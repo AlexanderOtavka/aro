@@ -1,0 +1,6 @@
+[package]
+name = "aro"
+version = "0.1.0"
+authors = ["Zander Otavka <AlexanderOtavka@users.noreply.github.com>"]
+
+[dependencies]
