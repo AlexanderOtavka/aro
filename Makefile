@@ -1,12 +1,21 @@
-build:
-	cargo build
+# Citations:
+#   Jonathan Sadun helped with the cargo-watch task
 
-install:
+# Docker Commands
+
+docker-build:
+	docker build -t aro .
+
+docker-run: docker-build
+	docker run --rm aro
+
+docker-test: docker-build
+	docker run --rm aro cargo test
+
+# Local Commands
+
+~/.cargo/bin/cargo-watch:
 	cargo install cargo-watch
 
-test:
+test: ~/.cargo/bin/cargo-watch
 	cargo watch -c -w src -x check -x test
-
-test-once:
-	cargo check
-	cargo test

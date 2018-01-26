@@ -1,10 +1,9 @@
 version: 2
 jobs:
   build:
-    docker:
-      - image: debian:stretch
+    machine: true
     steps:
       - checkout
       - run:
           name: Test
-          command: make test-once
+          command: make docker-test
