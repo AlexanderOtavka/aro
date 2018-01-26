@@ -18,4 +18,4 @@ docker-test: docker-build
 	cargo install cargo-watch
 
 test: ~/.cargo/bin/cargo-watch
-	cargo watch -c -w src -x check -x test
+	cargo watch -c -w src -x test
