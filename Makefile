@@ -7,7 +7,7 @@ docker-build:
 	docker build -t aro .
 
 docker-run: docker-build
-	docker run --rm aro
+	docker run --rm aro cargo run $(args)
 
 docker-test: docker-build
 	docker run --rm aro cargo test
