@@ -1,3 +1,5 @@
+#![cfg_attr(test, deny(warnings))]
+
 extern crate clap;
 
 fn main() {
