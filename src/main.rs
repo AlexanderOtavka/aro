@@ -5,7 +5,7 @@ extern crate clap;
 fn main() {
     let options = clap::App::new("The aro-> Compiler")
         .version("0.1.0")
-        .author("Zander Otavka <otavkaal@grinnell.edu")
+        .author("Zander Otavka <otavkaal@grinnell.edu>")
         .arg(
             clap::Arg::with_name("length")
                 .help("Print out the lengths of each arg.")
