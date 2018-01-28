@@ -8,7 +8,7 @@ build-release:
 	cp target/release/aro .
 
 ~/.cargo/bin/cargo-watch:
-	cargo install cargo-watch
+	cargo install --root ~/.cargo cargo-watch
 
 test: ~/.cargo/bin/cargo-watch
 	cargo watch -c -w src -x test
@@ -22,7 +22,7 @@ docker-build:
 	docker build -t aro .
 
 docker-run: docker-build
-	docker run --rm aro "cargo install && aro $(args)"
+	docker run --rm aro cargo run -- $(args)
 
 docker-test: docker-build
-	docker run --rm aro "cargo test"
+	docker run --rm aro cargo test --features "$(features)"

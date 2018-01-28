@@ -6,4 +6,4 @@ jobs:
       - checkout
       - run:
           name: Test
-          command: make docker-test
+          command: make docker-test features="ci"

@@ -1,4 +1,4 @@
-#![cfg_attr(test, deny(warnings))]
+#![cfg_attr(feature = "ci", deny(warnings))]
 
 extern crate clap;
 
