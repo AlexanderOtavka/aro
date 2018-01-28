@@ -14,3 +14,19 @@ passing `foo` and `bar` as arguments to the aro executable. `make docker-test`
 will run all unit tests inside the docker container.
 
 ## Changelog
+
+### Assignment 1 (1/29/17)
+
+#### New Features
+
+* Build process added with Makefile
+* Basic test suite using rust's built in testing framework
+* Simple starter program that just parses and prints command line args
+
+#### Changed Features
+
+None
+
+#### Known Bugs
+
+None
