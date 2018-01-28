@@ -1,3 +1,5 @@
+![Build Status](https://circleci.com/gh/AlexanderOtavka/aro.svg?style=shield&circle-token=84e6e5347cf534a856e4b176fe4d5742c05b623f)
+
 # aro
 
 The aro compiler.
