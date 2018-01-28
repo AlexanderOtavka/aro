@@ -28,7 +28,6 @@ mod test_write_output {
     #[test]
     fn it_repeats_the_args_back() {
         let mut output = Vec::new();
-
         write_output(&mut output, false, vec!["foo", "bar"]);
 
         assert_eq!("foo\nbar\n", String::from_utf8(output).unwrap());
@@ -37,7 +36,6 @@ mod test_write_output {
     #[test]
     fn it_sends_back_the_arg_lengths() {
         let mut output = Vec::new();
-
         write_output(&mut output, true, vec!["foo", "bazing"]);
 
         assert_eq!("3\n6\n", String::from_utf8(output).unwrap());
@@ -60,10 +58,8 @@ fn main() {
         )
         .get_matches();
 
-    let output = io::stdout();
-
     write_output(
-        output,
+        io::stdout(),
         options.is_present("length"),
         options.values_of("args").unwrap_or_default(),
     );
