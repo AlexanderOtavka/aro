@@ -7,16 +7,16 @@ use std::io::{self, Write};
 // https://stackoverflow.com/questions/34969902/how-to-write-a-rust-function-that-takes-an-iterator
 // https://stackoverflow.com/questions/28370126/how-can-i-test-stdin-and-stdout
 
-fn write_output<'a, W, A>(mut writer: W, show_length: bool, args: A)
+fn write_output<'a, W, A>(mut output: W, show_length: bool, args: A)
 where
     W: Write,
     A: IntoIterator<Item = &'a str>,
 {
     for arg in args.into_iter() {
         if show_length {
-            write!(&mut writer, "{}\n", arg.len()).unwrap();
+            write!(&mut output, "{}\n", arg.len()).unwrap();
         } else {
-            write!(&mut writer, "{}\n", arg).unwrap();
+            write!(&mut output, "{}\n", arg).unwrap();
         }
     }
 }
