@@ -2,6 +2,48 @@
 
 extern crate clap;
 
+use std::io::{self, Write};
+
+// https://stackoverflow.com/questions/34969902/how-to-write-a-rust-function-that-takes-an-iterator
+// https://stackoverflow.com/questions/28370126/how-can-i-test-stdin-and-stdout
+
+fn write_output<'a, W, A>(mut writer: W, show_length: bool, args: A)
+where
+    W: Write,
+    A: IntoIterator<Item = &'a str>,
+{
+    for arg in args.into_iter() {
+        if show_length {
+            write!(&mut writer, "{}\n", arg.len()).unwrap();
+        } else {
+            write!(&mut writer, "{}\n", arg).unwrap();
+        }
+    }
+}
+
+#[cfg(test)]
+mod test_write_output {
+    use super::*;
+
+    #[test]
+    fn it_repeats_the_args_back() {
+        let mut output = Vec::new();
+
+        write_output(&mut output, false, vec!["foo", "bar"]);
+
+        assert_eq!("foo\nbar\n", String::from_utf8(output).unwrap());
+    }
+
+    #[test]
+    fn it_sends_back_the_arg_lengths() {
+        let mut output = Vec::new();
+
+        write_output(&mut output, true, vec!["foo", "bazing"]);
+
+        assert_eq!("3\n6\n", String::from_utf8(output).unwrap());
+    }
+}
+
 fn main() {
     let options = clap::App::new("The aro-> Compiler")
         .version("0.1.0")
@@ -18,11 +60,11 @@ fn main() {
         )
         .get_matches();
 
-    for arg in options.values_of("args").unwrap_or_default() {
-        if options.is_present("length") {
-            println!("{}", String::from(arg).len())
-        } else {
-            println!("{}", arg);
-        }
-    }
+    let output = io::stdout();
+
+    write_output(
+        output,
+        options.is_present("length"),
+        options.values_of("args").unwrap_or_default(),
+    );
 }
