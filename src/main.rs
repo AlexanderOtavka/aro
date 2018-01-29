@@ -1,11 +1,13 @@
+// Citations:
+//  https://doc.rust-lang.org
+//  https://stackoverflow.com/questions/34969902/how-to-write-a-rust-function-that-takes-an-iterator
+//  https://stackoverflow.com/questions/28370126/how-can-i-test-stdin-and-stdout
+
 #![cfg_attr(feature = "ci", deny(warnings))]
 
 extern crate clap;
 
 use std::io::{self, Write};
-
-// https://stackoverflow.com/questions/34969902/how-to-write-a-rust-function-that-takes-an-iterator
-// https://stackoverflow.com/questions/28370126/how-can-i-test-stdin-and-stdout
 
 fn write_output<'a, W, A>(mut output: W, show_length: bool, args: A)
 where
