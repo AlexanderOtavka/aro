@@ -3,14 +3,14 @@ extern crate regex;
 use self::regex::Regex;
 
 #[derive(Debug, PartialEq)]
-enum Token {
+pub enum Token {
     LParen,
     RParen,
     Plus,
     Int(i32),
 }
 
-fn get_token_list(source: &str) -> Box<Vec<Token>> {
+pub fn source_to_tokens(source: &str) -> Box<Vec<Token>> {
     let l_paren_regex = Regex::new(r"^\s*\(").unwrap();
     let r_paren_regex = Regex::new(r"^\s*\)").unwrap();
     let plus_regex = Regex::new(r"^\s*\+").unwrap();
@@ -46,51 +46,51 @@ fn get_token_list(source: &str) -> Box<Vec<Token>> {
 }
 
 #[cfg(test)]
-mod test_get_token_list {
+mod test_source_to_tokens {
     use super::*;
 
     #[test]
     fn it_returns_an_empty_list_when_given_empty_source() {
-        assert_eq!(*get_token_list(""), vec![]);
+        assert_eq!(*source_to_tokens(""), vec![]);
     }
 
     #[test]
     fn it_returns_an_empty_list_when_given_only_whitespace() {
-        assert_eq!(*get_token_list("     \n \t   "), vec![]);
+        assert_eq!(*source_to_tokens("     \n \t   "), vec![]);
     }
 
     #[test]
     fn it_lexes_a_left_paren() {
-        assert_eq!(*get_token_list("    \n   \t (   "), vec![Token::LParen]);
+        assert_eq!(*source_to_tokens("    \n   \t (   "), vec![Token::LParen]);
     }
 
     #[test]
     fn it_lexes_two_left_parens() {
         assert_eq!(
-            *get_token_list("   ( \n   \t (   "),
+            *source_to_tokens("   ( \n   \t (   "),
             vec![Token::LParen, Token::LParen]
         );
     }
 
     #[test]
     fn it_lexes_a_right_paren() {
-        assert_eq!(*get_token_list(" \n\n \t\t\n )  "), vec![Token::RParen]);
+        assert_eq!(*source_to_tokens(" \n\n \t\t\n )  "), vec![Token::RParen]);
     }
 
     #[test]
     fn it_lexes_a_plus_sign() {
-        assert_eq!(*get_token_list("      +  "), vec![Token::Plus]);
+        assert_eq!(*source_to_tokens("      +  "), vec![Token::Plus]);
     }
 
     #[test]
     fn it_lexes_an_int() {
-        assert_eq!(*get_token_list("    27  "), vec![Token::Int(27)]);
+        assert_eq!(*source_to_tokens("    27  "), vec![Token::Int(27)]);
     }
 
     #[test]
     fn it_lexes_a_simple_expression() {
         assert_eq!(
-            *get_token_list(
+            *source_to_tokens(
                 "( + 21
                     (+24 31)
                  )
