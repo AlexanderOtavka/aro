@@ -6,6 +6,7 @@
 #![cfg_attr(feature = "ci", deny(warnings))]
 
 extern crate clap;
+mod lex;
 
 use std::io::{self, Write};
 
