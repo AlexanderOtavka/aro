@@ -30,10 +30,9 @@ pub fn source_to_tokens(source: &str) -> Box<Vec<Token>> {
             token_list.push(Token::Plus);
             unprocessed_source = &unprocessed_source[substr.end()..];
         } else if let Some(captures) = int_regex.captures(unprocessed_source) {
-            if let Some(value_match) = captures.get(1) {
-                let value = value_match.as_str().parse::<i32>().unwrap();
-                token_list.push(Token::Int(value));
-            }
+            let value_match = captures.get(1).unwrap();
+            let value = value_match.as_str().parse::<i32>().unwrap();
+            token_list.push(Token::Int(value));
 
             let end = captures.get(0).unwrap().end();
             unprocessed_source = &unprocessed_source[end..];
