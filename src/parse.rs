@@ -152,4 +152,11 @@ mod test_tokens_to_ast {
         let message = tokens_to_ast(&tokens).unwrap_err();
         assert_eq!(message, "Expected `)`.");
     }
+
+    #[test]
+    fn it_handles_a_too_short_plus_operation() {
+        let tokens = vec![Token::LParen, Token::Plus, Token::Int(2), Token::RParen];
+        let message = tokens_to_ast(&tokens).unwrap_err();
+        assert_eq!(message, "Expected value or `(`.");
+    }
 }
