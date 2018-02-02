@@ -25,4 +25,5 @@ docker-run: docker-build
 	docker run --rm aro cargo run -- $(args)
 
 docker-test: docker-build
+	docker run --rm aro cargo check --features "$(features)"
 	docker run --rm aro cargo test --features "$(features)"
