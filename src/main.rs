@@ -8,6 +8,7 @@
 extern crate clap;
 mod lex;
 mod parse;
+mod eval;
 
 use std::io::{self, Write};
 
