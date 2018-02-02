@@ -18,13 +18,13 @@ fn call_to_ast(tokens: &[Token]) -> Result<(Box<Expression>, &[Token]), &str> {
                         Box::new(Expression::Add(left_expr, right_expr)),
                         &unprocessed_tokens[1..],
                     )),
-                    _ => Err("Expected `)`."),
+                    _ => Err("Nah-ah.  Close that shit with a `)`."),
                 }
             }
-            _ => Err("Expected operator."),
+            _ => Err("God damn it.  OPERATOR GOES HERE.  It's like I'm talking to a monkey."),
         };
     } else {
-        return Err("Unexpected end of file.");
+        return Err("You ass goblin!  You can't end the file there.");
     }
 }
 
@@ -33,10 +33,10 @@ pub fn tokens_to_ast(tokens: &[Token]) -> Result<(Box<Expression>, &[Token]), &s
         return match *token {
             Token::Int(value) => Ok((Box::new(Expression::Int(value)), &tokens[1..])),
             Token::LParen => call_to_ast(&tokens[1..]),
-            _ => Err("Expected value or `(`."),
+            _ => Err("Hey asshole, expected value or `(`."),
         };
     } else {
-        return Err("Unexpected end of file.");
+        return Err("You ass goblin!  You can't end the file there.");
     }
 }
 
@@ -108,28 +108,31 @@ mod test_tokens_to_ast {
     fn it_handles_an_empty_token_list() {
         let tokens = vec![];
         let message = tokens_to_ast(&tokens).unwrap_err();
-        assert_eq!(message, "Unexpected end of file.");
+        assert_eq!(message, "You ass goblin!  You can't end the file there.");
     }
 
     #[test]
     fn it_handles_an_unclosed_paren() {
         let tokens = vec![Token::LParen];
         let message = tokens_to_ast(&tokens).unwrap_err();
-        assert_eq!(message, "Unexpected end of file.");
+        assert_eq!(message, "You ass goblin!  You can't end the file there.");
     }
 
     #[test]
     fn it_handles_a_value_after_paren() {
         let tokens = vec![Token::LParen, Token::Int(3), Token::RParen];
         let message = tokens_to_ast(&tokens).unwrap_err();
-        assert_eq!(message, "Expected operator.");
+        assert_eq!(
+            message,
+            "God damn it.  OPERATOR GOES HERE.  It's like I'm talking to a monkey."
+        );
     }
 
     #[test]
     fn it_handles_an_early_r_paren() {
         let tokens = vec![Token::RParen];
         let message = tokens_to_ast(&tokens).unwrap_err();
-        assert_eq!(message, "Expected value or `(`.");
+        assert_eq!(message, "Hey asshole, expected value or `(`.");
     }
 
     #[test]
@@ -143,20 +146,20 @@ mod test_tokens_to_ast {
             Token::RParen,
         ];
         let message = tokens_to_ast(&tokens).unwrap_err();
-        assert_eq!(message, "Expected `)`.");
+        assert_eq!(message, "Nah-ah.  Close that shit with a `)`.");
     }
 
     #[test]
     fn it_handles_an_unclosed_plus_operation() {
         let tokens = vec![Token::LParen, Token::Plus, Token::Int(2), Token::Int(5)];
         let message = tokens_to_ast(&tokens).unwrap_err();
-        assert_eq!(message, "Expected `)`.");
+        assert_eq!(message, "Nah-ah.  Close that shit with a `)`.");
     }
 
     #[test]
     fn it_handles_a_too_short_plus_operation() {
         let tokens = vec![Token::LParen, Token::Plus, Token::Int(2), Token::RParen];
         let message = tokens_to_ast(&tokens).unwrap_err();
-        assert_eq!(message, "Expected value or `(`.");
+        assert_eq!(message, "Hey asshole, expected value or `(`.");
     }
 }
