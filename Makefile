@@ -15,6 +15,7 @@ test: ~/.cargo/bin/cargo-watch
 
 clean:
 	cargo clean
+	rm -f ./aro
 
 # Docker Commands
 
