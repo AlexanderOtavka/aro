@@ -3,6 +3,7 @@ use super::parse::Expression;
 #[derive(Debug, PartialEq)]
 pub enum Value {
     Int(i32),
+    Bool(bool),
     NaN,
 }
 
@@ -10,6 +11,7 @@ pub fn evaluate_expression(expression: Box<Expression>) -> Value {
     let expr = *expression;
     match expr {
         Expression::Int(value) => Value::Int(value),
+        Expression::Bool(value) => Value::Bool(value),
         Expression::Add(left, right) => {
             match (evaluate_expression(left), evaluate_expression(right)) {
                 (Value::Int(left_value), Value::Int(right_value)) => {
@@ -51,10 +53,18 @@ mod test_evaluate_expression {
     use super::*;
 
     #[test]
-    fn it_spits_back_out_a_value() {
+    fn it_spits_back_out_an_int() {
         assert_eq!(
             evaluate_expression(Box::new(Expression::Int(5))),
             Value::Int(5)
+        )
+    }
+
+    #[test]
+    fn it_spits_back_out_a_bool() {
+        assert_eq!(
+            evaluate_expression(Box::new(Expression::Bool(true))),
+            Value::Bool(true)
         )
     }
 

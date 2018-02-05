@@ -3,6 +3,7 @@ use super::lex::Token;
 #[derive(Debug, PartialEq)]
 pub enum Expression {
     Int(i32),
+    Bool(bool),
     Add(Box<Expression>, Box<Expression>),
     Subtract(Box<Expression>, Box<Expression>),
     Multiply(Box<Expression>, Box<Expression>),
@@ -54,6 +55,7 @@ pub fn tokens_to_ast(tokens: &[Token]) -> Result<(Box<Expression>, &[Token]), &s
     if let Some(token) = tokens.get(0) {
         return match *token {
             Token::Int(value) => Ok((Box::new(Expression::Int(value)), &tokens[1..])),
+            Token::Bool(value) => Ok((Box::new(Expression::Bool(value)), &tokens[1..])),
             Token::LParen => call_to_ast(&tokens[1..]),
             _ => Err("Hey asshole, expected value or `(`."),
         };
@@ -67,18 +69,18 @@ mod test_tokens_to_ast {
     use super::*;
 
     #[test]
-    fn it_makes_a_0_tree() {
-        let tokens = vec![Token::Int(0)];
-        let (expr, unprocessed) = tokens_to_ast(&tokens).unwrap();
-        assert_eq!(*expr, Expression::Int(0));
-        assert_eq!(unprocessed.len(), 0);
-    }
-
-    #[test]
     fn it_makes_an_int_tree() {
         let tokens = vec![Token::Int(5)];
         let (expr, unprocessed) = tokens_to_ast(&tokens).unwrap();
         assert_eq!(*expr, Expression::Int(5));
+        assert_eq!(unprocessed.len(), 0);
+    }
+
+    #[test]
+    fn it_makes_a_bool_tree() {
+        let tokens = vec![Token::Bool(true)];
+        let (expr, unprocessed) = tokens_to_ast(&tokens).unwrap();
+        assert_eq!(*expr, Expression::Bool(true));
         assert_eq!(unprocessed.len(), 0);
     }
 

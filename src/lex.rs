@@ -6,17 +6,20 @@ use self::regex::Regex;
 pub enum Token {
     LParen,
     RParen,
+    Int(i32),
+    Bool(bool),
     Plus,
     Minus,
     Star,
     Slash,
-    Int(i32),
 }
 
 pub fn source_to_tokens(source: &str) -> Box<Vec<Token>> {
     let l_paren_regex = Regex::new(r"^\s*\(").unwrap();
     let r_paren_regex = Regex::new(r"^\s*\)").unwrap();
     let int_regex = Regex::new(r"^\s*(\-?\d+)").unwrap();
+    let true_regex = Regex::new(r"^\s*true").unwrap();
+    let false_regex = Regex::new(r"^\s*false").unwrap();
     let plus_regex = Regex::new(r"^\s*\+").unwrap();
     let minus_regex = Regex::new(r"^\s*\-").unwrap();
     let multiply_regex = Regex::new(r"^\s*\*").unwrap();
@@ -40,6 +43,12 @@ pub fn source_to_tokens(source: &str) -> Box<Vec<Token>> {
             token_list.push(Token::Int(value));
 
             end = captures.get(0).unwrap().end();
+        } else if let Some(substr) = true_regex.find(unprocessed_source) {
+            token_list.push(Token::Bool(true));
+            end = substr.end();
+        } else if let Some(substr) = false_regex.find(unprocessed_source) {
+            token_list.push(Token::Bool(false));
+            end = substr.end();
         } else if let Some(substr) = plus_regex.find(unprocessed_source) {
             token_list.push(Token::Plus);
             end = substr.end();
@@ -95,6 +104,34 @@ mod test_source_to_tokens {
     }
 
     #[test]
+    fn it_lexes_an_int() {
+        assert_eq!(*source_to_tokens("    27  "), vec![Token::Int(27)]);
+    }
+
+    #[test]
+    fn it_lexes_a_negative_int() {
+        assert_eq!(*source_to_tokens("    -27  "), vec![Token::Int(-27)]);
+    }
+
+    #[test]
+    fn it_lexes_a_minus_and_then_an_int() {
+        assert_eq!(
+            *source_to_tokens("    - 27  "),
+            vec![Token::Minus, Token::Int(27)]
+        );
+    }
+
+    #[test]
+    fn it_lexes_a_true_bool() {
+        assert_eq!(*source_to_tokens("    true  "), vec![Token::Bool(true)]);
+    }
+
+    #[test]
+    fn it_lexes_a_false_bool() {
+        assert_eq!(*source_to_tokens("    false  "), vec![Token::Bool(false)]);
+    }
+
+    #[test]
     fn it_lexes_a_plus_sign() {
         assert_eq!(*source_to_tokens("      +  "), vec![Token::Plus]);
     }
@@ -112,24 +149,6 @@ mod test_source_to_tokens {
     #[test]
     fn it_lexes_a_divide_sign() {
         assert_eq!(*source_to_tokens("      /  "), vec![Token::Slash]);
-    }
-
-    #[test]
-    fn it_lexes_an_int() {
-        assert_eq!(*source_to_tokens("    27  "), vec![Token::Int(27)]);
-    }
-
-    #[test]
-    fn it_lexes_a_negative_int() {
-        assert_eq!(*source_to_tokens("    -27  "), vec![Token::Int(-27)]);
-    }
-
-    #[test]
-    fn it_lexes_a_minus_and_then_an_int() {
-        assert_eq!(
-            *source_to_tokens("    - 27  "),
-            vec![Token::Minus, Token::Int(27)]
-        );
     }
 
     #[test]
