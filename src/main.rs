@@ -24,7 +24,10 @@ fn evaluate_source(input: &str) -> Result<String, String> {
         ));
     }
 
-    Ok(String::from(format!("{}", eval::evaluate_expression(ast))))
+    Ok(match eval::evaluate_expression(ast) {
+        eval::Value::Int(value) => format!("{}", value),
+        eval::Value::NaN => String::from("NaN"),
+    })
 }
 
 #[cfg(test)]
