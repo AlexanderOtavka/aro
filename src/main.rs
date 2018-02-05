@@ -62,6 +62,14 @@ mod test_evaluate_source {
             "You ass goblin!  You can't end the file there."
         );
     }
+
+    #[test]
+    fn it_complains_about_extra_tokens_in_file() {
+        assert_eq!(
+            evaluate_source("5 7").unwrap_err(),
+            "One expression per file!  Get that shit out'a here.",
+        );
+    }
 }
 
 fn evaluate_file(file_name: &str) -> Result<String, String> {
