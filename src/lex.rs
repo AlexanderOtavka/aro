@@ -16,11 +16,11 @@ pub enum Token {
 pub fn source_to_tokens(source: &str) -> Box<Vec<Token>> {
     let l_paren_regex = Regex::new(r"^\s*\(").unwrap();
     let r_paren_regex = Regex::new(r"^\s*\)").unwrap();
+    let int_regex = Regex::new(r"^\s*(\-?\d+)").unwrap();
     let plus_regex = Regex::new(r"^\s*\+").unwrap();
     let minus_regex = Regex::new(r"^\s*\-").unwrap();
     let multiply_regex = Regex::new(r"^\s*\*").unwrap();
     let divide_regex = Regex::new(r"^\s*/").unwrap();
-    let int_regex = Regex::new(r"^\s*(\d+)").unwrap();
 
     let mut token_list = Vec::new();
     let mut unprocessed_source = source;
@@ -34,6 +34,12 @@ pub fn source_to_tokens(source: &str) -> Box<Vec<Token>> {
         } else if let Some(substr) = r_paren_regex.find(unprocessed_source) {
             token_list.push(Token::RParen);
             end = substr.end();
+        } else if let Some(captures) = int_regex.captures(unprocessed_source) {
+            let value_match = captures.get(1).unwrap();
+            let value = value_match.as_str().parse::<i32>().unwrap();
+            token_list.push(Token::Int(value));
+
+            end = captures.get(0).unwrap().end();
         } else if let Some(substr) = plus_regex.find(unprocessed_source) {
             token_list.push(Token::Plus);
             end = substr.end();
@@ -46,12 +52,6 @@ pub fn source_to_tokens(source: &str) -> Box<Vec<Token>> {
         } else if let Some(substr) = divide_regex.find(unprocessed_source) {
             token_list.push(Token::Slash);
             end = substr.end();
-        } else if let Some(captures) = int_regex.captures(unprocessed_source) {
-            let value_match = captures.get(1).unwrap();
-            let value = value_match.as_str().parse::<i32>().unwrap();
-            token_list.push(Token::Int(value));
-
-            end = captures.get(0).unwrap().end();
         } else {
             break;
         }
@@ -117,6 +117,19 @@ mod test_source_to_tokens {
     #[test]
     fn it_lexes_an_int() {
         assert_eq!(*source_to_tokens("    27  "), vec![Token::Int(27)]);
+    }
+
+    #[test]
+    fn it_lexes_a_negative_int() {
+        assert_eq!(*source_to_tokens("    -27  "), vec![Token::Int(-27)]);
+    }
+
+    #[test]
+    fn it_lexes_a_minus_and_then_an_int() {
+        assert_eq!(
+            *source_to_tokens("    - 27  "),
+            vec![Token::Minus, Token::Int(27)]
+        );
     }
 
     #[test]

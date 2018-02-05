@@ -70,6 +70,17 @@ mod test_evaluate_expression {
     }
 
     #[test]
+    fn it_adds_negative_numbers() {
+        assert_eq!(
+            evaluate_expression(Box::new(Expression::Add(
+                Box::new(Expression::Int(-1)),
+                Box::new(Expression::Int(-2)),
+            ))),
+            Value::Int(-3)
+        )
+    }
+
+    #[test]
     fn it_subtracts() {
         assert_eq!(
             evaluate_expression(Box::new(Expression::Subtract(
