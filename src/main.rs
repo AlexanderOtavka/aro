@@ -16,7 +16,13 @@ use std::process::exit;
 fn evaluate_source(input: &str) -> Result<String, String> {
     let tokens = lex::source_to_tokens(&input);
 
-    let (ast, _) = parse::tokens_to_ast(tokens.as_slice()).map_err(String::from)?;
+    let (ast, unprocessed) = parse::tokens_to_ast(tokens.as_slice()).map_err(String::from)?;
+
+    if unprocessed.len() > 0 {
+        return Err(String::from(
+            "One expression per file!  Get that shit out'a here.",
+        ));
+    }
 
     Ok(String::from(format!("{}", eval::evaluate_expression(ast))))
 }
