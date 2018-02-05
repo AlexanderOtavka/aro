@@ -10,41 +10,63 @@ mod lex;
 mod parse;
 mod eval;
 
-use std::io::{self, Write};
+use std::io::prelude::*;
+use std::process::exit;
 
-fn write_output<'a, W, A>(mut output: W, show_length: bool, args: A)
-where
-    W: Write,
-    A: IntoIterator<Item = &'a str>,
-{
-    for arg in args.into_iter() {
-        if show_length {
-            write!(&mut output, "{}\n", arg.len()).unwrap();
-        } else {
-            write!(&mut output, "{}\n", arg).unwrap();
-        }
-    }
+fn evaluate_source(input: &str) -> Result<String, String> {
+    let tokens = lex::source_to_tokens(&input);
+
+    let (ast, _) = parse::tokens_to_ast(tokens.as_slice()).map_err(String::from)?;
+
+    Ok(String::from(format!("{}", eval::evaluate_expression(ast))))
 }
 
 #[cfg(test)]
-mod test_write_output {
+mod test_evaluate_source {
     use super::*;
 
     #[test]
-    fn it_repeats_the_args_back() {
-        let mut output = Vec::new();
-        write_output(&mut output, false, vec!["foo", "bar"]);
-
-        assert_eq!("foo\nbar\n", String::from_utf8(output).unwrap());
+    fn it_spits_out_a_result() {
+        assert_eq!(evaluate_source("5").unwrap(), "5");
     }
 
     #[test]
-    fn it_sends_back_the_arg_lengths() {
-        let mut output = Vec::new();
-        write_output(&mut output, true, vec!["foo", "bazing"]);
-
-        assert_eq!("3\n6\n", String::from_utf8(output).unwrap());
+    fn it_evaluates_an_ast() {
+        assert_eq!(
+            evaluate_source(
+                "
+                (+ 20
+                   (+ (+ 5 10)
+                      15))
+                "
+            ).unwrap(),
+            "50"
+        );
     }
+
+    #[test]
+    fn it_reports_an_error() {
+        assert_eq!(
+            evaluate_source(
+                "
+                (+ 20
+                   (+ (+ 5 10)
+                "
+            ).unwrap_err(),
+            "You ass goblin!  You can't end the file there."
+        );
+    }
+}
+
+fn evaluate_file(file_name: &str) -> Result<String, String> {
+    let mut input_file = std::fs::File::open(file_name).map_err(|_| "Couldn't open file.")?;
+
+    let mut input_string = String::new();
+    input_file
+        .read_to_string(&mut input_string)
+        .map_err(|_| "Couldn't read input.")?;
+
+    evaluate_source(&input_string)
 }
 
 fn main() {
@@ -52,20 +74,20 @@ fn main() {
         .version("0.1.0")
         .author("Zander Otavka <otavkaal@grinnell.edu>")
         .arg(
-            clap::Arg::with_name("length")
-                .help("Print out the lengths of each arg.")
-                .long("length"),
-        )
-        .arg(
-            clap::Arg::with_name("args")
-                .help("A mysterious list of arguments to be printed back.")
-                .multiple(true),
+            clap::Arg::with_name("infile")
+                .help("The input file of aro code.")
+                .required(true),
         )
         .get_matches();
 
-    write_output(
-        io::stdout(),
-        options.is_present("length"),
-        options.values_of("args").unwrap_or_default(),
-    );
+    exit(match evaluate_file(options.value_of("infile").unwrap()) {
+        Ok(output) => {
+            println!("{}", output);
+            0
+        }
+        Err(message) => {
+            eprintln!("{}", message);
+            1
+        }
+    })
 }
