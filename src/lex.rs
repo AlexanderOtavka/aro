@@ -7,6 +7,9 @@ pub enum Token {
     LParen,
     RParen,
     Plus,
+    Minus,
+    Star,
+    Slash,
     Int(i32),
 }
 
@@ -14,31 +17,46 @@ pub fn source_to_tokens(source: &str) -> Box<Vec<Token>> {
     let l_paren_regex = Regex::new(r"^\s*\(").unwrap();
     let r_paren_regex = Regex::new(r"^\s*\)").unwrap();
     let plus_regex = Regex::new(r"^\s*\+").unwrap();
+    let minus_regex = Regex::new(r"^\s*\-").unwrap();
+    let multiply_regex = Regex::new(r"^\s*\*").unwrap();
+    let divide_regex = Regex::new(r"^\s*/").unwrap();
     let int_regex = Regex::new(r"^\s*(\d+)").unwrap();
 
     let mut token_list = Vec::new();
     let mut unprocessed_source = source;
 
     loop {
+        let end;
+
         if let Some(substr) = l_paren_regex.find(unprocessed_source) {
             token_list.push(Token::LParen);
-            unprocessed_source = &unprocessed_source[substr.end()..];
+            end = substr.end();
         } else if let Some(substr) = r_paren_regex.find(unprocessed_source) {
             token_list.push(Token::RParen);
-            unprocessed_source = &unprocessed_source[substr.end()..];
+            end = substr.end();
         } else if let Some(substr) = plus_regex.find(unprocessed_source) {
             token_list.push(Token::Plus);
-            unprocessed_source = &unprocessed_source[substr.end()..];
+            end = substr.end();
+        } else if let Some(substr) = minus_regex.find(unprocessed_source) {
+            token_list.push(Token::Minus);
+            end = substr.end();
+        } else if let Some(substr) = multiply_regex.find(unprocessed_source) {
+            token_list.push(Token::Star);
+            end = substr.end();
+        } else if let Some(substr) = divide_regex.find(unprocessed_source) {
+            token_list.push(Token::Slash);
+            end = substr.end();
         } else if let Some(captures) = int_regex.captures(unprocessed_source) {
             let value_match = captures.get(1).unwrap();
             let value = value_match.as_str().parse::<i32>().unwrap();
             token_list.push(Token::Int(value));
 
-            let end = captures.get(0).unwrap().end();
-            unprocessed_source = &unprocessed_source[end..];
+            end = captures.get(0).unwrap().end();
         } else {
             break;
         }
+
+        unprocessed_source = &unprocessed_source[end..];
     }
 
     Box::new(token_list)
@@ -79,6 +97,21 @@ mod test_source_to_tokens {
     #[test]
     fn it_lexes_a_plus_sign() {
         assert_eq!(*source_to_tokens("      +  "), vec![Token::Plus]);
+    }
+
+    #[test]
+    fn it_lexes_a_minus_sign() {
+        assert_eq!(*source_to_tokens("      -  "), vec![Token::Minus]);
+    }
+
+    #[test]
+    fn it_lexes_a_multiply_sign() {
+        assert_eq!(*source_to_tokens("      *  "), vec![Token::Star]);
+    }
+
+    #[test]
+    fn it_lexes_a_divide_sign() {
+        assert_eq!(*source_to_tokens("      /  "), vec![Token::Slash]);
     }
 
     #[test]

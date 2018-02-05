@@ -4,22 +4,44 @@ use super::lex::Token;
 pub enum Expression {
     Int(i32),
     Add(Box<Expression>, Box<Expression>),
+    Subtract(Box<Expression>, Box<Expression>),
+    Multiply(Box<Expression>, Box<Expression>),
+    Divide(Box<Expression>, Box<Expression>),
+}
+
+fn binary_operator_to_ast<F>(
+    tokens: &[Token],
+    get_expression: F,
+) -> Result<(Box<Expression>, &[Token]), &str>
+where
+    F: Fn(Box<Expression>, Box<Expression>) -> Expression,
+{
+    let (left_expr, unprocessed_tokens) = tokens_to_ast(tokens)?;
+    let (right_expr, unprocessed_tokens) = tokens_to_ast(unprocessed_tokens)?;
+
+    match unprocessed_tokens.get(0) {
+        Some(&Token::RParen) => Ok((
+            Box::new(get_expression(left_expr, right_expr)),
+            &unprocessed_tokens[1..],
+        )),
+        _ => Err("Nah-ah.  Close that shit with a `)`."),
+    }
 }
 
 fn call_to_ast(tokens: &[Token]) -> Result<(Box<Expression>, &[Token]), &str> {
     if let Some(token) = tokens.get(0) {
         return match *token {
             Token::Plus => {
-                let (left_expr, unprocessed_tokens) = tokens_to_ast(&tokens[1..])?;
-                let (right_expr, unprocessed_tokens) = tokens_to_ast(unprocessed_tokens)?;
-
-                match unprocessed_tokens.get(0) {
-                    Some(&Token::RParen) => Ok((
-                        Box::new(Expression::Add(left_expr, right_expr)),
-                        &unprocessed_tokens[1..],
-                    )),
-                    _ => Err("Nah-ah.  Close that shit with a `)`."),
-                }
+                binary_operator_to_ast(&tokens[1..], |left, right| Expression::Add(left, right))
+            }
+            Token::Minus => binary_operator_to_ast(&tokens[1..], |left, right| {
+                Expression::Subtract(left, right)
+            }),
+            Token::Star => binary_operator_to_ast(&tokens[1..], |left, right| {
+                Expression::Multiply(left, right)
+            }),
+            Token::Slash => {
+                binary_operator_to_ast(&tokens[1..], |left, right| Expression::Divide(left, right))
             }
             _ => Err("God damn it.  OPERATOR GOES HERE.  It's like I'm talking to a monkey."),
         };
@@ -78,13 +100,64 @@ mod test_tokens_to_ast {
     }
 
     #[test]
-    fn it_makes_a_nested_plus_tree() {
+    fn it_makes_a_simple_minus_tree() {
+        let tokens = vec![
+            Token::LParen,
+            Token::Minus,
+            Token::Int(2),
+            Token::Int(5),
+            Token::RParen,
+        ];
+        let (expr, unprocessed) = tokens_to_ast(&tokens).unwrap();
+        assert_eq!(
+            *expr,
+            Expression::Subtract(Box::new(Expression::Int(2)), Box::new(Expression::Int(5)))
+        );
+        assert_eq!(unprocessed.len(), 0);
+    }
+
+    #[test]
+    fn it_makes_a_simple_star_tree() {
+        let tokens = vec![
+            Token::LParen,
+            Token::Star,
+            Token::Int(2),
+            Token::Int(5),
+            Token::RParen,
+        ];
+        let (expr, unprocessed) = tokens_to_ast(&tokens).unwrap();
+        assert_eq!(
+            *expr,
+            Expression::Multiply(Box::new(Expression::Int(2)), Box::new(Expression::Int(5)))
+        );
+        assert_eq!(unprocessed.len(), 0);
+    }
+
+    #[test]
+    fn it_makes_a_simple_slash_tree() {
+        let tokens = vec![
+            Token::LParen,
+            Token::Slash,
+            Token::Int(2),
+            Token::Int(5),
+            Token::RParen,
+        ];
+        let (expr, unprocessed) = tokens_to_ast(&tokens).unwrap();
+        assert_eq!(
+            *expr,
+            Expression::Divide(Box::new(Expression::Int(2)), Box::new(Expression::Int(5)))
+        );
+        assert_eq!(unprocessed.len(), 0);
+    }
+
+    #[test]
+    fn it_makes_a_nested_tree() {
         let tokens = vec![
             Token::LParen,
             Token::Plus,
             Token::Int(2),
             Token::LParen,
-            Token::Plus,
+            Token::Star,
             Token::Int(3),
             Token::Int(5),
             Token::RParen,
@@ -95,7 +168,7 @@ mod test_tokens_to_ast {
             *expr,
             Expression::Add(
                 Box::new(Expression::Int(2)),
-                Box::new(Expression::Add(
+                Box::new(Expression::Multiply(
                     Box::new(Expression::Int(3)),
                     Box::new(Expression::Int(5))
                 ))
