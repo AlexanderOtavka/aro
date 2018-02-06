@@ -24,7 +24,7 @@ fn evaluate_source(input: &str) -> Result<String, String> {
         ));
     }
 
-    Ok(match eval::evaluate_expression(ast) {
+    Ok(match eval::evaluate_expression(ast)? {
         eval::Value::Int(value) => format!("{}", value),
         eval::Value::Bool(true) => String::from("true"),
         eval::Value::Bool(false) => String::from("false"),

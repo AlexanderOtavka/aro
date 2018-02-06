@@ -7,42 +7,96 @@ pub enum Value {
     NaN,
 }
 
-pub fn evaluate_expression(expression: Box<Expression>) -> Value {
+fn evaluate_number_operator<F>(left: &Value, right: &Value, evaluate: F) -> Result<Value, String>
+where
+    F: Fn(i32, i32) -> i32,
+{
+    match (left, right) {
+        (&Value::Int(left_value), &Value::Int(right_value)) => {
+            Ok(Value::Int(evaluate(left_value, right_value)))
+        }
+        (&Value::Int(_), &Value::NaN)
+        | (&Value::NaN, &Value::Int(_))
+        | (&Value::NaN, &Value::NaN) => Ok(Value::NaN),
+        _ => Err(String::from("Fuck off with your non-number bullshit.")),
+    }
+}
+
+#[cfg(test)]
+mod test_evaluate_number_operator {
+    use super::*;
+
+    #[test]
+    fn it_operates_on_two_ints() {
+        assert_eq!(
+            evaluate_number_operator(&Value::Int(2), &Value::Int(4), |a, b| a + b).unwrap(),
+            Value::Int(6)
+        );
+    }
+
+    #[test]
+    fn it_doesnt_add_bools() {
+        assert_eq!(
+            evaluate_number_operator(&Value::Bool(true), &Value::Int(4), |a, b| a + b).unwrap_err(),
+            "Fuck off with your non-number bullshit."
+        );
+        assert_eq!(
+            evaluate_number_operator(&Value::Int(4), &Value::Bool(true), |a, b| a + b).unwrap_err(),
+            "Fuck off with your non-number bullshit."
+        );
+        assert_eq!(
+            evaluate_number_operator(&Value::Bool(true), &Value::Bool(true), |a, b| a + b)
+                .unwrap_err(),
+            "Fuck off with your non-number bullshit."
+        );
+    }
+
+    #[test]
+    fn it_turns_nan_add_inputs_to_nan_add_outputs() {
+        assert_eq!(
+            evaluate_number_operator(&Value::NaN, &Value::Int(4), |a, b| a + b).unwrap(),
+            Value::NaN
+        );
+        assert_eq!(
+            evaluate_number_operator(&Value::Int(4), &Value::NaN, |a, b| a + b).unwrap(),
+            Value::NaN
+        );
+        assert_eq!(
+            evaluate_number_operator(&Value::NaN, &Value::NaN, |a, b| a + b).unwrap(),
+            Value::NaN
+        );
+    }
+}
+
+pub fn evaluate_expression(expression: Box<Expression>) -> Result<Value, String> {
     let expr = *expression;
     match expr {
-        Expression::Int(value) => Value::Int(value),
-        Expression::Bool(value) => Value::Bool(value),
-        Expression::Add(left, right) => {
-            match (evaluate_expression(left), evaluate_expression(right)) {
-                (Value::Int(left_value), Value::Int(right_value)) => {
-                    Value::Int(left_value + right_value)
-                }
-                _ => Value::NaN,
-            }
-        }
-        Expression::Subtract(left, right) => {
-            match (evaluate_expression(left), evaluate_expression(right)) {
-                (Value::Int(left_value), Value::Int(right_value)) => {
-                    Value::Int(left_value - right_value)
-                }
-                _ => Value::NaN,
-            }
-        }
-        Expression::Multiply(left, right) => {
-            match (evaluate_expression(left), evaluate_expression(right)) {
-                (Value::Int(left_value), Value::Int(right_value)) => {
-                    Value::Int(left_value * right_value)
-                }
-                _ => Value::NaN,
-            }
-        }
+        Expression::Int(value) => Ok(Value::Int(value)),
+        Expression::Bool(value) => Ok(Value::Bool(value)),
+        Expression::Add(left, right) => evaluate_number_operator(
+            &evaluate_expression(left)?,
+            &evaluate_expression(right)?,
+            |a, b| a + b,
+        ),
+        Expression::Subtract(left, right) => evaluate_number_operator(
+            &evaluate_expression(left)?,
+            &evaluate_expression(right)?,
+            |a, b| a - b,
+        ),
+        Expression::Multiply(left, right) => evaluate_number_operator(
+            &evaluate_expression(left)?,
+            &evaluate_expression(right)?,
+            |a, b| a * b,
+        ),
         Expression::Divide(left, right) => {
-            match (evaluate_expression(left), evaluate_expression(right)) {
-                (Value::Int(_), Value::Int(0)) => Value::NaN,
-                (Value::Int(left_value), Value::Int(right_value)) => {
-                    Value::Int(left_value / right_value)
+            match (evaluate_expression(left)?, evaluate_expression(right)?) {
+                (Value::Int(0), Value::Int(0)) => Ok(Value::NaN), // I hate this
+                (Value::Int(_), Value::Int(0)) => {
+                    Err(String::from("Fuck off with your divide-by-zero bullshit."))
                 }
-                _ => Value::NaN,
+                (left_value, right_value) => {
+                    evaluate_number_operator(&left_value, &right_value, |a, b| a / b)
+                }
             }
         }
     }
@@ -55,7 +109,7 @@ mod test_evaluate_expression {
     #[test]
     fn it_spits_back_out_an_int() {
         assert_eq!(
-            evaluate_expression(Box::new(Expression::Int(5))),
+            evaluate_expression(Box::new(Expression::Int(5))).unwrap(),
             Value::Int(5)
         )
     }
@@ -63,7 +117,7 @@ mod test_evaluate_expression {
     #[test]
     fn it_spits_back_out_a_bool() {
         assert_eq!(
-            evaluate_expression(Box::new(Expression::Bool(true))),
+            evaluate_expression(Box::new(Expression::Bool(true))).unwrap(),
             Value::Bool(true)
         )
     }
@@ -74,7 +128,7 @@ mod test_evaluate_expression {
             evaluate_expression(Box::new(Expression::Add(
                 Box::new(Expression::Int(1)),
                 Box::new(Expression::Int(2)),
-            ))),
+            ))).unwrap(),
             Value::Int(3)
         )
     }
@@ -85,7 +139,7 @@ mod test_evaluate_expression {
             evaluate_expression(Box::new(Expression::Add(
                 Box::new(Expression::Int(-1)),
                 Box::new(Expression::Int(-2)),
-            ))),
+            ))).unwrap(),
             Value::Int(-3)
         )
     }
@@ -96,8 +150,19 @@ mod test_evaluate_expression {
             evaluate_expression(Box::new(Expression::Subtract(
                 Box::new(Expression::Int(2)),
                 Box::new(Expression::Int(1)),
-            ))),
+            ))).unwrap(),
             Value::Int(1)
+        )
+    }
+
+    #[test]
+    fn it_doesnt_subtract_bools() {
+        assert_eq!(
+            evaluate_expression(Box::new(Expression::Subtract(
+                Box::new(Expression::Bool(true)),
+                Box::new(Expression::Int(2)),
+            ))).unwrap_err(),
+            "Fuck off with your non-number bullshit."
         )
     }
 
@@ -107,8 +172,19 @@ mod test_evaluate_expression {
             evaluate_expression(Box::new(Expression::Multiply(
                 Box::new(Expression::Int(3)),
                 Box::new(Expression::Int(2)),
-            ))),
+            ))).unwrap(),
             Value::Int(6)
+        )
+    }
+
+    #[test]
+    fn it_doesnt_multiply_bools() {
+        assert_eq!(
+            evaluate_expression(Box::new(Expression::Multiply(
+                Box::new(Expression::Bool(true)),
+                Box::new(Expression::Int(2)),
+            ))).unwrap_err(),
+            "Fuck off with your non-number bullshit."
         )
     }
 
@@ -118,19 +194,41 @@ mod test_evaluate_expression {
             evaluate_expression(Box::new(Expression::Divide(
                 Box::new(Expression::Int(3)),
                 Box::new(Expression::Int(2)),
-            ))),
+            ))).unwrap(),
             Value::Int(1)
         )
     }
 
     #[test]
-    fn it_divides_by_zero() {
+    fn it_does_not_divide_by_zero() {
         assert_eq!(
             evaluate_expression(Box::new(Expression::Divide(
                 Box::new(Expression::Int(3)),
                 Box::new(Expression::Int(0)),
-            ))),
+            ))).unwrap_err(),
+            "Fuck off with your divide-by-zero bullshit."
+        )
+    }
+
+    #[test]
+    fn it_divides_zero_by_zero() {
+        assert_eq!(
+            evaluate_expression(Box::new(Expression::Divide(
+                Box::new(Expression::Int(0)),
+                Box::new(Expression::Int(0)),
+            ))).unwrap(),
             Value::NaN
+        )
+    }
+
+    #[test]
+    fn it_doesnt_divide_bools() {
+        assert_eq!(
+            evaluate_expression(Box::new(Expression::Divide(
+                Box::new(Expression::Bool(true)),
+                Box::new(Expression::Int(2)),
+            ))).unwrap_err(),
+            "Fuck off with your non-number bullshit."
         )
     }
 
@@ -143,7 +241,7 @@ mod test_evaluate_expression {
                     Box::new(Expression::Int(2)),
                     Box::new(Expression::Int(3)),
                 ))
-            ))),
+            ))).unwrap(),
             Value::Int(7)
         )
     }
