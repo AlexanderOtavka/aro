@@ -185,6 +185,17 @@ mod test_source_to_tokens {
     }
 
     #[test]
+    fn it_lexes_nan() {
+        let tokens = source_to_tokens("    NaN  ").unwrap();
+        assert_eq!(tokens.len(), 1);
+        if let Token::Float(first_token) = tokens[0] {
+            assert!(first_token.is_nan());
+        } else {
+            assert!(false, "Not a float token")
+        }
+    }
+
+    #[test]
     fn it_lexes_infinity() {
         assert_eq!(
             *source_to_tokens("    inf  ").unwrap(),
@@ -206,17 +217,6 @@ mod test_source_to_tokens {
             *source_to_tokens("    - inf  ").unwrap(),
             vec![Token::Minus, Token::Float(INFINITY)]
         );
-    }
-
-    #[test]
-    fn it_lexes_nan() {
-        let tokens = source_to_tokens("    NaN  ").unwrap();
-        assert_eq!(tokens.len(), 1);
-        if let Token::Float(first_token) = tokens[0] {
-            assert!(first_token.is_nan());
-        } else {
-            assert!(false, "Not a float token")
-        }
     }
 
     #[test]
