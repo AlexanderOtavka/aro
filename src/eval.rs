@@ -104,7 +104,9 @@ pub fn evaluate_expression(expression: Box<Expression>) -> Result<Value, String>
                 true => consequent,
                 false => alternate,
             }),
-            _ => Err(String::from("This isn't JavaScript.  Only bools in `if`s.")),
+            _ => Err(String::from(
+                "This isn't JavaScript.  Only bools in `if`s.  Dumbass.",
+            )),
         },
     }
 }
@@ -271,7 +273,7 @@ mod test_evaluate_expression {
                 Box::new(Expression::Int(2)),
                 Box::new(Expression::Int(3)),
             ))).unwrap_err(),
-            "This isn't JavaScript.  Only bools in `if`s."
+            "This isn't JavaScript.  Only bools in `if`s.  Dumbass."
         )
     }
 
