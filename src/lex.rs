@@ -1,6 +1,7 @@
 extern crate regex;
 
 use self::regex::Regex;
+use std::f64::NAN;
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
@@ -21,6 +22,7 @@ pub fn source_to_tokens(source: &str) -> Box<Vec<Token>> {
     let l_paren_regex = Regex::new(r"^\s*\(").unwrap();
     let r_paren_regex = Regex::new(r"^\s*\)").unwrap();
     let float_regex = Regex::new(r"^\s*(\-?\d+\.\d+)").unwrap();
+    let nan_regex = Regex::new(r"^\s*NaN").unwrap();
     let int_regex = Regex::new(r"^\s*(\-?\d+)").unwrap();
     let true_regex = Regex::new(r"^\s*true").unwrap();
     let false_regex = Regex::new(r"^\s*false").unwrap();
@@ -48,6 +50,9 @@ pub fn source_to_tokens(source: &str) -> Box<Vec<Token>> {
             let value = value_match.as_str().parse::<f64>().unwrap();
             token_list.push(Token::Float(value));
             end = captures.get(0).unwrap().end();
+        } else if let Some(substr) = nan_regex.find(unprocessed_source) {
+            token_list.push(Token::Float(NAN));
+            end = substr.end();
         } else if let Some(captures) = int_regex.captures(unprocessed_source) {
             let value_match = captures.get(1).unwrap();
             let value = value_match.as_str().parse::<i32>().unwrap();
@@ -153,6 +158,17 @@ mod test_source_to_tokens {
             *source_to_tokens("    - 27.2  "),
             vec![Token::Minus, Token::Float(27.2)]
         );
+    }
+
+    #[test]
+    fn it_lexes_nan() {
+        let tokens = source_to_tokens("    NaN  ");
+        assert_eq!(tokens.len(), 1);
+        if let Token::Float(first_token) = tokens[0] {
+            assert!(first_token.is_nan());
+        } else {
+            assert!(false, "Not a float token")
+        }
     }
 
     #[test]
