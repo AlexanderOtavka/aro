@@ -18,7 +18,7 @@ pub enum Token {
     LEq,
 }
 
-pub fn source_to_tokens(source: &str) -> Box<Vec<Token>> {
+pub fn source_to_tokens(source: &str) -> Result<Box<Vec<Token>>, String> {
     let l_paren_regex = Regex::new(r"^\s*\(").unwrap();
     let r_paren_regex = Regex::new(r"^\s*\)").unwrap();
     let float_regex = Regex::new(r"^\s*(\-?\d+\.\d+)").unwrap();
@@ -32,6 +32,7 @@ pub fn source_to_tokens(source: &str) -> Box<Vec<Token>> {
     let divide_regex = Regex::new(r"^\s*/").unwrap();
     let if_regex = Regex::new(r"^\s*if").unwrap();
     let leq_regex = Regex::new(r"^\s*<=").unwrap();
+    let end_regex = Regex::new(r"^\s*$").unwrap();
 
     let mut token_list = Vec::new();
     let mut unprocessed_source = source;
@@ -82,14 +83,16 @@ pub fn source_to_tokens(source: &str) -> Box<Vec<Token>> {
         } else if let Some(substr) = leq_regex.find(unprocessed_source) {
             token_list.push(Token::LEq);
             end = substr.end();
-        } else {
+        } else if end_regex.is_match(unprocessed_source) {
             break;
+        } else {
+            return Err(String::from("Suprise unknown token, muthafaka."));
         }
 
         unprocessed_source = &unprocessed_source[end..];
     }
 
-    Box::new(token_list)
+    Ok(Box::new(token_list))
 }
 
 #[cfg(test)]
@@ -98,71 +101,86 @@ mod test_source_to_tokens {
 
     #[test]
     fn it_returns_an_empty_list_when_given_empty_source() {
-        assert_eq!(*source_to_tokens(""), vec![]);
+        assert_eq!(*source_to_tokens("").unwrap(), vec![]);
     }
 
     #[test]
     fn it_returns_an_empty_list_when_given_only_whitespace() {
-        assert_eq!(*source_to_tokens("     \n \t   "), vec![]);
+        assert_eq!(*source_to_tokens("     \n \t   ").unwrap(), vec![]);
     }
 
     #[test]
     fn it_lexes_a_left_paren() {
-        assert_eq!(*source_to_tokens("    \n   \t (   "), vec![Token::LParen]);
+        assert_eq!(
+            *source_to_tokens("    \n   \t (   ").unwrap(),
+            vec![Token::LParen]
+        );
     }
 
     #[test]
     fn it_lexes_two_left_parens() {
         assert_eq!(
-            *source_to_tokens("   ( \n   \t (   "),
+            *source_to_tokens("   ( \n   \t (   ").unwrap(),
             vec![Token::LParen, Token::LParen]
         );
     }
 
     #[test]
     fn it_lexes_a_right_paren() {
-        assert_eq!(*source_to_tokens(" \n\n \t\t\n )  "), vec![Token::RParen]);
+        assert_eq!(
+            *source_to_tokens(" \n\n \t\t\n )  ").unwrap(),
+            vec![Token::RParen]
+        );
     }
 
     #[test]
     fn it_lexes_an_int() {
-        assert_eq!(*source_to_tokens("    27  "), vec![Token::Int(27)]);
+        assert_eq!(*source_to_tokens("    27  ").unwrap(), vec![Token::Int(27)]);
     }
 
     #[test]
     fn it_lexes_a_negative_int() {
-        assert_eq!(*source_to_tokens("    -27  "), vec![Token::Int(-27)]);
+        assert_eq!(
+            *source_to_tokens("    -27  ").unwrap(),
+            vec![Token::Int(-27)]
+        );
     }
 
     #[test]
     fn it_lexes_a_minus_and_then_an_int() {
         assert_eq!(
-            *source_to_tokens("    - 27  "),
+            *source_to_tokens("    - 27  ").unwrap(),
             vec![Token::Minus, Token::Int(27)]
         );
     }
 
     #[test]
     fn it_lexes_a_float() {
-        assert_eq!(*source_to_tokens("    27.2  "), vec![Token::Float(27.2)]);
+        assert_eq!(
+            *source_to_tokens("    27.2  ").unwrap(),
+            vec![Token::Float(27.2)]
+        );
     }
 
     #[test]
     fn it_lexes_a_negative_float() {
-        assert_eq!(*source_to_tokens("    -27.2  "), vec![Token::Float(-27.2)]);
+        assert_eq!(
+            *source_to_tokens("    -27.2  ").unwrap(),
+            vec![Token::Float(-27.2)]
+        );
     }
 
     #[test]
     fn it_lexes_a_minus_and_then_a_float() {
         assert_eq!(
-            *source_to_tokens("    - 27.2  "),
+            *source_to_tokens("    - 27.2  ").unwrap(),
             vec![Token::Minus, Token::Float(27.2)]
         );
     }
 
     #[test]
     fn it_lexes_nan() {
-        let tokens = source_to_tokens("    NaN  ");
+        let tokens = source_to_tokens("    NaN  ").unwrap();
         assert_eq!(tokens.len(), 1);
         if let Token::Float(first_token) = tokens[0] {
             assert!(first_token.is_nan());
@@ -173,37 +191,43 @@ mod test_source_to_tokens {
 
     #[test]
     fn it_lexes_a_true_bool() {
-        assert_eq!(*source_to_tokens("    true  "), vec![Token::Bool(true)]);
+        assert_eq!(
+            *source_to_tokens("    true  ").unwrap(),
+            vec![Token::Bool(true)]
+        );
     }
 
     #[test]
     fn it_lexes_a_false_bool() {
-        assert_eq!(*source_to_tokens("    false  "), vec![Token::Bool(false)]);
+        assert_eq!(
+            *source_to_tokens("    false  ").unwrap(),
+            vec![Token::Bool(false)]
+        );
     }
 
     #[test]
     fn it_lexes_a_plus_sign() {
-        assert_eq!(*source_to_tokens("      +  "), vec![Token::Plus]);
+        assert_eq!(*source_to_tokens("      +  ").unwrap(), vec![Token::Plus]);
     }
 
     #[test]
     fn it_lexes_a_minus_sign() {
-        assert_eq!(*source_to_tokens("      -  "), vec![Token::Minus]);
+        assert_eq!(*source_to_tokens("      -  ").unwrap(), vec![Token::Minus]);
     }
 
     #[test]
     fn it_lexes_a_multiply_sign() {
-        assert_eq!(*source_to_tokens("      *  "), vec![Token::Star]);
+        assert_eq!(*source_to_tokens("      *  ").unwrap(), vec![Token::Star]);
     }
 
     #[test]
     fn it_lexes_a_divide_sign() {
-        assert_eq!(*source_to_tokens("      /  "), vec![Token::Slash]);
+        assert_eq!(*source_to_tokens("      /  ").unwrap(), vec![Token::Slash]);
     }
 
     #[test]
     fn it_lexes_an_if() {
-        assert_eq!(*source_to_tokens("      if  "), vec![Token::If]);
+        assert_eq!(*source_to_tokens("      if  ").unwrap(), vec![Token::If]);
     }
 
     #[test]
@@ -214,7 +238,7 @@ mod test_source_to_tokens {
                     (+24 31)
                  )
                 "
-            ),
+            ).unwrap(),
             vec![
                 Token::LParen,
                 Token::Plus,
@@ -226,6 +250,18 @@ mod test_source_to_tokens {
                 Token::RParen,
                 Token::RParen,
             ]
+        );
+    }
+
+    #[test]
+    fn it_doesnt_lex_unknown_tokens() {
+        assert_eq!(
+            source_to_tokens("&").unwrap_err(),
+            "Suprise unknown token, muthafaka."
+        );
+        assert_eq!(
+            source_to_tokens(" \n \t  & \n\t  ").unwrap_err(),
+            "Suprise unknown token, muthafaka."
         );
     }
 }

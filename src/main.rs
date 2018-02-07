@@ -15,7 +15,7 @@ use std::process::exit;
 use eval::Value;
 
 fn evaluate_source(input: &str) -> Result<String, String> {
-    let tokens = lex::source_to_tokens(&input);
+    let tokens = lex::source_to_tokens(&input)?;
 
     let (ast, unprocessed) = parse::tokens_to_ast(tokens.as_slice()).map_err(String::from)?;
 
