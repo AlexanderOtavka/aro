@@ -9,6 +9,7 @@ pub enum Expression {
     Multiply(Box<Expression>, Box<Expression>),
     Divide(Box<Expression>, Box<Expression>),
     If(Box<Expression>, Box<Expression>, Box<Expression>),
+    LEq(Box<Expression>, Box<Expression>),
 }
 
 fn binary_operator_to_ast<F>(
@@ -57,6 +58,9 @@ fn call_to_ast(tokens: &[Token]) -> Result<(Box<Expression>, &[Token]), &str> {
                     )),
                     _ => Err("Nah-ah.  Close that shit with a `)`."),
                 }
+            }
+            Token::LEq => {
+                binary_operator_to_ast(&tokens[1..], |left, right| Expression::LEq(left, right))
             }
             _ => Err("God damn it.  OPERATOR GOES HERE.  It's like I'm talking to a monkey."),
         };
@@ -184,6 +188,23 @@ mod test_tokens_to_ast {
                 Box::new(Expression::Int(2)),
                 Box::new(Expression::Int(5))
             )
+        );
+        assert_eq!(unprocessed.len(), 0);
+    }
+
+    #[test]
+    fn it_makes_a_simple_leq_tree() {
+        let tokens = vec![
+            Token::LParen,
+            Token::LEq,
+            Token::Int(2),
+            Token::Int(5),
+            Token::RParen,
+        ];
+        let (expr, unprocessed) = tokens_to_ast(&tokens).unwrap();
+        assert_eq!(
+            *expr,
+            Expression::LEq(Box::new(Expression::Int(2)), Box::new(Expression::Int(5)))
         );
         assert_eq!(unprocessed.len(), 0);
     }

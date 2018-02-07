@@ -13,6 +13,7 @@ pub enum Token {
     Star,
     Slash,
     If,
+    LEq,
 }
 
 pub fn source_to_tokens(source: &str) -> Box<Vec<Token>> {
@@ -26,6 +27,7 @@ pub fn source_to_tokens(source: &str) -> Box<Vec<Token>> {
     let multiply_regex = Regex::new(r"^\s*\*").unwrap();
     let divide_regex = Regex::new(r"^\s*/").unwrap();
     let if_regex = Regex::new(r"^\s*if").unwrap();
+    let leq_regex = Regex::new(r"^\s*<=").unwrap();
 
     let mut token_list = Vec::new();
     let mut unprocessed_source = source;
@@ -43,7 +45,6 @@ pub fn source_to_tokens(source: &str) -> Box<Vec<Token>> {
             let value_match = captures.get(1).unwrap();
             let value = value_match.as_str().parse::<i32>().unwrap();
             token_list.push(Token::Int(value));
-
             end = captures.get(0).unwrap().end();
         } else if let Some(substr) = true_regex.find(unprocessed_source) {
             token_list.push(Token::Bool(true));
@@ -65,6 +66,9 @@ pub fn source_to_tokens(source: &str) -> Box<Vec<Token>> {
             end = substr.end();
         } else if let Some(substr) = if_regex.find(unprocessed_source) {
             token_list.push(Token::If);
+            end = substr.end();
+        } else if let Some(substr) = leq_regex.find(unprocessed_source) {
+            token_list.push(Token::LEq);
             end = substr.end();
         } else {
             break;

@@ -108,6 +108,14 @@ pub fn evaluate_expression(expression: Box<Expression>) -> Result<Value, String>
                 "This isn't JavaScript.  Only bools in `if`s.  Dumbass.",
             )),
         },
+        Expression::LEq(left, right) => {
+            match (evaluate_expression(left)?, evaluate_expression(right)?) {
+                (Value::Int(left_value), Value::Int(right_value)) => {
+                    Ok(Value::Bool(left_value <= right_value))
+                }
+                _ => Err(String::from("Fuck off with your non-number bullshit.")),
+            }
+        }
     }
 }
 
@@ -165,17 +173,6 @@ mod test_evaluate_expression {
     }
 
     #[test]
-    fn it_doesnt_subtract_bools() {
-        assert_eq!(
-            evaluate_expression(Box::new(Expression::Subtract(
-                Box::new(Expression::Bool(true)),
-                Box::new(Expression::Int(2)),
-            ))).unwrap_err(),
-            "Fuck off with your non-number bullshit."
-        )
-    }
-
-    #[test]
     fn it_multiplies() {
         assert_eq!(
             evaluate_expression(Box::new(Expression::Multiply(
@@ -183,17 +180,6 @@ mod test_evaluate_expression {
                 Box::new(Expression::Int(2)),
             ))).unwrap(),
             Value::Int(6)
-        )
-    }
-
-    #[test]
-    fn it_doesnt_multiply_bools() {
-        assert_eq!(
-            evaluate_expression(Box::new(Expression::Multiply(
-                Box::new(Expression::Bool(true)),
-                Box::new(Expression::Int(2)),
-            ))).unwrap_err(),
-            "Fuck off with your non-number bullshit."
         )
     }
 
@@ -227,17 +213,6 @@ mod test_evaluate_expression {
                 Box::new(Expression::Int(0)),
             ))).unwrap(),
             Value::NaN
-        )
-    }
-
-    #[test]
-    fn it_doesnt_divide_bools() {
-        assert_eq!(
-            evaluate_expression(Box::new(Expression::Divide(
-                Box::new(Expression::Bool(true)),
-                Box::new(Expression::Int(2)),
-            ))).unwrap_err(),
-            "Fuck off with your non-number bullshit."
         )
     }
 
@@ -289,5 +264,23 @@ mod test_evaluate_expression {
             ))).unwrap(),
             Value::Int(7)
         )
+    }
+
+    #[test]
+    fn it_compares_with_leq() {
+        assert_eq!(
+            evaluate_expression(Box::new(Expression::LEq(
+                Box::new(Expression::Int(3)),
+                Box::new(Expression::Int(2)),
+            ))).unwrap(),
+            Value::Bool(false)
+        );
+        assert_eq!(
+            evaluate_expression(Box::new(Expression::LEq(
+                Box::new(Expression::Int(2)),
+                Box::new(Expression::Int(2)),
+            ))).unwrap(),
+            Value::Bool(true)
+        );
     }
 }
