@@ -84,15 +84,13 @@ pub fn source_to_tokens(source: &str) -> Result<Box<Vec<Token>>, String> {
             token_list.push(Token::LEq);
             end = substr.end();
         } else if end_regex.is_match(unprocessed_source) {
-            break;
+            return Ok(Box::new(token_list));
         } else {
             return Err(String::from("Suprise unknown token, muthafaka."));
         }
 
         unprocessed_source = &unprocessed_source[end..];
     }
-
-    Ok(Box::new(token_list))
 }
 
 #[cfg(test)]
