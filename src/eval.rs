@@ -99,6 +99,13 @@ pub fn evaluate_expression(expression: Box<Expression>) -> Result<Value, String>
                 }
             }
         }
+        Expression::If(guard, consequent, alternate) => match *guard {
+            Expression::Bool(guard_value) => evaluate_expression(match guard_value {
+                true => consequent,
+                false => alternate,
+            }),
+            _ => Err(String::from("This isn't JavaScript.  Only bools in `if`s.")),
+        },
     }
 }
 
@@ -229,6 +236,42 @@ mod test_evaluate_expression {
                 Box::new(Expression::Int(2)),
             ))).unwrap_err(),
             "Fuck off with your non-number bullshit."
+        )
+    }
+
+    #[test]
+    fn it_returns_the_consequent_of_an_if() {
+        assert_eq!(
+            evaluate_expression(Box::new(Expression::If(
+                Box::new(Expression::Bool(true)),
+                Box::new(Expression::Int(1)),
+                Box::new(Expression::Int(2)),
+            ))).unwrap(),
+            Value::Int(1)
+        )
+    }
+
+    #[test]
+    fn it_returns_the_alternate_of_an_if() {
+        assert_eq!(
+            evaluate_expression(Box::new(Expression::If(
+                Box::new(Expression::Bool(false)),
+                Box::new(Expression::Int(1)),
+                Box::new(Expression::Int(2)),
+            ))).unwrap(),
+            Value::Int(2)
+        )
+    }
+
+    #[test]
+    fn it_requires_a_bool_if_guard() {
+        assert_eq!(
+            evaluate_expression(Box::new(Expression::If(
+                Box::new(Expression::Int(1)),
+                Box::new(Expression::Int(2)),
+                Box::new(Expression::Int(3)),
+            ))).unwrap_err(),
+            "This isn't JavaScript.  Only bools in `if`s."
         )
     }
 

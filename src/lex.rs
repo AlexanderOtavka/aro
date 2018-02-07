@@ -12,6 +12,7 @@ pub enum Token {
     Minus,
     Star,
     Slash,
+    If,
 }
 
 pub fn source_to_tokens(source: &str) -> Box<Vec<Token>> {
@@ -24,6 +25,7 @@ pub fn source_to_tokens(source: &str) -> Box<Vec<Token>> {
     let minus_regex = Regex::new(r"^\s*\-").unwrap();
     let multiply_regex = Regex::new(r"^\s*\*").unwrap();
     let divide_regex = Regex::new(r"^\s*/").unwrap();
+    let if_regex = Regex::new(r"^\s*if").unwrap();
 
     let mut token_list = Vec::new();
     let mut unprocessed_source = source;
@@ -60,6 +62,9 @@ pub fn source_to_tokens(source: &str) -> Box<Vec<Token>> {
             end = substr.end();
         } else if let Some(substr) = divide_regex.find(unprocessed_source) {
             token_list.push(Token::Slash);
+            end = substr.end();
+        } else if let Some(substr) = if_regex.find(unprocessed_source) {
+            token_list.push(Token::If);
             end = substr.end();
         } else {
             break;
@@ -149,6 +154,11 @@ mod test_source_to_tokens {
     #[test]
     fn it_lexes_a_divide_sign() {
         assert_eq!(*source_to_tokens("      /  "), vec![Token::Slash]);
+    }
+
+    #[test]
+    fn it_lexes_an_if() {
+        assert_eq!(*source_to_tokens("      if  "), vec![Token::If]);
     }
 
     #[test]
