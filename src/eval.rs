@@ -32,6 +32,7 @@ where
 #[cfg(test)]
 mod test_evaluate_number_operator {
     use super::*;
+    use std::f64::NAN;
 
     #[test]
     fn it_operates_on_two_ints() {
