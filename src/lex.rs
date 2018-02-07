@@ -7,6 +7,7 @@ pub enum Token {
     LParen,
     RParen,
     Int(i32),
+    Float(f64),
     Bool(bool),
     Plus,
     Minus,
@@ -19,6 +20,7 @@ pub enum Token {
 pub fn source_to_tokens(source: &str) -> Box<Vec<Token>> {
     let l_paren_regex = Regex::new(r"^\s*\(").unwrap();
     let r_paren_regex = Regex::new(r"^\s*\)").unwrap();
+    let float_regex = Regex::new(r"^\s*(\-?\d+\.\d+)").unwrap();
     let int_regex = Regex::new(r"^\s*(\-?\d+)").unwrap();
     let true_regex = Regex::new(r"^\s*true").unwrap();
     let false_regex = Regex::new(r"^\s*false").unwrap();
@@ -41,6 +43,11 @@ pub fn source_to_tokens(source: &str) -> Box<Vec<Token>> {
         } else if let Some(substr) = r_paren_regex.find(unprocessed_source) {
             token_list.push(Token::RParen);
             end = substr.end();
+        } else if let Some(captures) = float_regex.captures(unprocessed_source) {
+            let value_match = captures.get(1).unwrap();
+            let value = value_match.as_str().parse::<f64>().unwrap();
+            token_list.push(Token::Float(value));
+            end = captures.get(0).unwrap().end();
         } else if let Some(captures) = int_regex.captures(unprocessed_source) {
             let value_match = captures.get(1).unwrap();
             let value = value_match.as_str().parse::<i32>().unwrap();
@@ -127,6 +134,24 @@ mod test_source_to_tokens {
         assert_eq!(
             *source_to_tokens("    - 27  "),
             vec![Token::Minus, Token::Int(27)]
+        );
+    }
+
+    #[test]
+    fn it_lexes_a_float() {
+        assert_eq!(*source_to_tokens("    27.2  "), vec![Token::Float(27.2)]);
+    }
+
+    #[test]
+    fn it_lexes_a_negative_float() {
+        assert_eq!(*source_to_tokens("    -27.2  "), vec![Token::Float(-27.2)]);
+    }
+
+    #[test]
+    fn it_lexes_a_minus_and_then_a_float() {
+        assert_eq!(
+            *source_to_tokens("    - 27.2  "),
+            vec![Token::Minus, Token::Float(27.2)]
         );
     }
 

@@ -3,6 +3,7 @@ use super::lex::Token;
 #[derive(Debug, PartialEq)]
 pub enum Expression {
     Int(i32),
+    Float(f64),
     Bool(bool),
     Add(Box<Expression>, Box<Expression>),
     Subtract(Box<Expression>, Box<Expression>),
@@ -73,6 +74,7 @@ pub fn tokens_to_ast(tokens: &[Token]) -> Result<(Box<Expression>, &[Token]), &s
     if let Some(token) = tokens.get(0) {
         return match *token {
             Token::Int(value) => Ok((Box::new(Expression::Int(value)), &tokens[1..])),
+            Token::Float(value) => Ok((Box::new(Expression::Float(value)), &tokens[1..])),
             Token::Bool(value) => Ok((Box::new(Expression::Bool(value)), &tokens[1..])),
             Token::LParen => call_to_ast(&tokens[1..]),
             _ => Err("Hey asshole, expected value or `(`."),
@@ -95,6 +97,14 @@ mod test_tokens_to_ast {
     }
 
     #[test]
+    fn it_makes_a_float_tree() {
+        let tokens = vec![Token::Float(5.3)];
+        let (expr, unprocessed) = tokens_to_ast(&tokens).unwrap();
+        assert_eq!(*expr, Expression::Float(5.3));
+        assert_eq!(unprocessed.len(), 0);
+    }
+
+    #[test]
     fn it_makes_a_bool_tree() {
         let tokens = vec![Token::Bool(true)];
         let (expr, unprocessed) = tokens_to_ast(&tokens).unwrap();
@@ -108,13 +118,16 @@ mod test_tokens_to_ast {
             Token::LParen,
             Token::Plus,
             Token::Int(2),
-            Token::Int(5),
+            Token::Float(5.1),
             Token::RParen,
         ];
         let (expr, unprocessed) = tokens_to_ast(&tokens).unwrap();
         assert_eq!(
             *expr,
-            Expression::Add(Box::new(Expression::Int(2)), Box::new(Expression::Int(5)))
+            Expression::Add(
+                Box::new(Expression::Int(2)),
+                Box::new(Expression::Float(5.1))
+            )
         );
         assert_eq!(unprocessed.len(), 0);
     }

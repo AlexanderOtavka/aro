@@ -27,6 +27,7 @@ fn evaluate_source(input: &str) -> Result<String, String> {
 
     Ok(match eval::evaluate_expression(ast)? {
         Value::Int(value) => format!("{}", value),
+        Value::Float(value) => format!("{}", value),
         Value::Bool(true) => String::from("true"),
         Value::Bool(false) => String::from("false"),
         Value::NaN => String::from("NaN"),
@@ -50,12 +51,12 @@ mod test_evaluate_source {
         assert_eq!(
             evaluate_source(
                 "
-                (+ 20
+                (+ -20.2
                    (+ (+ 5 10)
                       15))
                 "
             ).unwrap(),
-            "50"
+            "9.8"
         );
     }
 
@@ -66,7 +67,7 @@ mod test_evaluate_source {
                 "
                 (if (<= 20 10)
                     (* 2 (/ 0 0))
-                    (- 5 10))
+                    (- -10 -5))
                 "
             ).unwrap(),
             "-5"

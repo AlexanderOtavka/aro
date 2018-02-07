@@ -3,20 +3,33 @@ use super::parse::Expression;
 #[derive(Debug, PartialEq)]
 pub enum Value {
     Int(i32),
+    Float(f64),
     Bool(bool),
     NaN,
 }
 
 fn evaluate_number_operator<F>(left: &Value, right: &Value, evaluate: F) -> Result<Value, String>
 where
-    F: Fn(i32, i32) -> i32,
+    F: Fn(f64, f64) -> f64,
 {
     match (left, right) {
         (&Value::Int(left_value), &Value::Int(right_value)) => {
-            Ok(Value::Int(evaluate(left_value, right_value)))
+            Ok(Value::Int(evaluate(left_value as f64, right_value as f64)
+                as i32))
+        }
+        (&Value::Float(left_value), &Value::Float(right_value)) => {
+            Ok(Value::Float(evaluate(left_value, right_value)))
+        }
+        (&Value::Int(left_value), &Value::Float(right_value)) => {
+            Ok(Value::Float(evaluate(left_value as f64, right_value)))
+        }
+        (&Value::Float(left_value), &Value::Int(right_value)) => {
+            Ok(Value::Float(evaluate(left_value, right_value as f64)))
         }
         (&Value::Int(_), &Value::NaN)
         | (&Value::NaN, &Value::Int(_))
+        | (&Value::Float(_), &Value::NaN)
+        | (&Value::NaN, &Value::Float(_))
         | (&Value::NaN, &Value::NaN) => Ok(Value::NaN),
         _ => Err(String::from("Fuck off with your non-number bullshit.")),
     }
@@ -31,6 +44,26 @@ mod test_evaluate_number_operator {
         assert_eq!(
             evaluate_number_operator(&Value::Int(2), &Value::Int(4), |a, b| a + b).unwrap(),
             Value::Int(6)
+        );
+    }
+
+    #[test]
+    fn it_operates_on_two_floats() {
+        assert_eq!(
+            evaluate_number_operator(&Value::Float(2.1), &Value::Float(4.3), |a, b| a + b).unwrap(),
+            Value::Float(6.4)
+        );
+    }
+
+    #[test]
+    fn it_operates_on_mixed_ints_and_floats() {
+        assert_eq!(
+            evaluate_number_operator(&Value::Int(2), &Value::Float(4.3), |a, b| a + b).unwrap(),
+            Value::Float(6.3)
+        );
+        assert_eq!(
+            evaluate_number_operator(&Value::Float(2.3), &Value::Int(4), |a, b| a + b).unwrap(),
+            Value::Float(6.3)
         );
     }
 
@@ -62,6 +95,14 @@ mod test_evaluate_number_operator {
             Value::NaN
         );
         assert_eq!(
+            evaluate_number_operator(&Value::NaN, &Value::Float(4.2), |a, b| a + b).unwrap(),
+            Value::NaN
+        );
+        assert_eq!(
+            evaluate_number_operator(&Value::Float(4.2), &Value::NaN, |a, b| a + b).unwrap(),
+            Value::NaN
+        );
+        assert_eq!(
             evaluate_number_operator(&Value::NaN, &Value::NaN, |a, b| a + b).unwrap(),
             Value::NaN
         );
@@ -72,6 +113,7 @@ pub fn evaluate_expression(expression: Box<Expression>) -> Result<Value, String>
     let expr = *expression;
     match expr {
         Expression::Int(value) => Ok(Value::Int(value)),
+        Expression::Float(value) => Ok(Value::Float(value)),
         Expression::Bool(value) => Ok(Value::Bool(value)),
         Expression::Add(left, right) => evaluate_number_operator(
             &evaluate_expression(left)?,
