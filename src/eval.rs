@@ -1,5 +1,4 @@
 use super::parse::Expression;
-use std::f64::NAN;
 
 #[derive(Debug, PartialEq)]
 pub enum Value {
