@@ -30,7 +30,6 @@ fn evaluate_source(input: &str) -> Result<String, String> {
         Value::Float(value) => format!("{}", value),
         Value::Bool(true) => String::from("true"),
         Value::Bool(false) => String::from("false"),
-        Value::NaN => String::from("NaN"),
     })
 }
 
@@ -71,6 +70,19 @@ mod test_evaluate_source {
                 "
             ).unwrap(),
             "-5"
+        );
+    }
+
+    #[test]
+    fn it_does_zero_division_with_floats() {
+        assert_eq!(
+            evaluate_source(
+                "
+                (- (/ 1 0.0)
+                   100000000000000000000000000000000000000000000000000000.0)
+                "
+            ).unwrap(),
+            "inf"
         );
     }
 

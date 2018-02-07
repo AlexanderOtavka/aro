@@ -1,11 +1,11 @@
 use super::parse::Expression;
+use std::f64::NAN;
 
 #[derive(Debug, PartialEq)]
 pub enum Value {
     Int(i32),
     Float(f64),
     Bool(bool),
-    NaN,
 }
 
 fn evaluate_number_operator<F>(left: &Value, right: &Value, evaluate: F) -> Result<Value, String>
@@ -26,11 +26,6 @@ where
         (&Value::Float(left_value), &Value::Int(right_value)) => {
             Ok(Value::Float(evaluate(left_value, right_value as f64)))
         }
-        (&Value::Int(_), &Value::NaN)
-        | (&Value::NaN, &Value::Int(_))
-        | (&Value::Float(_), &Value::NaN)
-        | (&Value::NaN, &Value::Float(_))
-        | (&Value::NaN, &Value::NaN) => Ok(Value::NaN),
         _ => Err(String::from("Fuck off with your non-number bullshit.")),
     }
 }
@@ -84,28 +79,31 @@ mod test_evaluate_number_operator {
         );
     }
 
+    fn val_is_nan(value: Value) -> bool {
+        if let Value::Float(num) = value {
+            num.is_nan()
+        } else {
+            false
+        }
+    }
+
     #[test]
     fn it_turns_nan_add_inputs_to_nan_add_outputs() {
-        assert_eq!(
-            evaluate_number_operator(&Value::NaN, &Value::Int(4), |a, b| a + b).unwrap(),
-            Value::NaN
-        );
-        assert_eq!(
-            evaluate_number_operator(&Value::Int(4), &Value::NaN, |a, b| a + b).unwrap(),
-            Value::NaN
-        );
-        assert_eq!(
-            evaluate_number_operator(&Value::NaN, &Value::Float(4.2), |a, b| a + b).unwrap(),
-            Value::NaN
-        );
-        assert_eq!(
-            evaluate_number_operator(&Value::Float(4.2), &Value::NaN, |a, b| a + b).unwrap(),
-            Value::NaN
-        );
-        assert_eq!(
-            evaluate_number_operator(&Value::NaN, &Value::NaN, |a, b| a + b).unwrap(),
-            Value::NaN
-        );
+        assert!(val_is_nan(
+            evaluate_number_operator(&Value::Float(NAN), &Value::Int(4), |a, b| a + b).unwrap(),
+        ));
+        assert!(val_is_nan(
+            evaluate_number_operator(&Value::Int(4), &Value::Float(NAN), |a, b| a + b).unwrap(),
+        ));
+        assert!(val_is_nan(
+            evaluate_number_operator(&Value::Float(NAN), &Value::Float(4.2), |a, b| a + b).unwrap(),
+        ));
+        assert!(val_is_nan(
+            evaluate_number_operator(&Value::Float(4.2), &Value::Float(NAN), |a, b| a + b).unwrap(),
+        ));
+        assert!(val_is_nan(
+            evaluate_number_operator(&Value::Float(NAN), &Value::Float(NAN), |a, b| a + b).unwrap(),
+        ));
     }
 }
 
@@ -132,7 +130,6 @@ pub fn evaluate_expression(expression: Box<Expression>) -> Result<Value, String>
         ),
         Expression::Divide(left, right) => {
             match (evaluate_expression(left)?, evaluate_expression(right)?) {
-                (Value::Int(0), Value::Int(0)) => Ok(Value::NaN), // I hate this
                 (Value::Int(_), Value::Int(0)) => {
                     Err(String::from("Fuck off with your divide-by-zero bullshit."))
                 }
@@ -226,7 +223,7 @@ mod test_evaluate_expression {
     }
 
     #[test]
-    fn it_divides() {
+    fn it_divides_integers() {
         assert_eq!(
             evaluate_expression(Box::new(Expression::Divide(
                 Box::new(Expression::Int(3)),
@@ -237,25 +234,45 @@ mod test_evaluate_expression {
     }
 
     #[test]
-    fn it_does_not_divide_by_zero() {
+    fn it_divides_floats() {
+        assert_eq!(
+            evaluate_expression(Box::new(Expression::Divide(
+                Box::new(Expression::Float(3.0)),
+                Box::new(Expression::Int(2)),
+            ))).unwrap(),
+            Value::Float(1.5)
+        )
+    }
+
+    #[test]
+    fn it_does_not_divide_ints_by_zero() {
         assert_eq!(
             evaluate_expression(Box::new(Expression::Divide(
                 Box::new(Expression::Int(3)),
                 Box::new(Expression::Int(0)),
             ))).unwrap_err(),
             "Fuck off with your divide-by-zero bullshit."
-        )
-    }
-
-    #[test]
-    fn it_divides_zero_by_zero() {
+        );
         assert_eq!(
             evaluate_expression(Box::new(Expression::Divide(
                 Box::new(Expression::Int(0)),
                 Box::new(Expression::Int(0)),
-            ))).unwrap(),
-            Value::NaN
-        )
+            ))).unwrap_err(),
+            "Fuck off with your divide-by-zero bullshit."
+        );
+    }
+
+    #[test]
+    fn it_divides_zero_by_zero() {
+        if let Value::Float(num) = evaluate_expression(Box::new(Expression::Divide(
+            Box::new(Expression::Float(0.0)),
+            Box::new(Expression::Int(0)),
+        ))).unwrap()
+        {
+            assert!(num.is_nan());
+        } else {
+            assert!(false, "Not a float value");
+        }
     }
 
     #[test]
