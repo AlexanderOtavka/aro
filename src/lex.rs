@@ -1,7 +1,7 @@
 extern crate regex;
 
 use self::regex::Regex;
-use std::f64::NAN;
+use std::f64::{INFINITY, NAN};
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
@@ -23,6 +23,8 @@ pub fn source_to_tokens(source: &str) -> Result<Box<Vec<Token>>, String> {
     let r_paren_regex = Regex::new(r"^\s*\)").unwrap();
     let float_regex = Regex::new(r"^\s*(\-?\d+\.\d+)").unwrap();
     let nan_regex = Regex::new(r"^\s*NaN").unwrap();
+    let inf_regex = Regex::new(r"^\s*inf").unwrap();
+    let neg_inf_regex = Regex::new(r"^\s*-inf").unwrap();
     let int_regex = Regex::new(r"^\s*(\-?\d+)").unwrap();
     let true_regex = Regex::new(r"^\s*true").unwrap();
     let false_regex = Regex::new(r"^\s*false").unwrap();
@@ -53,6 +55,12 @@ pub fn source_to_tokens(source: &str) -> Result<Box<Vec<Token>>, String> {
             end = captures.get(0).unwrap().end();
         } else if let Some(substr) = nan_regex.find(unprocessed_source) {
             token_list.push(Token::Float(NAN));
+            end = substr.end();
+        } else if let Some(substr) = inf_regex.find(unprocessed_source) {
+            token_list.push(Token::Float(INFINITY));
+            end = substr.end();
+        } else if let Some(substr) = neg_inf_regex.find(unprocessed_source) {
+            token_list.push(Token::Float(-INFINITY));
             end = substr.end();
         } else if let Some(captures) = int_regex.captures(unprocessed_source) {
             let value_match = captures.get(1).unwrap();
@@ -173,6 +181,30 @@ mod test_source_to_tokens {
         assert_eq!(
             *source_to_tokens("    - 27.2  ").unwrap(),
             vec![Token::Minus, Token::Float(27.2)]
+        );
+    }
+
+    #[test]
+    fn it_lexes_infinity() {
+        assert_eq!(
+            *source_to_tokens("    inf  ").unwrap(),
+            vec![Token::Float(INFINITY)]
+        );
+    }
+
+    #[test]
+    fn it_lexes_negative_infinity() {
+        assert_eq!(
+            *source_to_tokens("    -inf  ").unwrap(),
+            vec![Token::Float(-INFINITY)]
+        );
+    }
+
+    #[test]
+    fn it_lexes_a_minus_and_then_infinity() {
+        assert_eq!(
+            *source_to_tokens("    - inf  ").unwrap(),
+            vec![Token::Minus, Token::Float(INFINITY)]
         );
     }
 
