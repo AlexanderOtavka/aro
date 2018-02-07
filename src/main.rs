@@ -56,6 +56,20 @@ mod test_evaluate_source {
     }
 
     #[test]
+    fn it_evaluates_an_if_expression() {
+        assert_eq!(
+            evaluate_source(
+                "
+                (if (<= 20 10)
+                    (* 2 (/ 0 0))
+                    (- 5 10))
+                "
+            ).unwrap(),
+            "-5"
+        );
+    }
+
+    #[test]
     fn it_reports_an_error() {
         assert_eq!(
             evaluate_source(

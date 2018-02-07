@@ -99,8 +99,8 @@ pub fn evaluate_expression(expression: Box<Expression>) -> Result<Value, String>
                 }
             }
         }
-        Expression::If(guard, consequent, alternate) => match *guard {
-            Expression::Bool(guard_value) => evaluate_expression(match guard_value {
+        Expression::If(guard, consequent, alternate) => match evaluate_expression(guard)? {
+            Value::Bool(guard_value) => evaluate_expression(match guard_value {
                 true => consequent,
                 false => alternate,
             }),
@@ -220,7 +220,10 @@ mod test_evaluate_expression {
     fn it_returns_the_consequent_of_an_if() {
         assert_eq!(
             evaluate_expression(Box::new(Expression::If(
-                Box::new(Expression::Bool(true)),
+                Box::new(Expression::LEq(
+                    Box::new(Expression::Int(1)),
+                    Box::new(Expression::Int(1)),
+                )),
                 Box::new(Expression::Int(1)),
                 Box::new(Expression::Int(2)),
             ))).unwrap(),
