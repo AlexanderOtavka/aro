@@ -34,7 +34,7 @@ where
 
 fn call_to_ast(tokens: &[Token]) -> Result<(Box<Expression>, &[Token]), &str> {
     if let Some(token) = tokens.get(0) {
-        return match *token {
+        match *token {
             Token::Plus => {
                 binary_operator_to_ast(&tokens[1..], |left, right| Expression::Add(left, right))
             }
@@ -64,23 +64,23 @@ fn call_to_ast(tokens: &[Token]) -> Result<(Box<Expression>, &[Token]), &str> {
                 binary_operator_to_ast(&tokens[1..], |left, right| Expression::LEq(left, right))
             }
             _ => Err("God damn it.  OPERATOR GOES HERE.  It's like I'm talking to a monkey."),
-        };
+        }
     } else {
-        return Err("You ass goblin!  You can't end the file there.");
+        Err("You ass goblin!  You can't end the file there.")
     }
 }
 
 pub fn tokens_to_ast(tokens: &[Token]) -> Result<(Box<Expression>, &[Token]), &str> {
     if let Some(token) = tokens.get(0) {
-        return match *token {
+        match *token {
             Token::Int(value) => Ok((Box::new(Expression::Int(value)), &tokens[1..])),
             Token::Float(value) => Ok((Box::new(Expression::Float(value)), &tokens[1..])),
             Token::Bool(value) => Ok((Box::new(Expression::Bool(value)), &tokens[1..])),
             Token::LParen => call_to_ast(&tokens[1..]),
             _ => Err("Hey asshole, expected value or `(`."),
-        };
+        }
     } else {
-        return Err("You ass goblin!  You can't end the file there.");
+        Err("You ass goblin!  You can't end the file there.")
     }
 }
 
