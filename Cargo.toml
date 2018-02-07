@@ -9,3 +9,4 @@ ci = []
 
 [dependencies]
 clap = "2.29.2"
+regex = "0.2.5"
