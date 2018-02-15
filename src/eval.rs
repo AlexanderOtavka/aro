@@ -1,4 +1,4 @@
-use super::parse::Expression;
+use ast::Expression;
 
 #[derive(Debug, PartialEq)]
 pub enum Value {

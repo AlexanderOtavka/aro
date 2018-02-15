@@ -2,28 +2,22 @@
 //  https://doc.rust-lang.org
 //  https://stackoverflow.com/questions/34969902/how-to-write-a-rust-function-that-takes-an-iterator
 //  https://stackoverflow.com/questions/28370126/how-can-i-test-stdin-and-stdout
+//  http://lalrpop.github.io/lalrpop/
 
 #![cfg_attr(feature = "ci", deny(warnings))]
 
 extern crate clap;
-mod lex;
 mod parse;
 mod eval;
+mod ast;
+mod grammar;
 
 use std::io::prelude::*;
 use std::process::exit;
 use eval::Value;
 
 fn evaluate_source(input: &str) -> Result<String, String> {
-    let tokens = lex::source_to_tokens(&input)?;
-
-    let (ast, unprocessed) = parse::tokens_to_ast(tokens.as_slice()).map_err(String::from)?;
-
-    if unprocessed.len() > 0 {
-        return Err(String::from(
-            "One expression per file!  Get that shit out'a here.",
-        ));
-    }
+    let ast = parse::source_to_ast(input)?;
 
     Ok(match eval::evaluate_expression(ast)? {
         Value::Int(value) => format!("{}", value),
@@ -50,9 +44,8 @@ mod test_evaluate_source {
         assert_eq!(
             evaluate_source(
                 "
-                (+ -20.2
-                   (+ (+ 5 10)
-                      15))
+                -20.2 +
+                (5 + 10 + 15)
                 "
             ).unwrap(),
             "9.8"
@@ -64,9 +57,10 @@ mod test_evaluate_source {
         assert_eq!(
             evaluate_source(
                 "
-                (if (<= 20 10)
-                    (* 2 (/ 0 0))
-                    (- -10 -5))
+                if 20 <= 10 then
+                    2 * (0 / 0)
+                else
+                    -10 - -5
                 "
             ).unwrap(),
             "-5"
@@ -78,8 +72,8 @@ mod test_evaluate_source {
         assert_eq!(
             evaluate_source(
                 "
-                (- (/ 1 0.0)
-                   100000000000000000000000000000000000000000000000000000.0)
+                1 / 0.0 -
+                    100000000000000000000000000000000000000000000000000000.0
                 "
             ).unwrap(),
             "inf"
@@ -88,23 +82,18 @@ mod test_evaluate_source {
 
     #[test]
     fn it_reports_an_error() {
-        assert_eq!(
+        assert!(
             evaluate_source(
                 "
-                (+ 20
-                   (+ (+ 5 10)
+                20 + (5 + 10
                 "
-            ).unwrap_err(),
-            "You ass goblin!  You can't end the file there."
+            ).is_err()
         );
     }
 
     #[test]
     fn it_complains_about_extra_tokens_in_file() {
-        assert_eq!(
-            evaluate_source("5 7").unwrap_err(),
-            "One expression per file!  Get that shit out'a here.",
-        );
+        assert!(evaluate_source("5 7").is_err());
     }
 }
 

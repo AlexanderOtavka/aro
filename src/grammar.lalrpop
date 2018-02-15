@@ -1,0 +1,49 @@
+use std::str::FromStr;
+use ast::Expression;
+use std::f64::{NAN, INFINITY};
+
+grammar;
+
+pub Expr: Box<Expression> = {
+    "if" <Expr> "then" <Expr> "else" <Expr> => Box::new(Expression::If(<>)),
+    Tier3,
+};
+
+Tier3 = {
+    <Tier3> "<=" <Tier2> => Box::new(Expression::LEq(<>)),
+    Tier2,
+};
+
+Tier2 = {
+    <Tier2> "+" <Tier1> => Box::new(Expression::Add(<>)),
+    <Tier2> "-" <Tier1> => Box::new(Expression::Subtract(<>)),
+    Tier1,
+};
+
+Tier1 = {
+    <Tier1> "*" <Value> => Box::new(Expression::Multiply(<>)),
+    <Tier1> "/" <Value> => Box::new(Expression::Divide(<>)),
+    Value,
+};
+
+Value = {
+    Int => Box::new(Expression::Int(<>)),
+    Float => Box::new(Expression::Float(<>)),
+    Bool => Box::new(Expression::Bool(<>)),
+    "(" <Expr> ")",
+};
+
+Float: f64 = {
+    r"-?[0-9]+\.[0-9]+" => f64::from_str(<>).unwrap(),
+    r"NaN" => NAN,
+    r"inf" => INFINITY,
+};
+
+Int: i32 = {
+    r"-?[0-9]+" => i32::from_str(<>).unwrap(),
+};
+
+Bool: bool = {
+    r"true" => true,
+    r"false" => false,
+};

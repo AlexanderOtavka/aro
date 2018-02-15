@@ -11,3 +11,5 @@ Cargo.lock
 
 # The executable copied by make
 /aro
+
+/src/grammar.rs
