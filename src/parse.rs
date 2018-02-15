@@ -11,6 +11,11 @@ mod source_to_ast {
     use std::f64::INFINITY;
 
     #[test]
+    fn unwraps_parens() {
+        assert_eq!(*source_to_ast("(((((5)))))").unwrap(), Expression::Int(5));
+    }
+
+    #[test]
     fn makes_an_int_tree() {
         assert_eq!(*source_to_ast("5").unwrap(), Expression::Int(5));
     }
@@ -106,5 +111,29 @@ mod source_to_ast {
                 ))
             )
         );
+    }
+
+    #[test]
+    fn overrides_precedence_with_parens() {
+        assert_eq!(
+            *source_to_ast("(2 + 3) * 5").unwrap(),
+            Expression::Multiply(
+                Box::new(Expression::Add(
+                    Box::new(Expression::Int(2)),
+                    Box::new(Expression::Int(3))
+                )),
+                Box::new(Expression::Int(5)),
+            )
+        );
+    }
+
+    #[test]
+    fn complains_about_empty_input() {
+        assert!(source_to_ast("").is_err());
+    }
+
+    #[test]
+    fn doesnt_like_empty_parens() {
+        assert!(source_to_ast("()").is_err());
     }
 }
