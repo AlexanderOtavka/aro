@@ -28,11 +28,11 @@ fn evaluate_source(input: &str) -> Result<String, String> {
 }
 
 #[cfg(test)]
-mod test_evaluate_source {
+mod evaluate_source {
     use super::*;
 
     #[test]
-    fn it_spits_out_a_result() {
+    fn spits_out_a_result() {
         assert_eq!(evaluate_source("5").unwrap(), "5");
         assert_eq!(evaluate_source("-51").unwrap(), "-51");
         assert_eq!(evaluate_source("false").unwrap(), "false");
@@ -40,7 +40,7 @@ mod test_evaluate_source {
     }
 
     #[test]
-    fn it_evaluates_an_ast() {
+    fn evaluates_an_ast() {
         assert_eq!(
             evaluate_source(
                 "
@@ -53,7 +53,7 @@ mod test_evaluate_source {
     }
 
     #[test]
-    fn it_evaluates_an_if_expression() {
+    fn evaluates_an_if_expression() {
         assert_eq!(
             evaluate_source(
                 "
@@ -68,7 +68,7 @@ mod test_evaluate_source {
     }
 
     #[test]
-    fn it_does_zero_division_with_floats() {
+    fn does_zero_division_with_floats() {
         assert_eq!(
             evaluate_source(
                 "
@@ -81,7 +81,7 @@ mod test_evaluate_source {
     }
 
     #[test]
-    fn it_reports_an_error() {
+    fn reports_an_error() {
         assert!(
             evaluate_source(
                 "
@@ -92,7 +92,7 @@ mod test_evaluate_source {
     }
 
     #[test]
-    fn it_complains_about_extra_tokens_in_file() {
+    fn complains_about_extra_tokens_in_file() {
         assert!(evaluate_source("5 7").is_err());
     }
 }

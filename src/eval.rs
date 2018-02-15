@@ -30,12 +30,12 @@ where
 }
 
 #[cfg(test)]
-mod test_evaluate_number_operator {
+mod evaluate_number_operator {
     use super::*;
     use std::f64::NAN;
 
     #[test]
-    fn it_operates_on_two_ints() {
+    fn operates_on_two_ints() {
         assert_eq!(
             evaluate_number_operator(&Value::Int(2), &Value::Int(4), |a, b| a + b).unwrap(),
             Value::Int(6)
@@ -43,7 +43,7 @@ mod test_evaluate_number_operator {
     }
 
     #[test]
-    fn it_operates_on_two_floats() {
+    fn operates_on_two_floats() {
         assert_eq!(
             evaluate_number_operator(&Value::Float(2.1), &Value::Float(4.3), |a, b| a + b).unwrap(),
             Value::Float(6.4)
@@ -51,7 +51,7 @@ mod test_evaluate_number_operator {
     }
 
     #[test]
-    fn it_operates_on_mixed_ints_and_floats() {
+    fn operates_on_mixed_ints_and_floats() {
         assert_eq!(
             evaluate_number_operator(&Value::Int(2), &Value::Float(4.3), |a, b| a + b).unwrap(),
             Value::Float(6.3)
@@ -63,7 +63,7 @@ mod test_evaluate_number_operator {
     }
 
     #[test]
-    fn it_doesnt_add_bools() {
+    fn doesnt_add_bools() {
         assert_eq!(
             evaluate_number_operator(&Value::Bool(true), &Value::Int(4), |a, b| a + b).unwrap_err(),
             "Fuck off with your non-number bullshit."
@@ -88,7 +88,7 @@ mod test_evaluate_number_operator {
     }
 
     #[test]
-    fn it_turns_nan_add_inputs_to_nan_add_outputs() {
+    fn turns_nan_add_inputs_to_nan_add_outputs() {
         assert!(val_is_nan(
             evaluate_number_operator(&Value::Float(NAN), &Value::Int(4), |a, b| a + b).unwrap(),
         ));
@@ -159,11 +159,11 @@ pub fn evaluate_expression(expression: Box<Expression>) -> Result<Value, String>
 }
 
 #[cfg(test)]
-mod test_evaluate_expression {
+mod evaluate_expression {
     use super::*;
 
     #[test]
-    fn it_spits_back_out_an_int() {
+    fn spits_back_out_an_int() {
         assert_eq!(
             evaluate_expression(Box::new(Expression::Int(5))).unwrap(),
             Value::Int(5)
@@ -171,7 +171,7 @@ mod test_evaluate_expression {
     }
 
     #[test]
-    fn it_spits_back_out_a_bool() {
+    fn spits_back_out_a_bool() {
         assert_eq!(
             evaluate_expression(Box::new(Expression::Bool(true))).unwrap(),
             Value::Bool(true)
@@ -179,7 +179,7 @@ mod test_evaluate_expression {
     }
 
     #[test]
-    fn it_adds() {
+    fn adds() {
         assert_eq!(
             evaluate_expression(Box::new(Expression::Add(
                 Box::new(Expression::Int(1)),
@@ -190,7 +190,7 @@ mod test_evaluate_expression {
     }
 
     #[test]
-    fn it_adds_negative_numbers() {
+    fn adds_negative_numbers() {
         assert_eq!(
             evaluate_expression(Box::new(Expression::Add(
                 Box::new(Expression::Int(-1)),
@@ -201,7 +201,7 @@ mod test_evaluate_expression {
     }
 
     #[test]
-    fn it_subtracts() {
+    fn subtracts() {
         assert_eq!(
             evaluate_expression(Box::new(Expression::Subtract(
                 Box::new(Expression::Int(2)),
@@ -212,7 +212,7 @@ mod test_evaluate_expression {
     }
 
     #[test]
-    fn it_multiplies() {
+    fn multiplies() {
         assert_eq!(
             evaluate_expression(Box::new(Expression::Multiply(
                 Box::new(Expression::Int(3)),
@@ -223,7 +223,7 @@ mod test_evaluate_expression {
     }
 
     #[test]
-    fn it_divides_integers() {
+    fn divides_integers() {
         assert_eq!(
             evaluate_expression(Box::new(Expression::Divide(
                 Box::new(Expression::Int(3)),
@@ -234,7 +234,7 @@ mod test_evaluate_expression {
     }
 
     #[test]
-    fn it_divides_floats() {
+    fn divides_floats() {
         assert_eq!(
             evaluate_expression(Box::new(Expression::Divide(
                 Box::new(Expression::Float(3.0)),
@@ -245,7 +245,7 @@ mod test_evaluate_expression {
     }
 
     #[test]
-    fn it_does_not_divide_ints_by_zero() {
+    fn does_not_divide_ints_by_zero() {
         assert_eq!(
             evaluate_expression(Box::new(Expression::Divide(
                 Box::new(Expression::Int(3)),
@@ -263,7 +263,7 @@ mod test_evaluate_expression {
     }
 
     #[test]
-    fn it_divides_zero_by_zero() {
+    fn divides_zero_by_zero() {
         if let Value::Float(num) = evaluate_expression(Box::new(Expression::Divide(
             Box::new(Expression::Float(0.0)),
             Box::new(Expression::Int(0)),
@@ -276,7 +276,7 @@ mod test_evaluate_expression {
     }
 
     #[test]
-    fn it_returns_the_consequent_of_an_if() {
+    fn returns_the_consequent_of_an_if() {
         assert_eq!(
             evaluate_expression(Box::new(Expression::If(
                 Box::new(Expression::LEq(
@@ -291,7 +291,7 @@ mod test_evaluate_expression {
     }
 
     #[test]
-    fn it_returns_the_alternate_of_an_if() {
+    fn returns_the_alternate_of_an_if() {
         assert_eq!(
             evaluate_expression(Box::new(Expression::If(
                 Box::new(Expression::Bool(false)),
@@ -303,7 +303,7 @@ mod test_evaluate_expression {
     }
 
     #[test]
-    fn it_requires_a_bool_if_guard() {
+    fn requires_a_bool_if_guard() {
         assert_eq!(
             evaluate_expression(Box::new(Expression::If(
                 Box::new(Expression::Int(1)),
@@ -315,7 +315,7 @@ mod test_evaluate_expression {
     }
 
     #[test]
-    fn it_handles_a_nested_tree() {
+    fn handles_a_nested_tree() {
         assert_eq!(
             evaluate_expression(Box::new(Expression::Add(
                 Box::new(Expression::Int(1)),
@@ -329,7 +329,7 @@ mod test_evaluate_expression {
     }
 
     #[test]
-    fn it_compares_with_leq() {
+    fn compares_with_leq() {
         assert_eq!(
             evaluate_expression(Box::new(Expression::LEq(
                 Box::new(Expression::Int(3)),
