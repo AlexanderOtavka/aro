@@ -1,35 +1,39 @@
 use std::str::FromStr;
-use ast::Expression;
+use ast::{Ast, Expression, BinOp, Value};
 use std::f64::{NAN, INFINITY};
 
 grammar;
 
-pub Expr: Box<Expression> = {
-    "if" <Expr> "then" <Expr> "else" <Expr> => Box::new(Expression::If(<>)),
-    Tier3,
+pub Expr: Ast = {
+    <l:@L> "if" <e1:Expr> "then" <e2:Expr> "else" <e3:Expr> <r:@R> =>
+        Ast::new(l, r, Expression::If(e1, e2, e3)),
+    Comp,
 };
 
-Tier3 = {
-    <Tier3> "<=" <Tier2> => Box::new(Expression::LEq(<>)),
-    Tier2,
+Comp = {
+    <a:Comp> <l:@L> "<=" <r:@R> <b:Arith> =>
+        Ast::new(l, r, Expression::BinOp(BinOp::LEq, a, b)),
+    Arith,
 };
 
-Tier2 = {
-    <Tier2> "+" <Tier1> => Box::new(Expression::Add(<>)),
-    <Tier2> "-" <Tier1> => Box::new(Expression::Subtract(<>)),
-    Tier1,
+Arith = {
+    <a:Arith> <l:@L> "+" <r:@R> <b:Factor> =>
+        Ast::new(l, r, Expression::BinOp(BinOp::Add, a, b)),
+    <a:Arith> <l:@L> "-" <r:@R> <b:Factor> =>
+        Ast::new(l, r, Expression::BinOp(BinOp::Sub, a, b)),
+    Factor,
 };
 
-Tier1 = {
-    <Tier1> "*" <Value> => Box::new(Expression::Multiply(<>)),
-    <Tier1> "/" <Value> => Box::new(Expression::Divide(<>)),
+Factor = {
+    <a:Factor> <l:@L> "*" <r:@R> <b:Value> => Ast::new(l, r, Expression::BinOp(BinOp::Mul, a, b)),
+    <a:Factor> <l:@L> "/" <r:@R> <b:Value> => Ast::new(l, r, Expression::BinOp(BinOp::Div, a, b)),
     Value,
 };
 
 Value = {
-    Int => Box::new(Expression::Int(<>)),
-    Float => Box::new(Expression::Float(<>)),
-    Bool => Box::new(Expression::Bool(<>)),
+    <l:@L> <v:Int> <r:@R> => Ast::new(l, r, Expression::Value(Value::Int(v))),
+    <l:@L> <v:Float> <r:@R> => Ast::new(l, r, Expression::Value(Value::Float(v))),
+    <l:@L> <v:Bool> <r:@R> => Ast::new(l, r, Expression::Value(Value::Bool(v))),
     "(" <Expr> ")",
 };
 

@@ -1,11 +1,4 @@
-use ast::Expression;
-
-#[derive(Debug, PartialEq)]
-pub enum Value {
-    Int(i32),
-    Float(f64),
-    Bool(bool),
-}
+use ast::{Ast, BinOp, Expression, Value};
 
 fn evaluate_number_operator<F>(left: &Value, right: &Value, evaluate: F) -> Result<Value, String>
 where
@@ -107,54 +100,58 @@ mod evaluate_number_operator {
     }
 }
 
-pub fn evaluate_expression(expression: Box<Expression>) -> Result<Value, String> {
-    let expr = *expression;
+pub fn evaluate_expression(ast: Ast) -> Result<Value, String> {
+    let expr = *ast.expr;
     match expr {
-        Expression::Int(value) => Ok(Value::Int(value)),
-        Expression::Float(value) => Ok(Value::Float(value)),
-        Expression::Bool(value) => Ok(Value::Bool(value)),
-        Expression::Add(left, right) => evaluate_number_operator(
-            &evaluate_expression(left)?,
-            &evaluate_expression(right)?,
-            |a, b| a + b,
-        ),
-        Expression::Subtract(left, right) => evaluate_number_operator(
-            &evaluate_expression(left)?,
-            &evaluate_expression(right)?,
-            |a, b| a - b,
-        ),
-        Expression::Multiply(left, right) => evaluate_number_operator(
-            &evaluate_expression(left)?,
-            &evaluate_expression(right)?,
-            |a, b| a * b,
-        ),
-        Expression::Divide(left, right) => {
-            match (evaluate_expression(left)?, evaluate_expression(right)?) {
+        Expression::Value(value) => Ok(value),
+        Expression::BinOp(operation, left, right) => match operation {
+            BinOp::Add => evaluate_number_operator(
+                &evaluate_expression(left)?,
+                &evaluate_expression(right)?,
+                |a, b| a + b,
+            ),
+            BinOp::Sub => evaluate_number_operator(
+                &evaluate_expression(left)?,
+                &evaluate_expression(right)?,
+                |a, b| a - b,
+            ),
+            BinOp::Mul => evaluate_number_operator(
+                &evaluate_expression(left)?,
+                &evaluate_expression(right)?,
+                |a, b| a * b,
+            ),
+            BinOp::Div => match (evaluate_expression(left)?, evaluate_expression(right)?) {
                 (Value::Int(_), Value::Int(0)) => {
                     Err(String::from("Fuck off with your divide-by-zero bullshit."))
                 }
                 (left_value, right_value) => {
                     evaluate_number_operator(&left_value, &right_value, |a, b| a / b)
                 }
-            }
-        }
+            },
+            BinOp::LEq => match (evaluate_expression(left)?, evaluate_expression(right)?) {
+                (Value::Int(left_value), Value::Int(right_value)) => {
+                    Ok(Value::Bool(left_value <= right_value))
+                }
+                (Value::Float(left_value), Value::Int(right_value)) => {
+                    Ok(Value::Bool(left_value <= right_value as f64))
+                }
+                (Value::Int(left_value), Value::Float(right_value)) => {
+                    Ok(Value::Bool(left_value as f64 <= right_value))
+                }
+                (Value::Float(left_value), Value::Float(right_value)) => {
+                    Ok(Value::Bool(left_value <= right_value))
+                }
+                _ => Err(String::from("Fuck off with your non-number bullshit.")),
+            },
+        },
         Expression::If(guard, consequent, alternate) => match evaluate_expression(guard)? {
-            Value::Bool(guard_value) => evaluate_expression(match guard_value {
-                true => consequent,
-                false => alternate,
-            }),
+            Value::Bool(guard_value) => {
+                evaluate_expression(if guard_value { consequent } else { alternate })
+            }
             _ => Err(String::from(
                 "This isn't JavaScript.  Only bools in `if`s.  Dumbass.",
             )),
         },
-        Expression::LEq(left, right) => {
-            match (evaluate_expression(left)?, evaluate_expression(right)?) {
-                (Value::Int(left_value), Value::Int(right_value)) => {
-                    Ok(Value::Bool(left_value <= right_value))
-                }
-                _ => Err(String::from("Fuck off with your non-number bullshit.")),
-            }
-        }
     }
 }
 
@@ -162,10 +159,14 @@ pub fn evaluate_expression(expression: Box<Expression>) -> Result<Value, String>
 mod evaluate_expression {
     use super::*;
 
+    pub fn ast(expr: Expression) -> Ast {
+        Ast::new(0, 0, expr)
+    }
+
     #[test]
     fn spits_back_out_an_int() {
         assert_eq!(
-            evaluate_expression(Box::new(Expression::Int(5))).unwrap(),
+            evaluate_expression(ast(Expression::Value(Value::Int(5)))).unwrap(),
             Value::Int(5)
         )
     }
@@ -173,7 +174,7 @@ mod evaluate_expression {
     #[test]
     fn spits_back_out_a_bool() {
         assert_eq!(
-            evaluate_expression(Box::new(Expression::Bool(true))).unwrap(),
+            evaluate_expression(ast(Expression::Value(Value::Bool(true)))).unwrap(),
             Value::Bool(true)
         )
     }
@@ -181,9 +182,10 @@ mod evaluate_expression {
     #[test]
     fn adds() {
         assert_eq!(
-            evaluate_expression(Box::new(Expression::Add(
-                Box::new(Expression::Int(1)),
-                Box::new(Expression::Int(2)),
+            evaluate_expression(ast(Expression::BinOp(
+                BinOp::Add,
+                ast(Expression::Value(Value::Int(1))),
+                ast(Expression::Value(Value::Int(2))),
             ))).unwrap(),
             Value::Int(3)
         )
@@ -192,9 +194,10 @@ mod evaluate_expression {
     #[test]
     fn adds_negative_numbers() {
         assert_eq!(
-            evaluate_expression(Box::new(Expression::Add(
-                Box::new(Expression::Int(-1)),
-                Box::new(Expression::Int(-2)),
+            evaluate_expression(ast(Expression::BinOp(
+                BinOp::Add,
+                ast(Expression::Value(Value::Int(-1))),
+                ast(Expression::Value(Value::Int(-2))),
             ))).unwrap(),
             Value::Int(-3)
         )
@@ -203,9 +206,10 @@ mod evaluate_expression {
     #[test]
     fn subtracts() {
         assert_eq!(
-            evaluate_expression(Box::new(Expression::Subtract(
-                Box::new(Expression::Int(2)),
-                Box::new(Expression::Int(1)),
+            evaluate_expression(ast(Expression::BinOp(
+                BinOp::Sub,
+                ast(Expression::Value(Value::Int(2))),
+                ast(Expression::Value(Value::Int(1))),
             ))).unwrap(),
             Value::Int(1)
         )
@@ -214,9 +218,10 @@ mod evaluate_expression {
     #[test]
     fn multiplies() {
         assert_eq!(
-            evaluate_expression(Box::new(Expression::Multiply(
-                Box::new(Expression::Int(3)),
-                Box::new(Expression::Int(2)),
+            evaluate_expression(ast(Expression::BinOp(
+                BinOp::Mul,
+                ast(Expression::Value(Value::Int(3))),
+                ast(Expression::Value(Value::Int(2))),
             ))).unwrap(),
             Value::Int(6)
         )
@@ -225,9 +230,10 @@ mod evaluate_expression {
     #[test]
     fn divides_integers() {
         assert_eq!(
-            evaluate_expression(Box::new(Expression::Divide(
-                Box::new(Expression::Int(3)),
-                Box::new(Expression::Int(2)),
+            evaluate_expression(ast(Expression::BinOp(
+                BinOp::Div,
+                ast(Expression::Value(Value::Int(3))),
+                ast(Expression::Value(Value::Int(2))),
             ))).unwrap(),
             Value::Int(1)
         )
@@ -236,9 +242,10 @@ mod evaluate_expression {
     #[test]
     fn divides_floats() {
         assert_eq!(
-            evaluate_expression(Box::new(Expression::Divide(
-                Box::new(Expression::Float(3.0)),
-                Box::new(Expression::Int(2)),
+            evaluate_expression(ast(Expression::BinOp(
+                BinOp::Div,
+                ast(Expression::Value(Value::Float(3.0))),
+                ast(Expression::Value(Value::Int(2))),
             ))).unwrap(),
             Value::Float(1.5)
         )
@@ -247,16 +254,18 @@ mod evaluate_expression {
     #[test]
     fn does_not_divide_ints_by_zero() {
         assert_eq!(
-            evaluate_expression(Box::new(Expression::Divide(
-                Box::new(Expression::Int(3)),
-                Box::new(Expression::Int(0)),
+            evaluate_expression(ast(Expression::BinOp(
+                BinOp::Div,
+                ast(Expression::Value(Value::Int(3))),
+                ast(Expression::Value(Value::Int(0))),
             ))).unwrap_err(),
             "Fuck off with your divide-by-zero bullshit."
         );
         assert_eq!(
-            evaluate_expression(Box::new(Expression::Divide(
-                Box::new(Expression::Int(0)),
-                Box::new(Expression::Int(0)),
+            evaluate_expression(ast(Expression::BinOp(
+                BinOp::Div,
+                ast(Expression::Value(Value::Int(0))),
+                ast(Expression::Value(Value::Int(0))),
             ))).unwrap_err(),
             "Fuck off with your divide-by-zero bullshit."
         );
@@ -264,9 +273,10 @@ mod evaluate_expression {
 
     #[test]
     fn divides_zero_by_zero() {
-        if let Value::Float(num) = evaluate_expression(Box::new(Expression::Divide(
-            Box::new(Expression::Float(0.0)),
-            Box::new(Expression::Int(0)),
+        if let Value::Float(num) = evaluate_expression(ast(Expression::BinOp(
+            BinOp::Div,
+            ast(Expression::Value(Value::Float(0.0))),
+            ast(Expression::Value(Value::Int(0))),
         ))).unwrap()
         {
             assert!(num.is_nan());
@@ -278,13 +288,14 @@ mod evaluate_expression {
     #[test]
     fn returns_the_consequent_of_an_if() {
         assert_eq!(
-            evaluate_expression(Box::new(Expression::If(
-                Box::new(Expression::LEq(
-                    Box::new(Expression::Int(1)),
-                    Box::new(Expression::Int(1)),
+            evaluate_expression(ast(Expression::If(
+                ast(Expression::BinOp(
+                    BinOp::LEq,
+                    ast(Expression::Value(Value::Int(1))),
+                    ast(Expression::Value(Value::Int(1))),
                 )),
-                Box::new(Expression::Int(1)),
-                Box::new(Expression::Int(2)),
+                ast(Expression::Value(Value::Int(1))),
+                ast(Expression::Value(Value::Int(2))),
             ))).unwrap(),
             Value::Int(1)
         )
@@ -293,10 +304,10 @@ mod evaluate_expression {
     #[test]
     fn returns_the_alternate_of_an_if() {
         assert_eq!(
-            evaluate_expression(Box::new(Expression::If(
-                Box::new(Expression::Bool(false)),
-                Box::new(Expression::Int(1)),
-                Box::new(Expression::Int(2)),
+            evaluate_expression(ast(Expression::If(
+                ast(Expression::Value(Value::Bool(false))),
+                ast(Expression::Value(Value::Int(1))),
+                ast(Expression::Value(Value::Int(2))),
             ))).unwrap(),
             Value::Int(2)
         )
@@ -305,10 +316,10 @@ mod evaluate_expression {
     #[test]
     fn requires_a_bool_if_guard() {
         assert_eq!(
-            evaluate_expression(Box::new(Expression::If(
-                Box::new(Expression::Int(1)),
-                Box::new(Expression::Int(2)),
-                Box::new(Expression::Int(3)),
+            evaluate_expression(ast(Expression::If(
+                ast(Expression::Value(Value::Int(1))),
+                ast(Expression::Value(Value::Int(2))),
+                ast(Expression::Value(Value::Int(3))),
             ))).unwrap_err(),
             "This isn't JavaScript.  Only bools in `if`s.  Dumbass."
         )
@@ -317,11 +328,13 @@ mod evaluate_expression {
     #[test]
     fn handles_a_nested_tree() {
         assert_eq!(
-            evaluate_expression(Box::new(Expression::Add(
-                Box::new(Expression::Int(1)),
-                Box::new(Expression::Multiply(
-                    Box::new(Expression::Int(2)),
-                    Box::new(Expression::Int(3)),
+            evaluate_expression(ast(Expression::BinOp(
+                BinOp::Add,
+                ast(Expression::Value(Value::Int(1))),
+                ast(Expression::BinOp(
+                    BinOp::Mul,
+                    ast(Expression::Value(Value::Int(2))),
+                    ast(Expression::Value(Value::Int(3))),
                 ))
             ))).unwrap(),
             Value::Int(7)
@@ -331,16 +344,18 @@ mod evaluate_expression {
     #[test]
     fn compares_with_leq() {
         assert_eq!(
-            evaluate_expression(Box::new(Expression::LEq(
-                Box::new(Expression::Int(3)),
-                Box::new(Expression::Int(2)),
+            evaluate_expression(ast(Expression::BinOp(
+                BinOp::LEq,
+                ast(Expression::Value(Value::Int(3))),
+                ast(Expression::Value(Value::Int(2))),
             ))).unwrap(),
             Value::Bool(false)
         );
         assert_eq!(
-            evaluate_expression(Box::new(Expression::LEq(
-                Box::new(Expression::Int(2)),
-                Box::new(Expression::Int(2)),
+            evaluate_expression(ast(Expression::BinOp(
+                BinOp::LEq,
+                ast(Expression::Value(Value::Int(2))),
+                ast(Expression::Value(Value::Int(2))),
             ))).unwrap(),
             Value::Bool(true)
         );

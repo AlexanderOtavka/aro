@@ -14,7 +14,7 @@ mod grammar;
 
 use std::io::prelude::*;
 use std::process::exit;
-use eval::Value;
+use ast::Value;
 
 fn evaluate_source(input: &str) -> Result<String, String> {
     let ast = parse::source_to_ast(input)?;
