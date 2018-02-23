@@ -15,6 +15,27 @@ will run all unit tests inside the docker container.
 
 ## Changelog
 
+### Assignment 3 (2/23/18)
+
+#### New Features
+
+* Integrated LALRPOP lexer/parser generator.
+* Added pretty error messages with line/column information that underline the
+  problem. Oooh, shiny. Try `cargo run -- examples/parse_error.aro` to see an example.
+
+#### Changed Features
+
+* Changed syntax to use infix operators. The new language grammar is:
+  ```
+  e ::= n | f | (e) | e1 + e1 | e1 - e2 | e1 * e2 | e1 / e2
+        | true | false | e1 <= e2 | if e1 then e2 else e3
+  ```
+
+#### Known Bugs
+
+Still none. I still have hella tests, but not as many now since a library does
+most of the work now.
+
 ### Assignment 2 (2/7/18)
 
 #### New Features
