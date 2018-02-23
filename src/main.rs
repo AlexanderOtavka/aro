@@ -7,24 +7,31 @@
 #![cfg_attr(feature = "ci", deny(warnings))]
 
 extern crate clap;
+extern crate lalrpop_util;
 mod parse;
 mod eval;
 mod ast;
 mod grammar;
+mod util;
 
 use std::io::prelude::*;
 use std::process::exit;
 use ast::Value;
+use util::CompilerError;
 
-fn evaluate_source(input: &str) -> Result<String, String> {
+fn evaluate_source(input: &str) -> Result<String, CompilerError> {
     let ast = parse::source_to_ast(input)?;
 
-    Ok(match eval::evaluate_expression(ast)? {
-        Value::Int(value) => format!("{}", value),
-        Value::Float(value) => format!("{}", value),
-        Value::Bool(true) => String::from("true"),
-        Value::Bool(false) => String::from("false"),
-    })
+    Ok(
+        match eval::evaluate_expression(ast)
+            .map_err(|message| CompilerError::Unlocated { message })?
+        {
+            Value::Int(value) => format!("{}", value),
+            Value::Float(value) => format!("{}", value),
+            Value::Bool(true) => String::from("true"),
+            Value::Bool(false) => String::from("false"),
+        },
+    )
 }
 
 #[cfg(test)]
@@ -105,7 +112,7 @@ fn evaluate_file(file_name: &str) -> Result<String, String> {
         .read_to_string(&mut input_string)
         .map_err(|_| "Couldn't read input.")?;
 
-    evaluate_source(&input_string)
+    evaluate_source(&input_string).map_err(|err| err.as_string(&input_string))
 }
 
 fn main() {
