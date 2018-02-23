@@ -2,33 +2,28 @@ use ast::Ast;
 use grammar::parse_Expr;
 use lalrpop_util::ParseError;
 use util::CompilerError;
-use std::usize;
 
 pub fn source_to_ast<'input>(source: &'input str) -> Result<Ast, CompilerError> {
     parse_Expr(source).map_err(|err| match err {
         ParseError::InvalidToken { location } => CompilerError::Located {
-            message: String::from("Invalid token"),
+            message: String::from("Bitch, do I look like I speak perl?"),
             loc: location,
         },
         ParseError::ExtraToken {
             token: (left_loc, token, right_loc),
         } => CompilerError::LRLocated {
-            message: format!("Extra token `{}`", token),
+            message: format!("Hey, I have an idea, let's put `{}` everywhere!", token),
             left_loc,
             right_loc,
         },
-        ParseError::UnrecognizedToken { token, expected } => CompilerError::LRLocated {
+        ParseError::UnrecognizedToken {
+            token: Some((left, ref token, right)),
+            ref expected,
+        } => CompilerError::LRLocated {
             message: {
                 let mut message = String::new();
 
-                match token {
-                    Some((_, ref token, _)) => {
-                        message += &format!("Unrecognized token `{}`", token);
-                    }
-                    None => {
-                        message += "Unexpected EOF";
-                    }
-                };
+                message += &format!("What the fuck is a `{}` doing here?", token);
 
                 if !expected.is_empty() {
                     message += "\n";
@@ -44,16 +39,28 @@ pub fn source_to_ast<'input>(source: &'input str) -> Result<Ast, CompilerError> 
 
                 message
             },
-            left_loc: if let Some((left, _, _)) = token {
-                left
-            } else {
-                usize::MAX
-            },
-            right_loc: if let Some((_, _, right)) = token {
-                right
-            } else {
-                usize::MAX
-            },
+            left_loc: left,
+            right_loc: right,
+        },
+        ParseError::UnrecognizedToken {
+            token: None,
+            expected: _,
+        } if source.len() > 0 =>
+        {
+            CompilerError::Located {
+                message: String::from(
+                    "Oh, so we're just ending files wherever we want now?  Think again, Dumbass!",
+                ),
+                loc: source.len() - 1,
+            }
+        }
+        ParseError::UnrecognizedToken {
+            token: None,
+            expected: _,
+        } => CompilerError::Unlocated {
+            message: String::from(
+                "You're gonna have to give me something to work with.  My craft requires it!",
+            ),
         },
         ParseError::User { error } => CompilerError::Unlocated {
             message: String::from(error),

@@ -42,15 +42,13 @@ impl CompilerError {
             string += " ";
         }
 
-        for _ in 0..(min(right_loc, line_end) - left_loc) {
+        for _ in 0..(min(right_loc, line_end + 1) - left_loc) {
             string += "^";
         }
 
-        if right_loc > line_end {
+        if right_loc > line_end && right_loc < source.len() {
             string += "...";
         }
-
-        string += "\n";
 
         string
     }
@@ -71,7 +69,7 @@ impl CompilerError {
                 message,
                 CompilerError::underlined_at_loc(source, loc, loc + 1)
             ),
-            &CompilerError::Unlocated { ref message } => format!("{}\n", message),
+            &CompilerError::Unlocated { ref message } => format!("{}", message),
         }
     }
 }
@@ -86,8 +84,7 @@ mod underlined_at_loc {
             CompilerError::underlined_at_loc("foo bar", 0, 7),
             "      |\
              \n    1 | foo bar\
-             \n      | ^^^^^^^\
-             \n"
+             \n      | ^^^^^^^"
         );
     }
 
@@ -97,19 +94,27 @@ mod underlined_at_loc {
             CompilerError::underlined_at_loc("foo bar", 2, 5),
             "      |\
              \n    1 | foo bar\
-             \n      |   ^^^\
-             \n"
+             \n      |   ^^^"
         );
     }
 
     #[test]
     fn underlines_a_single_character_of_a_one_line_source() {
         assert_eq!(
-            CompilerError::underlined_at_loc("foo bar", 6, 7),
+            CompilerError::underlined_at_loc("foo bar", 4, 5),
             "      |\
              \n    1 | foo bar\
-             \n      |       ^\
-             \n"
+             \n      |     ^"
+        );
+    }
+
+    #[test]
+    fn underlines_the_end_of_input() {
+        assert_eq!(
+            CompilerError::underlined_at_loc("foo bar", 7, 8),
+            "      |\
+             \n    1 | foo bar\
+             \n      |        ^"
         );
     }
 
@@ -127,8 +132,7 @@ mod underlined_at_loc {
             ),
             "      |\
              \n    2 | foo 0bar1 baz\
-             \n      |      ^^^\
-             \n"
+             \n      |      ^^^"
         );
     }
 
@@ -146,8 +150,7 @@ mod underlined_at_loc {
             ),
             "      |\
              \n    2 | foo 0bar baz\
-             \n      |      ^^^^^^^...\
-             \n"
+             \n      |      ^^^^^^^^..."
         );
     }
 }
