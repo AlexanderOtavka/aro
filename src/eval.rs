@@ -1,4 +1,5 @@
 use ast::{Ast, BinOp, Expression, Value};
+use util::Error;
 
 fn evaluate_number_operator<F>(left: &Value, right: &Value, evaluate: F) -> Result<Value, String>
 where
@@ -100,8 +101,11 @@ mod evaluate_number_operator {
     }
 }
 
-pub fn evaluate_expression(ast: Ast) -> Result<Value, String> {
+pub fn evaluate_expression(ast: Ast) -> Result<Value, Error> {
     let expr = *ast.expr;
+    let left_loc = ast.left_loc;
+    let right_loc = ast.right_loc;
+
     match expr {
         Expression::Value(value) => Ok(value),
         Expression::BinOp(operation, left, right) => match operation {
@@ -143,14 +147,22 @@ pub fn evaluate_expression(ast: Ast) -> Result<Value, String> {
                 }
                 _ => Err(String::from("Fuck off with your non-number bullshit.")),
             },
-        },
+        }.map_err(|message| {
+            (Error::LRLocated {
+                message: message.clone(),
+                left_loc,
+                right_loc,
+            })
+        }),
         Expression::If(guard, consequent, alternate) => match evaluate_expression(guard)? {
             Value::Bool(guard_value) => {
                 evaluate_expression(if guard_value { consequent } else { alternate })
             }
-            _ => Err(String::from(
-                "This isn't JavaScript.  Only bools in `if`s.  Dumbass.",
-            )),
+            _ => Err(Error::LRLocated {
+                message: String::from("This isn't JavaScript.  Only bools in `if`s.  Dumbass."),
+                left_loc: ast.left_loc,
+                right_loc: ast.right_loc,
+            }),
         },
     }
 }
@@ -253,21 +265,19 @@ mod evaluate_expression {
 
     #[test]
     fn does_not_divide_ints_by_zero() {
-        assert_eq!(
+        assert!(
             evaluate_expression(ast(Expression::BinOp(
                 BinOp::Div,
                 ast(Expression::Value(Value::Int(3))),
                 ast(Expression::Value(Value::Int(0))),
-            ))).unwrap_err(),
-            "Fuck off with your divide-by-zero bullshit."
+            ))).is_err()
         );
-        assert_eq!(
+        assert!(
             evaluate_expression(ast(Expression::BinOp(
                 BinOp::Div,
                 ast(Expression::Value(Value::Int(0))),
                 ast(Expression::Value(Value::Int(0))),
-            ))).unwrap_err(),
-            "Fuck off with your divide-by-zero bullshit."
+            ))).is_err()
         );
     }
 
@@ -281,7 +291,7 @@ mod evaluate_expression {
         {
             assert!(num.is_nan());
         } else {
-            assert!(false, "Not a float value");
+            panic!()
         }
     }
 
@@ -315,13 +325,12 @@ mod evaluate_expression {
 
     #[test]
     fn requires_a_bool_if_guard() {
-        assert_eq!(
+        assert!(
             evaluate_expression(ast(Expression::If(
                 ast(Expression::Value(Value::Int(1))),
                 ast(Expression::Value(Value::Int(2))),
                 ast(Expression::Value(Value::Int(3))),
-            ))).unwrap_err(),
-            "This isn't JavaScript.  Only bools in `if`s.  Dumbass."
+            ))).is_err()
         )
     }
 

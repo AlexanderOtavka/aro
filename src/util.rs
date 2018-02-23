@@ -1,7 +1,7 @@
 use std::cmp::min;
 
 #[derive(Debug)]
-pub enum CompilerError {
+pub enum Error {
     LRLocated {
         message: String,
         left_loc: usize,
@@ -16,7 +16,7 @@ pub enum CompilerError {
     },
 }
 
-impl CompilerError {
+impl Error {
     fn underlined_at_loc(source: &str, left_loc: usize, right_loc: usize) -> String {
         let line_num = source[0..left_loc].matches("\n").count() + 1;
         let line_start = if let Some(newline_pos) = source[0..left_loc].rfind("\n") {
@@ -55,21 +55,21 @@ impl CompilerError {
 
     pub fn as_string(&self, source: &str) -> String {
         match self {
-            &CompilerError::LRLocated {
+            &Error::LRLocated {
                 left_loc,
                 right_loc,
                 ref message,
             } => format!(
                 "{}\n{}",
                 message,
-                CompilerError::underlined_at_loc(source, left_loc, right_loc)
+                Error::underlined_at_loc(source, left_loc, right_loc)
             ),
-            &CompilerError::Located { loc, ref message } => format!(
+            &Error::Located { loc, ref message } => format!(
                 "{}\n{}",
                 message,
-                CompilerError::underlined_at_loc(source, loc, loc + 1)
+                Error::underlined_at_loc(source, loc, loc + 1)
             ),
-            &CompilerError::Unlocated { ref message } => format!("{}", message),
+            &Error::Unlocated { ref message } => format!("{}", message),
         }
     }
 }
@@ -81,7 +81,7 @@ mod underlined_at_loc {
     #[test]
     fn underlines_all_of_a_one_line_source() {
         assert_eq!(
-            CompilerError::underlined_at_loc("foo bar", 0, 7),
+            Error::underlined_at_loc("foo bar", 0, 7),
             "      |\
              \n    1 | foo bar\
              \n      | ^^^^^^^"
@@ -91,7 +91,7 @@ mod underlined_at_loc {
     #[test]
     fn underlines_part_of_a_one_line_source() {
         assert_eq!(
-            CompilerError::underlined_at_loc("foo bar", 2, 5),
+            Error::underlined_at_loc("foo bar", 2, 5),
             "      |\
              \n    1 | foo bar\
              \n      |   ^^^"
@@ -101,7 +101,7 @@ mod underlined_at_loc {
     #[test]
     fn underlines_a_single_character_of_a_one_line_source() {
         assert_eq!(
-            CompilerError::underlined_at_loc("foo bar", 4, 5),
+            Error::underlined_at_loc("foo bar", 4, 5),
             "      |\
              \n    1 | foo bar\
              \n      |     ^"
@@ -111,7 +111,7 @@ mod underlined_at_loc {
     #[test]
     fn underlines_the_end_of_input() {
         assert_eq!(
-            CompilerError::underlined_at_loc("foo bar", 7, 8),
+            Error::underlined_at_loc("foo bar", 7, 8),
             "      |\
              \n    1 | foo bar\
              \n      |        ^"
@@ -125,7 +125,7 @@ mod underlined_at_loc {
                      \nthis is another line\
                      \n";
         assert_eq!(
-            CompilerError::underlined_at_loc(
+            Error::underlined_at_loc(
                 input,
                 input.find("0").unwrap() + 1,
                 input.find("1").unwrap()
@@ -143,7 +143,7 @@ mod underlined_at_loc {
                      \nthis is1 another line\
                      \n";
         assert_eq!(
-            CompilerError::underlined_at_loc(
+            Error::underlined_at_loc(
                 input,
                 input.find("0").unwrap() + 1,
                 input.find("1").unwrap()

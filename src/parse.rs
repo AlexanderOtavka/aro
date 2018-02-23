@@ -1,17 +1,17 @@
 use ast::Ast;
 use grammar::parse_Expr;
 use lalrpop_util::ParseError;
-use util::CompilerError;
+use util::Error;
 
-pub fn source_to_ast<'input>(source: &'input str) -> Result<Ast, CompilerError> {
+pub fn source_to_ast<'input>(source: &'input str) -> Result<Ast, Error> {
     parse_Expr(source).map_err(|err| match err {
-        ParseError::InvalidToken { location } => CompilerError::Located {
+        ParseError::InvalidToken { location } => Error::Located {
             message: String::from("Bitch, do I look like I speak perl?"),
             loc: location,
         },
         ParseError::ExtraToken {
             token: (left_loc, token, right_loc),
-        } => CompilerError::LRLocated {
+        } => Error::LRLocated {
             message: format!("Hey, I have an idea, let's put `{}` everywhere!", token),
             left_loc,
             right_loc,
@@ -19,7 +19,7 @@ pub fn source_to_ast<'input>(source: &'input str) -> Result<Ast, CompilerError> 
         ParseError::UnrecognizedToken {
             token: Some((left, ref token, right)),
             ref expected,
-        } => CompilerError::LRLocated {
+        } => Error::LRLocated {
             message: {
                 let mut message = String::new();
 
@@ -47,7 +47,7 @@ pub fn source_to_ast<'input>(source: &'input str) -> Result<Ast, CompilerError> 
             expected: _,
         } if source.len() > 0 =>
         {
-            CompilerError::Located {
+            Error::Located {
                 message: String::from(
                     "Oh, so we're just ending files wherever we want now?  Think again, Dumbass!",
                 ),
@@ -57,12 +57,12 @@ pub fn source_to_ast<'input>(source: &'input str) -> Result<Ast, CompilerError> 
         ParseError::UnrecognizedToken {
             token: None,
             expected: _,
-        } => CompilerError::Unlocated {
+        } => Error::Unlocated {
             message: String::from(
                 "You're gonna have to give me something to work with.  My craft requires it!",
             ),
         },
-        ParseError::User { error } => CompilerError::Unlocated {
+        ParseError::User { error } => Error::Unlocated {
             message: String::from(error),
         },
     })
@@ -72,7 +72,7 @@ pub fn source_to_ast<'input>(source: &'input str) -> Result<Ast, CompilerError> 
 mod source_to_ast {
     use super::*;
 
-    fn assert_parse_eq(actual: Result<Ast, CompilerError>, expected: &str) {
+    fn assert_parse_eq(actual: Result<Ast, Error>, expected: &str) {
         assert_eq!(format!("{}", actual.unwrap()), expected);
     }
 

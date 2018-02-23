@@ -17,21 +17,17 @@ mod util;
 use std::io::prelude::*;
 use std::process::exit;
 use ast::Value;
-use util::CompilerError;
+use util::Error;
 
-fn evaluate_source(input: &str) -> Result<String, CompilerError> {
+fn evaluate_source(input: &str) -> Result<String, Error> {
     let ast = parse::source_to_ast(input)?;
 
-    Ok(
-        match eval::evaluate_expression(ast)
-            .map_err(|message| CompilerError::Unlocated { message })?
-        {
-            Value::Int(value) => format!("{}", value),
-            Value::Float(value) => format!("{}", value),
-            Value::Bool(true) => String::from("true"),
-            Value::Bool(false) => String::from("false"),
-        },
-    )
+    Ok(match eval::evaluate_expression(ast)? {
+        Value::Int(value) => format!("{}", value),
+        Value::Float(value) => format!("{}", value),
+        Value::Bool(true) => String::from("true"),
+        Value::Bool(false) => String::from("false"),
+    })
 }
 
 #[cfg(test)]
