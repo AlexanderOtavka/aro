@@ -38,8 +38,8 @@ mod evaluate_source {
     fn spits_out_a_result() {
         assert_eq!(evaluate_source("5").unwrap(), "5");
         assert_eq!(evaluate_source("-51").unwrap(), "-51");
-        assert_eq!(evaluate_source("false").unwrap(), "false");
-        assert_eq!(evaluate_source("true").unwrap(), "true");
+        assert_eq!(evaluate_source("#false ()").unwrap(), "false");
+        assert_eq!(evaluate_source("#true ()").unwrap(), "true");
     }
 
     #[test]

@@ -92,6 +92,7 @@ mod source_to_ast {
     }
 
     #[test]
+    #[ignore]
     fn makes_a_nan_tree() {
         assert_parse_eq(source_to_ast("NaN"), "NaN");
     }

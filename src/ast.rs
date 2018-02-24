@@ -12,6 +12,8 @@ pub enum Expression {
     Value(Value),
     BinOp(BinOp, Ast, Ast),
     If(Ast, Ast, Ast),
+    Ident(String),
+    Func(String, Ast),
 }
 
 #[derive(Debug, PartialEq)]
@@ -21,6 +23,7 @@ pub enum BinOp {
     Mul,
     Div,
     LEq,
+    Call,
 }
 
 #[derive(Debug, PartialEq)]
@@ -54,11 +57,14 @@ impl fmt::Display for Ast {
                     &BinOp::Mul => "*",
                     &BinOp::Div => "/",
                     &BinOp::LEq => "<=",
+                    &BinOp::Call => "<|",
                 },
                 a,
                 b,
             ),
             &Expression::If(ref c, ref t, ref e) => write!(f, "(if {} {} {})", c, t, e),
+            &Expression::Func(ref p, ref e) => write!(f, "({} -> {})", p, e),
+            &Expression::Ident(ref n) => write!(f, "{}", n),
         }
     }
 }

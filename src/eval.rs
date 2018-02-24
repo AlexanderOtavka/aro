@@ -108,6 +108,7 @@ pub fn evaluate_expression(ast: Ast) -> Result<Value, Error> {
 
     match expr {
         Expression::Value(value) => Ok(value),
+        Expression::Ident(name) => panic!(),
         Expression::BinOp(operation, left, right) => match operation {
             BinOp::Add => evaluate_number_operator(
                 &evaluate_expression(left)?,
@@ -147,6 +148,7 @@ pub fn evaluate_expression(ast: Ast) -> Result<Value, Error> {
                 }
                 _ => Err(String::from("Fuck off with your non-number bullshit.")),
             },
+            BinOp::Call => panic!(),
         }.map_err(|message| {
             (Error::LRLocated {
                 message: message.clone(),
@@ -164,6 +166,7 @@ pub fn evaluate_expression(ast: Ast) -> Result<Value, Error> {
                 right_loc: ast.right_loc,
             }),
         },
+        Expression::Func(param, body) => panic!(),
     }
 }
 
