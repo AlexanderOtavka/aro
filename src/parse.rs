@@ -92,59 +92,68 @@ mod source_to_ast {
     }
 
     #[test]
+    fn makes_an_identifier_tree() {
+        assert_parse_eq(source_to_ast("foo"), "(foo)");
+    }
+
+    #[test]
     #[ignore]
     fn makes_a_nan_tree() {
         assert_parse_eq(source_to_ast("NaN"), "NaN");
     }
 
     #[test]
+    #[ignore]
     fn makes_a_inf_tree() {
         assert_parse_eq(source_to_ast("inf"), "inf");
     }
 
     #[test]
     fn makes_a_bool_tree() {
-        assert_parse_eq(source_to_ast("true"), "true");
+        assert_parse_eq(source_to_ast("#true ()"), "#true ()");
     }
 
     #[test]
     fn makes_a_simple_plus_tree() {
-        assert_parse_eq(source_to_ast("2 + 5.1"), "(+ 2 5.1)");
+        assert_parse_eq(source_to_ast("2 + 5.1"), "(2 + 5.1)");
     }
 
     #[test]
     fn makes_a_simple_minus_tree() {
-        assert_parse_eq(source_to_ast("2 - 5"), "(- 2 5)");
+        assert_parse_eq(source_to_ast("2 - 5"), "(2 - 5)");
     }
 
     #[test]
     fn makes_a_simple_star_tree() {
-        assert_parse_eq(source_to_ast("2 * 5"), "(* 2 5)");
+        assert_parse_eq(source_to_ast("2 * 5"), "(2 * 5)");
     }
 
     #[test]
     fn makes_a_simple_slash_tree() {
-        assert_parse_eq(source_to_ast("2 / 5"), "(/ 2 5)");
+        assert_parse_eq(source_to_ast("2 / 5"), "(2 / 5)");
     }
 
     #[test]
     fn makes_an_if_tree() {
-        assert_parse_eq(source_to_ast("if true then 2 else 5"), "(if true 2 5)");
+        assert_parse_eq(
+            source_to_ast("if #true () then 2 else 5"),
+            "(if #true () then 2 else 5)",
+        );
     }
 
     #[test]
     fn makes_a_simple_leq_tree() {
-        assert_parse_eq(source_to_ast("2 <= 5"), "(<= 2 5)");
+        assert_parse_eq(source_to_ast("2 <= 5"), "(2 <= 5)");
     }
 
     #[test]
     fn makes_a_nested_tree() {
-        assert_parse_eq(source_to_ast("2 + 3 * 5"), "(+ 2 (* 3 5))");
+        assert_parse_eq(source_to_ast("2 + 3 * 5"), "(2 + (3 * 5))");
     }
 
     #[test]
     fn overrides_precedence_with_parens() {
-        assert_parse_eq(source_to_ast("(2 + 3) * 5"), "(* (+ 2 3) 5)");
+        assert_parse_eq(source_to_ast("(2 + 3) * 5"), "((2 + 3) * 5)");
     }
 
     #[test]

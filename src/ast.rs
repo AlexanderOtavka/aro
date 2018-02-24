@@ -51,6 +51,7 @@ impl fmt::Display for Ast {
             &Expression::BinOp(ref op, ref a, ref b) => write!(
                 f,
                 "({} {} {})",
+                a,
                 match op {
                     &BinOp::Add => "+",
                     &BinOp::Sub => "-",
@@ -59,12 +60,11 @@ impl fmt::Display for Ast {
                     &BinOp::LEq => "<=",
                     &BinOp::Call => "<|",
                 },
-                a,
                 b,
             ),
-            &Expression::If(ref c, ref t, ref e) => write!(f, "(if {} {} {})", c, t, e),
+            &Expression::If(ref c, ref t, ref e) => write!(f, "(if {} then {} else {})", c, t, e),
             &Expression::Func(ref p, ref e) => write!(f, "({} -> {})", p, e),
-            &Expression::Ident(ref n) => write!(f, "{}", n),
+            &Expression::Ident(ref n) => write!(f, "({})", n),
         }
     }
 }
@@ -77,8 +77,8 @@ impl fmt::Display for Value {
             match self {
                 &Value::Int(value) => format!("{}", value),
                 &Value::Float(value) => format!("{}", value),
-                &Value::Bool(true) => String::from("true"),
-                &Value::Bool(false) => String::from("false"),
+                &Value::Bool(true) => String::from("#true ()"),
+                &Value::Bool(false) => String::from("#false ()"),
             }
         )
     }

@@ -16,18 +16,13 @@ mod util;
 
 use std::io::prelude::*;
 use std::process::exit;
-use ast::Value;
 use util::Error;
 
 fn evaluate_source(input: &str) -> Result<String, Error> {
     let ast = parse::source_to_ast(input)?;
+    let value = eval::evaluate_expression(ast)?;
 
-    Ok(match eval::evaluate_expression(ast)? {
-        Value::Int(value) => format!("{}", value),
-        Value::Float(value) => format!("{}", value),
-        Value::Bool(true) => String::from("true"),
-        Value::Bool(false) => String::from("false"),
-    })
+    Ok(format!("{}", value))
 }
 
 #[cfg(test)]
@@ -38,8 +33,8 @@ mod evaluate_source {
     fn spits_out_a_result() {
         assert_eq!(evaluate_source("5").unwrap(), "5");
         assert_eq!(evaluate_source("-51").unwrap(), "-51");
-        assert_eq!(evaluate_source("#false ()").unwrap(), "false");
-        assert_eq!(evaluate_source("#true ()").unwrap(), "true");
+        assert_eq!(evaluate_source("#false ()").unwrap(), "#false ()");
+        assert_eq!(evaluate_source("#true ()").unwrap(), "#true ()");
     }
 
     #[test]
