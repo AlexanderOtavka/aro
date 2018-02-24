@@ -1,0 +1,2 @@
+let divide <== a -> b -> a / b;
+5 |> divide <| 2.0

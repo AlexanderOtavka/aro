@@ -13,6 +13,7 @@ pub enum Expression {
     BinOp(BinOp, Ast, Ast),
     If(Ast, Ast, Ast),
     Ident(String),
+    Let(String, Ast, Ast),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -63,6 +64,7 @@ impl fmt::Display for Ast {
             ),
             &Expression::If(ref c, ref t, ref e) => write!(f, "(if {} then {} else {})", c, t, e),
             &Expression::Ident(ref n) => write!(f, "({})", n),
+            &Expression::Let(ref n, ref v, ref e) => write!(f, "(let {} <== {}; {})", n, v, e),
         }
     }
 }

@@ -167,6 +167,11 @@ mod source_to_ast {
     }
 
     #[test]
+    fn makes_a_let_tree() {
+        assert_parse_eq(source_to_ast("let a <== 5; a"), "(let a <== 5; (a))");
+    }
+
+    #[test]
     fn overrides_precedence_with_parens() {
         assert_parse_eq(source_to_ast("(2 + 3) * 5"), "((2 + 3) * 5)");
     }

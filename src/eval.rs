@@ -128,6 +128,19 @@ fn substitute(ast: &Ast, name: &str, value: &Ast) -> Ast {
             left_loc: ast.left_loc,
             right_loc: ast.right_loc,
         },
+        &Expression::Let(ref bind_name, ref bind_value, ref body) => Ast {
+            expr: Box::new(Expression::Let(
+                bind_name.clone(),
+                bind_value.clone(),
+                if bind_name == name {
+                    body.clone()
+                } else {
+                    substitute(body, name, value)
+                },
+            )),
+            left_loc: ast.left_loc,
+            right_loc: ast.right_loc,
+        },
         &Expression::Value(Value::Func(ref param_name, ref body)) => Ast {
             expr: Box::new(Expression::Value(Value::Func(
                 param_name.clone(),
@@ -234,10 +247,13 @@ pub fn evaluate_expression(ast: &Ast) -> Result<Value, Error> {
                 }),
             }
         }
+        &Expression::Let(ref bind_name, ref bind_value, ref body) => Ok(evaluate_expression(
+            &substitute(body, bind_name, bind_value),
+        )?),
     }
 }
 
-#[cfg(ignore)]
+#[cfg(test)]
 mod evaluate_expression {
     use super::*;
 
@@ -248,7 +264,7 @@ mod evaluate_expression {
     #[test]
     fn spits_back_out_an_int() {
         assert_eq!(
-            evaluate_expression(ast(Expression::Value(Value::Int(5)))).unwrap(),
+            evaluate_expression(&ast(Expression::Value(Value::Int(5)))).unwrap(),
             Value::Int(5)
         )
     }
@@ -256,20 +272,20 @@ mod evaluate_expression {
     #[test]
     fn spits_back_out_a_bool() {
         assert_eq!(
-            evaluate_expression(ast(Expression::Value(Value::Bool(true)))).unwrap(),
+            evaluate_expression(&ast(Expression::Value(Value::Bool(true)))).unwrap(),
             Value::Bool(true)
         )
     }
 
     #[test]
     fn doesnt_handle_straight_identifiers() {
-        assert!(evaluate_expression(ast(Expression::Ident(String::from("foo")))).is_err())
+        assert!(evaluate_expression(&ast(Expression::Ident(String::from("foo")))).is_err())
     }
 
     #[test]
     fn adds() {
         assert_eq!(
-            evaluate_expression(ast(Expression::BinOp(
+            evaluate_expression(&ast(Expression::BinOp(
                 BinOp::Add,
                 ast(Expression::Value(Value::Int(1))),
                 ast(Expression::Value(Value::Int(2))),
@@ -281,7 +297,7 @@ mod evaluate_expression {
     #[test]
     fn adds_negative_numbers() {
         assert_eq!(
-            evaluate_expression(ast(Expression::BinOp(
+            evaluate_expression(&ast(Expression::BinOp(
                 BinOp::Add,
                 ast(Expression::Value(Value::Int(-1))),
                 ast(Expression::Value(Value::Int(-2))),
@@ -293,7 +309,7 @@ mod evaluate_expression {
     #[test]
     fn subtracts() {
         assert_eq!(
-            evaluate_expression(ast(Expression::BinOp(
+            evaluate_expression(&ast(Expression::BinOp(
                 BinOp::Sub,
                 ast(Expression::Value(Value::Int(2))),
                 ast(Expression::Value(Value::Int(1))),
@@ -305,7 +321,7 @@ mod evaluate_expression {
     #[test]
     fn multiplies() {
         assert_eq!(
-            evaluate_expression(ast(Expression::BinOp(
+            evaluate_expression(&ast(Expression::BinOp(
                 BinOp::Mul,
                 ast(Expression::Value(Value::Int(3))),
                 ast(Expression::Value(Value::Int(2))),
@@ -317,7 +333,7 @@ mod evaluate_expression {
     #[test]
     fn divides_integers() {
         assert_eq!(
-            evaluate_expression(ast(Expression::BinOp(
+            evaluate_expression(&ast(Expression::BinOp(
                 BinOp::Div,
                 ast(Expression::Value(Value::Int(3))),
                 ast(Expression::Value(Value::Int(2))),
@@ -329,7 +345,7 @@ mod evaluate_expression {
     #[test]
     fn divides_floats() {
         assert_eq!(
-            evaluate_expression(ast(Expression::BinOp(
+            evaluate_expression(&ast(Expression::BinOp(
                 BinOp::Div,
                 ast(Expression::Value(Value::Float(3.0))),
                 ast(Expression::Value(Value::Int(2))),
@@ -341,14 +357,14 @@ mod evaluate_expression {
     #[test]
     fn does_not_divide_ints_by_zero() {
         assert!(
-            evaluate_expression(ast(Expression::BinOp(
+            evaluate_expression(&ast(Expression::BinOp(
                 BinOp::Div,
                 ast(Expression::Value(Value::Int(3))),
                 ast(Expression::Value(Value::Int(0))),
             ))).is_err()
         );
         assert!(
-            evaluate_expression(ast(Expression::BinOp(
+            evaluate_expression(&ast(Expression::BinOp(
                 BinOp::Div,
                 ast(Expression::Value(Value::Int(0))),
                 ast(Expression::Value(Value::Int(0))),
@@ -358,7 +374,7 @@ mod evaluate_expression {
 
     #[test]
     fn divides_zero_by_zero() {
-        if let Value::Float(num) = evaluate_expression(ast(Expression::BinOp(
+        if let Value::Float(num) = evaluate_expression(&ast(Expression::BinOp(
             BinOp::Div,
             ast(Expression::Value(Value::Float(0.0))),
             ast(Expression::Value(Value::Int(0))),
@@ -373,7 +389,7 @@ mod evaluate_expression {
     #[test]
     fn returns_the_consequent_of_an_if() {
         assert_eq!(
-            evaluate_expression(ast(Expression::If(
+            evaluate_expression(&ast(Expression::If(
                 ast(Expression::BinOp(
                     BinOp::LEq,
                     ast(Expression::Value(Value::Int(1))),
@@ -389,7 +405,7 @@ mod evaluate_expression {
     #[test]
     fn returns_the_alternate_of_an_if() {
         assert_eq!(
-            evaluate_expression(ast(Expression::If(
+            evaluate_expression(&ast(Expression::If(
                 ast(Expression::Value(Value::Bool(false))),
                 ast(Expression::Value(Value::Int(1))),
                 ast(Expression::Value(Value::Int(2))),
@@ -401,7 +417,7 @@ mod evaluate_expression {
     #[test]
     fn requires_a_bool_if_guard() {
         assert!(
-            evaluate_expression(ast(Expression::If(
+            evaluate_expression(&ast(Expression::If(
                 ast(Expression::Value(Value::Int(1))),
                 ast(Expression::Value(Value::Int(2))),
                 ast(Expression::Value(Value::Int(3))),
@@ -412,22 +428,55 @@ mod evaluate_expression {
     #[test]
     fn substitutes_in_a_nested_function_call() {
         assert_eq!(
-            evaluate_expression(ast(Expression::BinOp(BinOp::Call(
+            evaluate_expression(&ast(Expression::BinOp(
+                BinOp::Call,
                 ast(Expression::Value(Value::Func(
-                    ast(Expression::Ident("inc")),
-                    ast(Expression::BinOp(BinOp::Call(
-                        ast(Expression::Ident("inc")),
+                    String::from("inc"),
+                    ast(Expression::BinOp(
+                        BinOp::Call,
+                        ast(Expression::Ident(String::from("inc"))),
                         ast(Expression::Value(Value::Int(5)))
-                    )))
+                    ))
                 ))),
                 ast(Expression::Value(Value::Func(
-                    ast(Expression::Ident("x")),
-                    ast(Expression::BinOp(BinOp::Add(
-                        ast(Expression::Ident("x")),
+                    String::from("x"),
+                    ast(Expression::BinOp(
+                        BinOp::Add,
+                        ast(Expression::Ident(String::from("x"))),
                         ast(Expression::Value(Value::Int(1)))
-                    )))
+                    ))
                 )))
-            )))),
+            ))).unwrap(),
+            Value::Int(6)
+        )
+    }
+
+    #[test]
+    fn substitutes_with_a_let_expression() {
+        assert_eq!(
+            evaluate_expression(&ast(Expression::Let(
+                String::from("added_val"),
+                ast(Expression::Value(Value::Int(5))),
+                ast(Expression::BinOp(
+                    BinOp::Call,
+                    ast(Expression::Value(Value::Func(
+                        String::from("inc"),
+                        ast(Expression::BinOp(
+                            BinOp::Call,
+                            ast(Expression::Ident(String::from("inc"))),
+                            ast(Expression::Ident(String::from("added_val"))),
+                        ))
+                    ))),
+                    ast(Expression::Value(Value::Func(
+                        String::from("x"),
+                        ast(Expression::BinOp(
+                            BinOp::Add,
+                            ast(Expression::Ident(String::from("x"))),
+                            ast(Expression::Value(Value::Int(1)))
+                        ))
+                    )))
+                ))
+            ))).unwrap(),
             Value::Int(6)
         )
     }
@@ -435,25 +484,28 @@ mod evaluate_expression {
     #[test]
     fn doesnt_substitute_shadowed_variables() {
         assert_eq!(
-            evaluate_expression(ast(Expression::BinOp(BinOp::Call(
+            evaluate_expression(&ast(Expression::BinOp(
+                BinOp::Call,
                 ast(Expression::Value(Value::Func(
-                    ast(Expression::Ident("x")),
+                    String::from("x"),
                     ast(Expression::Value(Value::Func(
-                        ast(Expression::Ident("x")),
-                        ast(Expression::BinOp(BinOp::Add(
-                            ast(Expression::Ident("x")),
+                        String::from("x"),
+                        ast(Expression::BinOp(
+                            BinOp::Add,
+                            ast(Expression::Ident(String::from("x"))),
                             ast(Expression::Value(Value::Int(1)))
-                        )))
+                        ))
                     )))
                 ))),
                 ast(Expression::Value(Value::Int(5)))
-            )))),
+            ))).unwrap(),
             Value::Func(
-                ast(Expression::Ident("x")),
-                ast(Expression::BinOp(BinOp::Add(
-                    ast(Expression::Ident("x")),
+                String::from("x"),
+                ast(Expression::BinOp(
+                    BinOp::Add,
+                    ast(Expression::Ident(String::from("x"))),
                     ast(Expression::Value(Value::Int(1)))
-                )))
+                ))
             )
         )
     }
@@ -461,7 +513,7 @@ mod evaluate_expression {
     #[test]
     fn handles_a_nested_tree() {
         assert_eq!(
-            evaluate_expression(ast(Expression::BinOp(
+            evaluate_expression(&ast(Expression::BinOp(
                 BinOp::Add,
                 ast(Expression::Value(Value::Int(1))),
                 ast(Expression::BinOp(
@@ -477,7 +529,7 @@ mod evaluate_expression {
     #[test]
     fn compares_with_leq() {
         assert_eq!(
-            evaluate_expression(ast(Expression::BinOp(
+            evaluate_expression(&ast(Expression::BinOp(
                 BinOp::LEq,
                 ast(Expression::Value(Value::Int(3))),
                 ast(Expression::Value(Value::Int(2))),
@@ -485,7 +537,7 @@ mod evaluate_expression {
             Value::Bool(false)
         );
         assert_eq!(
-            evaluate_expression(ast(Expression::BinOp(
+            evaluate_expression(&ast(Expression::BinOp(
                 BinOp::LEq,
                 ast(Expression::Value(Value::Int(2))),
                 ast(Expression::Value(Value::Int(2))),
