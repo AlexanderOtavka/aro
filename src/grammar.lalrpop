@@ -14,6 +14,8 @@ pub Expr: Ast = {
 Call = {
     <f:Call> <l:@L> "<|" <r:@R> <a:Comp> =>
         Ast::new(l, r, Expression::BinOp(BinOp::Call, f, a)),
+    <a:Call> <l:@L> "|>" <r:@R> <f:Comp> =>
+        Ast::new(l, r, Expression::BinOp(BinOp::Call, f, a)),
     Comp,
 };
 
