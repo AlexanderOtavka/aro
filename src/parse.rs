@@ -134,6 +134,16 @@ mod source_to_ast {
     }
 
     #[test]
+    fn makes_a_simple_call_tree() {
+        assert_parse_eq(source_to_ast("a <| 5"), "((a) <| 5)");
+    }
+
+    #[test]
+    fn makes_a_simple_function_tree() {
+        assert_parse_eq(source_to_ast("a -> 5"), "(a -> 5)");
+    }
+
+    #[test]
     fn makes_an_if_tree() {
         assert_parse_eq(
             source_to_ast("if #true () then 2 else 5"),
@@ -149,6 +159,11 @@ mod source_to_ast {
     #[test]
     fn makes_a_nested_tree() {
         assert_parse_eq(source_to_ast("2 + 3 * 5"), "(2 + (3 * 5))");
+    }
+
+    #[test]
+    fn makes_a_nested_function_tree() {
+        assert_parse_eq(source_to_ast("a -> a <| 5 + 1"), "(a -> ((a) <| (5 + 1)))");
     }
 
     #[test]
