@@ -1,6 +1,5 @@
 use std::str::FromStr;
 use ast::{Ast, Expression, BinOp, Value};
-use std::f64::{NAN, INFINITY};
 
 grammar;
 
@@ -8,7 +7,7 @@ pub Expr: Ast = {
     <l:@L> "if" <e1:Expr> "then" <e2:Expr> "else" <e3:Expr> <r:@R> =>
         Ast::new(l, r, Expression::If(e1, e2, e3)),
     <p:Ident> <l:@L> "->" <r:@R> <e:Expr> =>
-        Ast::new(l, r, Expression::Func(p, e)),
+        Ast::new(l, r, Expression::Value(Value::Func(p, e))),
     Call,
 };
 

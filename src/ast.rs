@@ -1,22 +1,21 @@
 use std::fmt;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Ast {
     pub left_loc: usize,
     pub right_loc: usize,
     pub expr: Box<Expression>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Expression {
     Value(Value),
     BinOp(BinOp, Ast, Ast),
     If(Ast, Ast, Ast),
     Ident(String),
-    Func(String, Ast),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum BinOp {
     Add,
     Sub,
@@ -26,11 +25,12 @@ pub enum BinOp {
     Call,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Value {
     Int(i32),
     Float(f64),
     Bool(bool),
+    Func(String, Ast),
 }
 
 impl Ast {
@@ -43,7 +43,6 @@ impl Ast {
     }
 }
 
-#[cfg(test)]
 impl fmt::Display for Ast {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &*self.expr {
@@ -63,7 +62,6 @@ impl fmt::Display for Ast {
                 b,
             ),
             &Expression::If(ref c, ref t, ref e) => write!(f, "(if {} then {} else {})", c, t, e),
-            &Expression::Func(ref p, ref e) => write!(f, "({} -> {})", p, e),
             &Expression::Ident(ref n) => write!(f, "({})", n),
         }
     }
@@ -79,6 +77,7 @@ impl fmt::Display for Value {
                 &Value::Float(value) => format!("{}", value),
                 &Value::Bool(true) => String::from("#true ()"),
                 &Value::Bool(false) => String::from("#false ()"),
+                &Value::Func(ref p, ref e) => format!("({} -> {})", p, e),
             }
         )
     }

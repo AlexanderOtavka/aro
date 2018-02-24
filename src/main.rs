@@ -20,7 +20,7 @@ use util::Error;
 
 fn evaluate_source(input: &str) -> Result<String, Error> {
     let ast = parse::source_to_ast(input)?;
-    let value = eval::evaluate_expression(ast)?;
+    let value = eval::evaluate_expression(&ast)?;
 
     Ok(format!("{}", value))
 }

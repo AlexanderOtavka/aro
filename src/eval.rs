@@ -101,31 +101,80 @@ mod evaluate_number_operator {
     }
 }
 
-pub fn evaluate_expression(ast: Ast) -> Result<Value, Error> {
-    let expr = *ast.expr;
+fn substitute(ast: &Ast, name: &str, value: &Ast) -> Ast {
+    match &*ast.expr {
+        &Expression::Ident(ref ident_name) => {
+            if ident_name == name {
+                value.clone()
+            } else {
+                ast.clone()
+            }
+        }
+        &Expression::BinOp(ref op, ref left, ref right) => Ast {
+            expr: Box::new(Expression::BinOp(
+                op.clone(),
+                substitute(left, name, value),
+                substitute(right, name, value),
+            )),
+            left_loc: ast.left_loc,
+            right_loc: ast.right_loc,
+        },
+        &Expression::If(ref c, ref t, ref e) => Ast {
+            expr: Box::new(Expression::If(
+                substitute(c, name, value),
+                substitute(t, name, value),
+                substitute(e, name, value),
+            )),
+            left_loc: ast.left_loc,
+            right_loc: ast.right_loc,
+        },
+        &Expression::Value(Value::Func(ref param_name, ref body)) => Ast {
+            expr: Box::new(Expression::Value(Value::Func(
+                param_name.clone(),
+                if param_name == name {
+                    body.clone()
+                } else {
+                    substitute(body, name, value)
+                },
+            ))),
+            left_loc: ast.left_loc,
+            right_loc: ast.right_loc,
+        },
+        &Expression::Value(_) => ast.clone(),
+    }
+}
+
+pub fn evaluate_expression(ast: &Ast) -> Result<Value, Error> {
     let left_loc = ast.left_loc;
     let right_loc = ast.right_loc;
 
-    match expr {
-        Expression::Value(value) => Ok(value),
-        Expression::Ident(name) => panic!(),
-        Expression::BinOp(operation, left, right) => match operation {
-            BinOp::Add => evaluate_number_operator(
+    match &*ast.expr {
+        &Expression::Value(ref value) => Ok(value.clone()),
+        &Expression::Ident(ref name) => Err(Error::LRLocated {
+            message: format!(
+                "Am I supposed to read your god damn mind?  What's a `{}`?",
+                name
+            ),
+            left_loc,
+            right_loc,
+        }),
+        &Expression::BinOp(ref operation, ref left, ref right) => match operation {
+            &BinOp::Add => evaluate_number_operator(
                 &evaluate_expression(left)?,
                 &evaluate_expression(right)?,
                 |a, b| a + b,
             ),
-            BinOp::Sub => evaluate_number_operator(
+            &BinOp::Sub => evaluate_number_operator(
                 &evaluate_expression(left)?,
                 &evaluate_expression(right)?,
                 |a, b| a - b,
             ),
-            BinOp::Mul => evaluate_number_operator(
+            &BinOp::Mul => evaluate_number_operator(
                 &evaluate_expression(left)?,
                 &evaluate_expression(right)?,
                 |a, b| a * b,
             ),
-            BinOp::Div => match (evaluate_expression(left)?, evaluate_expression(right)?) {
+            &BinOp::Div => match (evaluate_expression(left)?, evaluate_expression(right)?) {
                 (Value::Int(_), Value::Int(0)) => {
                     Err(String::from("Fuck off with your divide-by-zero bullshit."))
                 }
@@ -133,7 +182,7 @@ pub fn evaluate_expression(ast: Ast) -> Result<Value, Error> {
                     evaluate_number_operator(&left_value, &right_value, |a, b| a / b)
                 }
             },
-            BinOp::LEq => match (evaluate_expression(left)?, evaluate_expression(right)?) {
+            &BinOp::LEq => match (evaluate_expression(left)?, evaluate_expression(right)?) {
                 (Value::Int(left_value), Value::Int(right_value)) => {
                     Ok(Value::Bool(left_value <= right_value))
                 }
@@ -148,7 +197,24 @@ pub fn evaluate_expression(ast: Ast) -> Result<Value, Error> {
                 }
                 _ => Err(String::from("Fuck off with your non-number bullshit.")),
             },
-            BinOp::Call => panic!(),
+            &BinOp::Call => {
+                if let Value::Func(ref param_name, ref body) = evaluate_expression(left)? {
+                    Ok(evaluate_expression(&substitute(
+                        body,
+                        param_name,
+                        &Ast {
+                            expr: Box::new(Expression::Value(evaluate_expression(right)?)),
+                            left_loc: right.left_loc,
+                            right_loc: right.right_loc,
+                        },
+                    ))?)
+                } else {
+                    Err(String::from(
+                        "I only call two things on a regular basis: functions, and your mom.\
+                         \nThat's not a function.",
+                    ))
+                }
+            }
         }.map_err(|message| {
             (Error::LRLocated {
                 message: message.clone(),
@@ -156,21 +222,22 @@ pub fn evaluate_expression(ast: Ast) -> Result<Value, Error> {
                 right_loc,
             })
         }),
-        Expression::If(guard, consequent, alternate) => match evaluate_expression(guard)? {
-            Value::Bool(guard_value) => {
-                evaluate_expression(if guard_value { consequent } else { alternate })
+        &Expression::If(ref guard, ref consequent, ref alternate) => {
+            match evaluate_expression(guard)? {
+                Value::Bool(guard_value) => {
+                    evaluate_expression(if guard_value { consequent } else { alternate })
+                }
+                _ => Err(Error::LRLocated {
+                    message: String::from("This isn't JavaScript.  Only bools in `if`s.  Dumbass."),
+                    left_loc: ast.left_loc,
+                    right_loc: ast.right_loc,
+                }),
             }
-            _ => Err(Error::LRLocated {
-                message: String::from("This isn't JavaScript.  Only bools in `if`s.  Dumbass."),
-                left_loc: ast.left_loc,
-                right_loc: ast.right_loc,
-            }),
-        },
-        Expression::Func(param, body) => panic!(),
+        }
     }
 }
 
-#[cfg(test)]
+#[cfg(ignore)]
 mod evaluate_expression {
     use super::*;
 
@@ -192,6 +259,11 @@ mod evaluate_expression {
             evaluate_expression(ast(Expression::Value(Value::Bool(true)))).unwrap(),
             Value::Bool(true)
         )
+    }
+
+    #[test]
+    fn doesnt_handle_straight_identifiers() {
+        assert!(evaluate_expression(ast(Expression::Ident(String::from("foo")))).is_err())
     }
 
     #[test]
@@ -334,6 +406,55 @@ mod evaluate_expression {
                 ast(Expression::Value(Value::Int(2))),
                 ast(Expression::Value(Value::Int(3))),
             ))).is_err()
+        )
+    }
+
+    #[test]
+    fn substitutes_in_a_nested_function_call() {
+        assert_eq!(
+            evaluate_expression(ast(Expression::BinOp(BinOp::Call(
+                ast(Expression::Value(Value::Func(
+                    ast(Expression::Ident("inc")),
+                    ast(Expression::BinOp(BinOp::Call(
+                        ast(Expression::Ident("inc")),
+                        ast(Expression::Value(Value::Int(5)))
+                    )))
+                ))),
+                ast(Expression::Value(Value::Func(
+                    ast(Expression::Ident("x")),
+                    ast(Expression::BinOp(BinOp::Add(
+                        ast(Expression::Ident("x")),
+                        ast(Expression::Value(Value::Int(1)))
+                    )))
+                )))
+            )))),
+            Value::Int(6)
+        )
+    }
+
+    #[test]
+    fn doesnt_substitute_shadowed_variables() {
+        assert_eq!(
+            evaluate_expression(ast(Expression::BinOp(BinOp::Call(
+                ast(Expression::Value(Value::Func(
+                    ast(Expression::Ident("x")),
+                    ast(Expression::Value(Value::Func(
+                        ast(Expression::Ident("x")),
+                        ast(Expression::BinOp(BinOp::Add(
+                            ast(Expression::Ident("x")),
+                            ast(Expression::Value(Value::Int(1)))
+                        )))
+                    )))
+                ))),
+                ast(Expression::Value(Value::Int(5)))
+            )))),
+            Value::Func(
+                ast(Expression::Ident("x")),
+                ast(Expression::BinOp(BinOp::Add(
+                    ast(Expression::Ident("x")),
+                    ast(Expression::Value(Value::Int(1)))
+                )))
+            )
         )
     }
 
