@@ -32,7 +32,7 @@ mod evaluate_number_operator {
     fn operates_on_two_ints() {
         assert_eq!(
             evaluate_number_operator(&Value::Int(2), &Value::Int(4), |a, b| a + b).unwrap(),
-            Value::Int(6)
+            Value::Int(6),
         );
     }
 
@@ -40,7 +40,7 @@ mod evaluate_number_operator {
     fn operates_on_two_floats() {
         assert_eq!(
             evaluate_number_operator(&Value::Float(2.1), &Value::Float(4.3), |a, b| a + b).unwrap(),
-            Value::Float(6.4)
+            Value::Float(6.4),
         );
     }
 
@@ -48,11 +48,11 @@ mod evaluate_number_operator {
     fn operates_on_mixed_ints_and_floats() {
         assert_eq!(
             evaluate_number_operator(&Value::Int(2), &Value::Float(4.3), |a, b| a + b).unwrap(),
-            Value::Float(6.3)
+            Value::Float(6.3),
         );
         assert_eq!(
             evaluate_number_operator(&Value::Float(2.3), &Value::Int(4), |a, b| a + b).unwrap(),
-            Value::Float(6.3)
+            Value::Float(6.3),
         );
     }
 
@@ -60,16 +60,16 @@ mod evaluate_number_operator {
     fn doesnt_add_bools() {
         assert_eq!(
             evaluate_number_operator(&Value::Bool(true), &Value::Int(4), |a, b| a + b).unwrap_err(),
-            "Fuck off with your non-number bullshit."
+            "Fuck off with your non-number bullshit.",
         );
         assert_eq!(
             evaluate_number_operator(&Value::Int(4), &Value::Bool(true), |a, b| a + b).unwrap_err(),
-            "Fuck off with your non-number bullshit."
+            "Fuck off with your non-number bullshit.",
         );
         assert_eq!(
             evaluate_number_operator(&Value::Bool(true), &Value::Bool(true), |a, b| a + b)
                 .unwrap_err(),
-            "Fuck off with your non-number bullshit."
+            "Fuck off with your non-number bullshit.",
         );
     }
 
@@ -272,332 +272,144 @@ pub fn evaluate_expression(ast: &Ast) -> Result<Value, Error> {
 #[cfg(test)]
 mod evaluate_expression {
     use super::*;
+    use parse::source_to_ast;
 
-    pub fn ast(expr: Expression) -> Ast {
-        Ast::new(0, 0, expr)
+    fn assert_eval_eq(source: &str, result: &str) {
+        assert_eq!(
+            format!(
+                "{}",
+                evaluate_expression(&source_to_ast(source).unwrap()).unwrap()
+            ),
+            result
+        )
+    }
+
+    fn assert_eval_err(source: &str) {
+        assert!(evaluate_expression(&source_to_ast(source).unwrap()).is_err())
     }
 
     #[test]
     fn spits_back_out_an_int() {
-        assert_eq!(
-            evaluate_expression(&ast(Expression::Value(Value::Int(5)))).unwrap(),
-            Value::Int(5)
-        )
+        assert_eval_eq("5", "5")
     }
 
     #[test]
     fn spits_back_out_a_bool() {
-        assert_eq!(
-            evaluate_expression(&ast(Expression::Value(Value::Bool(true)))).unwrap(),
-            Value::Bool(true)
-        )
+        assert_eval_eq("#true ()", "#true ()")
     }
 
     #[test]
     fn doesnt_handle_straight_identifiers() {
-        assert!(evaluate_expression(&ast(Expression::Ident(String::from("foo")))).is_err())
+        assert_eval_err("foo")
     }
 
     #[test]
     fn adds() {
-        assert_eq!(
-            evaluate_expression(&ast(Expression::BinOp(
-                BinOp::Add,
-                ast(Expression::Value(Value::Int(1))),
-                ast(Expression::Value(Value::Int(2))),
-            ))).unwrap(),
-            Value::Int(3)
-        )
+        assert_eval_eq("1 + 2", "3")
     }
 
     #[test]
     fn adds_negative_numbers() {
-        assert_eq!(
-            evaluate_expression(&ast(Expression::BinOp(
-                BinOp::Add,
-                ast(Expression::Value(Value::Int(-1))),
-                ast(Expression::Value(Value::Int(-2))),
-            ))).unwrap(),
-            Value::Int(-3)
-        )
+        assert_eval_eq("-1 + -2", "-3")
     }
 
     #[test]
     fn subtracts() {
-        assert_eq!(
-            evaluate_expression(&ast(Expression::BinOp(
-                BinOp::Sub,
-                ast(Expression::Value(Value::Int(2))),
-                ast(Expression::Value(Value::Int(1))),
-            ))).unwrap(),
-            Value::Int(1)
-        )
+        assert_eval_eq("2 - 1", "1")
     }
 
     #[test]
     fn multiplies() {
-        assert_eq!(
-            evaluate_expression(&ast(Expression::BinOp(
-                BinOp::Mul,
-                ast(Expression::Value(Value::Int(3))),
-                ast(Expression::Value(Value::Int(2))),
-            ))).unwrap(),
-            Value::Int(6)
-        )
+        assert_eval_eq("3 * 2", "6")
     }
 
     #[test]
     fn divides_integers() {
-        assert_eq!(
-            evaluate_expression(&ast(Expression::BinOp(
-                BinOp::Div,
-                ast(Expression::Value(Value::Int(3))),
-                ast(Expression::Value(Value::Int(2))),
-            ))).unwrap(),
-            Value::Int(1)
-        )
+        assert_eval_eq("3 / 2", "1")
     }
 
     #[test]
     fn divides_floats() {
-        assert_eq!(
-            evaluate_expression(&ast(Expression::BinOp(
-                BinOp::Div,
-                ast(Expression::Value(Value::Float(3.0))),
-                ast(Expression::Value(Value::Int(2))),
-            ))).unwrap(),
-            Value::Float(1.5)
-        )
+        assert_eval_eq("3.0 / 2", "1.5")
     }
 
     #[test]
     fn does_not_divide_ints_by_zero() {
-        assert!(
-            evaluate_expression(&ast(Expression::BinOp(
-                BinOp::Div,
-                ast(Expression::Value(Value::Int(3))),
-                ast(Expression::Value(Value::Int(0))),
-            ))).is_err()
-        );
-        assert!(
-            evaluate_expression(&ast(Expression::BinOp(
-                BinOp::Div,
-                ast(Expression::Value(Value::Int(0))),
-                ast(Expression::Value(Value::Int(0))),
-            ))).is_err()
-        );
+        assert_eval_err("3 / 0");
+        assert_eval_err("0 / 0");
     }
 
     #[test]
     fn divides_zero_by_zero() {
-        if let Value::Float(num) = evaluate_expression(&ast(Expression::BinOp(
-            BinOp::Div,
-            ast(Expression::Value(Value::Float(0.0))),
-            ast(Expression::Value(Value::Int(0))),
-        ))).unwrap()
-        {
-            assert!(num.is_nan());
-        } else {
-            panic!()
-        }
+        assert_eval_eq("0.0 / 0", "NaN")
+    }
+
+    #[test]
+    fn divides_floats_by_zero() {
+        assert_eval_eq("3.0 / 0", "inf")
     }
 
     #[test]
     fn returns_the_consequent_of_an_if() {
-        assert_eq!(
-            evaluate_expression(&ast(Expression::If(
-                ast(Expression::BinOp(
-                    BinOp::LEq,
-                    ast(Expression::Value(Value::Int(1))),
-                    ast(Expression::Value(Value::Int(1))),
-                )),
-                ast(Expression::Value(Value::Int(1))),
-                ast(Expression::Value(Value::Int(2))),
-            ))).unwrap(),
-            Value::Int(1)
-        )
+        assert_eval_eq("if 1 <= 1 then 1 else 2", "1")
     }
 
     #[test]
     fn returns_the_alternate_of_an_if() {
-        assert_eq!(
-            evaluate_expression(&ast(Expression::If(
-                ast(Expression::Value(Value::Bool(false))),
-                ast(Expression::Value(Value::Int(1))),
-                ast(Expression::Value(Value::Int(2))),
-            ))).unwrap(),
-            Value::Int(2)
-        )
+        assert_eval_eq("if (#false ()) then 1 else 2", "2")
     }
 
     #[test]
     fn requires_a_bool_if_guard() {
-        assert!(
-            evaluate_expression(&ast(Expression::If(
-                ast(Expression::Value(Value::Int(1))),
-                ast(Expression::Value(Value::Int(2))),
-                ast(Expression::Value(Value::Int(3))),
-            ))).is_err()
-        )
+        assert_eval_err("if 1 then 2 else 3")
     }
 
     #[test]
     fn substitutes_in_a_nested_function_call() {
-        assert_eq!(
-            evaluate_expression(&ast(Expression::BinOp(
-                BinOp::Call,
-                ast(Expression::Value(Value::Func(
-                    String::from("inc"),
-                    ast(Expression::BinOp(
-                        BinOp::Call,
-                        ast(Expression::Ident(String::from("inc"))),
-                        ast(Expression::Value(Value::Int(5)))
-                    ))
-                ))),
-                ast(Expression::Value(Value::Func(
-                    String::from("x"),
-                    ast(Expression::BinOp(
-                        BinOp::Add,
-                        ast(Expression::Ident(String::from("x"))),
-                        ast(Expression::Value(Value::Int(1)))
-                    ))
-                )))
-            ))).unwrap(),
-            Value::Int(6)
-        )
+        assert_eval_eq("(inc -> inc <| 5) <| (x -> x + 1)", "6")
     }
 
     #[test]
     fn substitutes_with_a_let_expression() {
-        assert_eq!(
-            evaluate_expression(&ast(Expression::Let(
-                String::from("added_val"),
-                ast(Expression::Value(Value::Int(5))),
-                ast(Expression::BinOp(
-                    BinOp::Call,
-                    ast(Expression::Value(Value::Func(
-                        String::from("inc"),
-                        ast(Expression::BinOp(
-                            BinOp::Call,
-                            ast(Expression::Ident(String::from("inc"))),
-                            ast(Expression::Ident(String::from("added_val"))),
-                        ))
-                    ))),
-                    ast(Expression::Value(Value::Func(
-                        String::from("x"),
-                        ast(Expression::BinOp(
-                            BinOp::Add,
-                            ast(Expression::Ident(String::from("x"))),
-                            ast(Expression::Value(Value::Int(1)))
-                        ))
-                    )))
-                ))
-            ))).unwrap(),
-            Value::Int(6)
+        assert_eval_eq(
+            "
+            let added_val <== 5
+            ((inc -> inc <| added_val) <| (x -> x + 1))
+            ",
+            "6",
         )
     }
 
     #[test]
     fn supports_recursion_in_the_let_expression() {
-        assert_eq!(
-            evaluate_expression(&ast(Expression::Let(
-                String::from("factorial"),
-                ast(Expression::Value(Value::Func(
-                    String::from("n"),
-                    ast(Expression::If(
-                        ast(Expression::BinOp(
-                            BinOp::LEq,
-                            ast(Expression::Ident(String::from("n"))),
-                            ast(Expression::Value(Value::Int(0)))
-                        )),
-                        ast(Expression::Value(Value::Int(1))),
-                        ast(Expression::BinOp(
-                            BinOp::Mul,
-                            ast(Expression::Ident(String::from("n"))),
-                            ast(Expression::BinOp(
-                                BinOp::Call,
-                                ast(Expression::Ident(String::from("factorial"))),
-                                ast(Expression::BinOp(
-                                    BinOp::Sub,
-                                    ast(Expression::Ident(String::from("n"))),
-                                    ast(Expression::Value(Value::Int(1))),
-                                ))
-                            ))
-                        ))
-                    )),
-                ))),
-                ast(Expression::BinOp(
-                    BinOp::Call,
-                    ast(Expression::Ident(String::from("factorial"))),
-                    ast(Expression::Value(Value::Int(5)))
-                ))
-            ))).unwrap(),
-            Value::Int(5 * 4 * 3 * 2 * 1)
+        assert_eval_eq(
+            "
+            let factorial <== n ->
+                if n <= 0 then
+                    1
+                else
+                    n * (factorial <| n - 1)
+
+            factorial <| 5
+            ",
+            &format!("{}", 5 * 4 * 3 * 2 * 1),
         )
     }
 
     #[test]
     fn doesnt_substitute_shadowed_variables() {
-        assert_eq!(
-            evaluate_expression(&ast(Expression::BinOp(
-                BinOp::Call,
-                ast(Expression::Value(Value::Func(
-                    String::from("x"),
-                    ast(Expression::Value(Value::Func(
-                        String::from("x"),
-                        ast(Expression::BinOp(
-                            BinOp::Add,
-                            ast(Expression::Ident(String::from("x"))),
-                            ast(Expression::Value(Value::Int(1)))
-                        ))
-                    )))
-                ))),
-                ast(Expression::Value(Value::Int(5)))
-            ))).unwrap(),
-            Value::Func(
-                String::from("x"),
-                ast(Expression::BinOp(
-                    BinOp::Add,
-                    ast(Expression::Ident(String::from("x"))),
-                    ast(Expression::Value(Value::Int(1)))
-                ))
-            )
-        )
+        assert_eval_eq("(x -> x -> x + 1) <| 5", "(x -> ((x) + 1))")
     }
 
     #[test]
     fn handles_a_nested_tree() {
-        assert_eq!(
-            evaluate_expression(&ast(Expression::BinOp(
-                BinOp::Add,
-                ast(Expression::Value(Value::Int(1))),
-                ast(Expression::BinOp(
-                    BinOp::Mul,
-                    ast(Expression::Value(Value::Int(2))),
-                    ast(Expression::Value(Value::Int(3))),
-                ))
-            ))).unwrap(),
-            Value::Int(7)
-        )
+        assert_eval_eq("1 + (2 * 3)", "7")
     }
 
     #[test]
     fn compares_with_leq() {
-        assert_eq!(
-            evaluate_expression(&ast(Expression::BinOp(
-                BinOp::LEq,
-                ast(Expression::Value(Value::Int(3))),
-                ast(Expression::Value(Value::Int(2))),
-            ))).unwrap(),
-            Value::Bool(false)
-        );
-        assert_eq!(
-            evaluate_expression(&ast(Expression::BinOp(
-                BinOp::LEq,
-                ast(Expression::Value(Value::Int(2))),
-                ast(Expression::Value(Value::Int(2))),
-            ))).unwrap(),
-            Value::Bool(true)
-        );
+        assert_eval_eq("3 <= 2", "#false ()");
+        assert_eval_eq("2 <= 2", "#true ()");
+        assert_eval_eq("1 <= 2", "#true ()");
     }
 }
