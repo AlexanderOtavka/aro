@@ -94,6 +94,10 @@ mod source_to_ast {
     #[test]
     fn makes_an_identifier_tree() {
         assert_parse_eq(source_to_ast("foo"), "(foo)");
+        assert_parse_eq(source_to_ast("foo_bar"), "(foo_bar)");
+        assert!(source_to_ast("_foo").is_err());
+        assert!(source_to_ast("foo_").is_err());
+        assert!(source_to_ast("foo__bar").is_err());
     }
 
     #[test]

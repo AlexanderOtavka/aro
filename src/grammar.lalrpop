@@ -54,7 +54,7 @@ Float: f64 = {
 };
 
 Ident: String = {
-    r"[a-z][a-z_]*" => String::from(<>),
+    r"[a-z](_?[a-z])*" => String::from(<>),
 };
 
 Int: i32 = {
