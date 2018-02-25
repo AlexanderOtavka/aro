@@ -40,6 +40,8 @@ will run all unit tests inside the docker container.
 
 #### Changed Features
 
+* `nan` and `inf` are now globally bound values, and can be shadowed.
+
 #### Known Bugs
 
 None.
