@@ -115,6 +115,8 @@ mod source_to_ast {
     #[test]
     fn makes_a_bool_tree() {
         assert_parse_eq(source_to_ast("#true ()"), "#true ()");
+        assert_parse_eq(source_to_ast("#false()"), "#false ()");
+        assert_parse_eq(source_to_ast("#true ( )"), "#true ()");
     }
 
     #[test]
