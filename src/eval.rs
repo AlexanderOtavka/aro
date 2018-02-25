@@ -281,56 +281,56 @@ mod evaluate_expression {
                 evaluate_expression(&source_to_ast(actual).unwrap()).unwrap()
             ),
             expected
-        )
+        );
     }
 
     fn assert_eval_err(source: &str) {
-        assert!(evaluate_expression(&source_to_ast(source).unwrap()).is_err())
+        assert!(evaluate_expression(&source_to_ast(source).unwrap()).is_err());
     }
 
     #[test]
     fn spits_back_out_an_int() {
-        assert_eval_eq("5", "5")
+        assert_eval_eq("5", "5");
     }
 
     #[test]
     fn spits_back_out_a_bool() {
-        assert_eval_eq("#true ()", "#true ()")
+        assert_eval_eq("#true ()", "#true ()");
     }
 
     #[test]
     fn doesnt_handle_straight_identifiers() {
-        assert_eval_err("foo")
+        assert_eval_err("foo");
     }
 
     #[test]
     fn adds() {
-        assert_eval_eq("1 + 2", "3")
+        assert_eval_eq("1 + 2", "3");
     }
 
     #[test]
     fn adds_negative_numbers() {
-        assert_eval_eq("-1 + -2", "-3")
+        assert_eval_eq("-1 + -2", "-3");
     }
 
     #[test]
     fn subtracts() {
-        assert_eval_eq("2 - 1", "1")
+        assert_eval_eq("2 - 1", "1");
     }
 
     #[test]
     fn multiplies() {
-        assert_eval_eq("3 * 2", "6")
+        assert_eval_eq("3 * 2", "6");
     }
 
     #[test]
     fn divides_integers() {
-        assert_eval_eq("3 / 2", "1")
+        assert_eval_eq("3 / 2", "1");
     }
 
     #[test]
     fn divides_floats() {
-        assert_eval_eq("3.0 / 2", "1.5")
+        assert_eval_eq("3.0 / 2", "1.5");
     }
 
     #[test]
@@ -341,32 +341,32 @@ mod evaluate_expression {
 
     #[test]
     fn divides_zero_by_zero() {
-        assert_eval_eq("0.0 / 0", "NaN")
+        assert_eval_eq("0.0 / 0", "NaN");
     }
 
     #[test]
     fn divides_floats_by_zero() {
-        assert_eval_eq("3.0 / 0", "inf")
+        assert_eval_eq("3.0 / 0", "inf");
     }
 
     #[test]
     fn returns_the_consequent_of_an_if() {
-        assert_eval_eq("if 1 <= 1 then 1 else 2", "1")
+        assert_eval_eq("if 1 <= 1 then 1 else 2", "1");
     }
 
     #[test]
     fn returns_the_alternate_of_an_if() {
-        assert_eval_eq("if (#false ()) then 1 else 2", "2")
+        assert_eval_eq("if (#false ()) then 1 else 2", "2");
     }
 
     #[test]
     fn requires_a_bool_if_guard() {
-        assert_eval_err("if 1 then 2 else 3")
+        assert_eval_err("if 1 then 2 else 3");
     }
 
     #[test]
     fn substitutes_in_a_nested_function_call() {
-        assert_eval_eq("(inc -> inc <| 5) <| (x -> x + 1)", "6")
+        assert_eval_eq("(inc -> inc <| 5) <| (x -> x + 1)", "6");
     }
 
     #[test]
@@ -377,7 +377,7 @@ mod evaluate_expression {
             ((inc -> inc <| added_val) <| (x -> x + 1))
             ",
             "6",
-        )
+        );
     }
 
     #[test]
@@ -393,17 +393,17 @@ mod evaluate_expression {
             factorial <| 5
             ",
             &format!("{}", 5 * 4 * 3 * 2 * 1),
-        )
+        );
     }
 
     #[test]
     fn doesnt_substitute_shadowed_variables() {
-        assert_eval_eq("(x -> x -> x + 1) <| 5", "(x -> ((x) + 1))")
+        assert_eval_eq("(x -> x -> x + 1) <| 5", "(x -> ((x) + 1))");
     }
 
     #[test]
     fn handles_a_nested_tree() {
-        assert_eval_eq("1 + (2 * 3)", "7")
+        assert_eval_eq("1 + (2 * 3)", "7");
     }
 
     #[test]
