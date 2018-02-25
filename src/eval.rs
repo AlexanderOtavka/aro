@@ -247,9 +247,25 @@ pub fn evaluate_expression(ast: &Ast) -> Result<Value, Error> {
                 }),
             }
         }
-        &Expression::Let(ref bind_name, ref bind_value, ref body) => Ok(evaluate_expression(
-            &substitute(body, bind_name, bind_value),
-        )?),
+        &Expression::Let(ref bind_name, ref bind_value, ref body) => {
+            Ok(evaluate_expression(&substitute(
+                body,
+                bind_name,
+                &substitute(
+                    bind_value,
+                    bind_name,
+                    &Ast {
+                        expr: Box::new(Expression::Let(
+                            bind_name.clone(),
+                            bind_value.clone(),
+                            bind_value.clone(),
+                        )),
+                        left_loc: bind_value.left_loc,
+                        right_loc: bind_value.right_loc,
+                    },
+                ),
+            ))?)
+        }
     }
 }
 
@@ -478,6 +494,45 @@ mod evaluate_expression {
                 ))
             ))).unwrap(),
             Value::Int(6)
+        )
+    }
+
+    #[test]
+    fn supports_recursion_in_the_let_expression() {
+        assert_eq!(
+            evaluate_expression(&ast(Expression::Let(
+                String::from("factorial"),
+                ast(Expression::Value(Value::Func(
+                    String::from("n"),
+                    ast(Expression::If(
+                        ast(Expression::BinOp(
+                            BinOp::LEq,
+                            ast(Expression::Ident(String::from("n"))),
+                            ast(Expression::Value(Value::Int(0)))
+                        )),
+                        ast(Expression::Value(Value::Int(1))),
+                        ast(Expression::BinOp(
+                            BinOp::Mul,
+                            ast(Expression::Ident(String::from("n"))),
+                            ast(Expression::BinOp(
+                                BinOp::Call,
+                                ast(Expression::Ident(String::from("factorial"))),
+                                ast(Expression::BinOp(
+                                    BinOp::Sub,
+                                    ast(Expression::Ident(String::from("n"))),
+                                    ast(Expression::Value(Value::Int(1))),
+                                ))
+                            ))
+                        ))
+                    )),
+                ))),
+                ast(Expression::BinOp(
+                    BinOp::Call,
+                    ast(Expression::Ident(String::from("factorial"))),
+                    ast(Expression::Value(Value::Int(5)))
+                ))
+            ))).unwrap(),
+            Value::Int(5 * 4 * 3 * 2 * 1)
         )
     }
 
