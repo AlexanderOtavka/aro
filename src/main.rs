@@ -18,11 +18,25 @@ use std::io::prelude::*;
 use std::process::exit;
 use util::Error;
 
-fn evaluate_source(input: &str) -> Result<String, Error> {
+fn evaluate_source(input: &str, small_step: bool) -> Result<String, Error> {
     let ast = parse::source_to_ast(input)?;
-    let value = eval::evaluate_expression(&ast)?;
 
-    Ok(format!("{}", value))
+    if small_step {
+        let steps = eval::get_eval_steps(&ast)?;
+
+        let mut output = String::new();
+        for step in &steps[0..(steps.len() - 1)] {
+            output += &format!("--> {}\n", step)
+        }
+
+        output += &format!("--> {}", steps[steps.len() - 1]);
+
+        Ok(output)
+    } else {
+        let value = eval::evaluate_expression(&ast)?;
+
+        Ok(format!("{}", value))
+    }
 }
 
 #[cfg(test)]
@@ -31,10 +45,10 @@ mod evaluate_source {
 
     #[test]
     fn spits_out_a_result() {
-        assert_eq!(evaluate_source("5").unwrap(), "5");
-        assert_eq!(evaluate_source("-51").unwrap(), "-51");
-        assert_eq!(evaluate_source("#false ()").unwrap(), "#false ()");
-        assert_eq!(evaluate_source("#true ()").unwrap(), "#true ()");
+        assert_eq!(evaluate_source("5", false).unwrap(), "5");
+        assert_eq!(evaluate_source("-51", false).unwrap(), "-51");
+        assert_eq!(evaluate_source("#false ()", false).unwrap(), "#false ()");
+        assert_eq!(evaluate_source("#true ()", false).unwrap(), "#true ()");
     }
 
     #[test]
@@ -44,9 +58,23 @@ mod evaluate_source {
                 "
                 -20.2 +
                 (5 + 10 + 15)
-                "
+                ",
+                false
             ).unwrap(),
             "9.8"
+        );
+        assert_eq!(
+            evaluate_source(
+                "
+                -20.2 +
+                (5 + 10 + 15)
+                ",
+                true
+            ).unwrap(),
+            "--> (-20.2 + ((5 + 10) + 15))\
+             \n--> (-20.2 + (15 + 15))\
+             \n--> (-20.2 + 30)\
+             \n--> 9.8"
         );
     }
 
@@ -59,7 +87,8 @@ mod evaluate_source {
                     2 * (0 / 0)
                 else
                     -10 - -5
-                "
+                ",
+                false
             ).unwrap(),
             "-5"
         );
@@ -72,7 +101,8 @@ mod evaluate_source {
                 "
                 1 / 0.0 -
                     100000000000000000000000000000000000000000000000000000.0
-                "
+                ",
+                false
             ).unwrap(),
             "inf"
         );
@@ -84,18 +114,19 @@ mod evaluate_source {
             evaluate_source(
                 "
                 20 + (5 + 10
-                "
+                ",
+                false
             ).is_err()
         );
     }
 
     #[test]
     fn complains_about_extra_tokens_in_file() {
-        assert!(evaluate_source("5 7").is_err());
+        assert!(evaluate_source("5 7", false).is_err());
     }
 }
 
-fn evaluate_file(file_name: &str) -> Result<String, String> {
+fn evaluate_file(file_name: &str, small_step: bool) -> Result<String, String> {
     let mut input_file = std::fs::File::open(file_name).map_err(|_| "Couldn't open file.")?;
 
     let mut input_string = String::new();
@@ -103,7 +134,7 @@ fn evaluate_file(file_name: &str) -> Result<String, String> {
         .read_to_string(&mut input_string)
         .map_err(|_| "Couldn't read input.")?;
 
-    evaluate_source(&input_string).map_err(|err| err.as_string(&input_string))
+    evaluate_source(&input_string, small_step).map_err(|err| err.as_string(&input_string))
 }
 
 fn main() {
@@ -115,9 +146,18 @@ fn main() {
                 .help("The input file of aro code.")
                 .required(true),
         )
+        .arg(
+            clap::Arg::with_name("small-step")
+                .help("Prints each step of execution")
+                .short("s")
+                .long("small-step"),
+        )
         .get_matches();
 
-    exit(match evaluate_file(options.value_of("infile").unwrap()) {
+    exit(match evaluate_file(
+        options.value_of("infile").unwrap(),
+        options.is_present("small-step"),
+    ) {
         Ok(output) => {
             println!("{}", output);
             0

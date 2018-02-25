@@ -1,26 +1,39 @@
 use ast::{Ast, BinOp, Expression, Value};
 use util::Error;
 
-fn evaluate_number_operator<F>(left: &Value, right: &Value, evaluate: F) -> Result<Value, String>
+fn evaluate_number_operator<F>(
+    ast: &Ast,
+    left: &Value,
+    right: &Value,
+    evaluate: F,
+) -> Result<Ast, Error>
 where
     F: Fn(f64, f64) -> f64,
 {
-    match (left, right) {
-        (&Value::Int(left_value), &Value::Int(right_value)) => {
-            Ok(Value::Int(evaluate(left_value as f64, right_value as f64)
-                as i32))
-        }
-        (&Value::Float(left_value), &Value::Float(right_value)) => {
-            Ok(Value::Float(evaluate(left_value, right_value)))
-        }
-        (&Value::Int(left_value), &Value::Float(right_value)) => {
-            Ok(Value::Float(evaluate(left_value as f64, right_value)))
-        }
-        (&Value::Float(left_value), &Value::Int(right_value)) => {
-            Ok(Value::Float(evaluate(left_value, right_value as f64)))
-        }
-        _ => Err(String::from("Fuck off with your non-number bullshit.")),
-    }
+    Ok(Ast {
+        expr: Box::new(Expression::Value(match (left, right) {
+            (&Value::Int(left_value), &Value::Int(right_value)) => {
+                Ok(Value::Int(evaluate(left_value as f64, right_value as f64)
+                    as i32))
+            }
+            (&Value::Float(left_value), &Value::Float(right_value)) => {
+                Ok(Value::Float(evaluate(left_value, right_value)))
+            }
+            (&Value::Int(left_value), &Value::Float(right_value)) => {
+                Ok(Value::Float(evaluate(left_value as f64, right_value)))
+            }
+            (&Value::Float(left_value), &Value::Int(right_value)) => {
+                Ok(Value::Float(evaluate(left_value, right_value as f64)))
+            }
+            _ => Err(Error::LRLocated {
+                message: String::from("Fuck off with your non-number bullshit."),
+                left_loc: ast.left_loc,
+                right_loc: ast.right_loc,
+            }),
+        }?)),
+        left_loc: ast.left_loc,
+        right_loc: ast.right_loc,
+    })
 }
 
 #[cfg(test)]
@@ -28,76 +41,92 @@ mod evaluate_number_operator {
     use super::*;
     use std::f64::NAN;
 
+    fn ast() -> Ast {
+        Ast {
+            expr: Box::new(Expression::Value(Value::Int(1))),
+            left_loc: 0,
+            right_loc: 0,
+        }
+    }
+
     #[test]
     fn operates_on_two_ints() {
         assert_eq!(
-            evaluate_number_operator(&Value::Int(2), &Value::Int(4), |a, b| a + b).unwrap(),
-            Value::Int(6),
+            *evaluate_number_operator(&ast(), &Value::Int(2), &Value::Int(4), |a, b| a + b)
+                .unwrap()
+                .expr,
+            Expression::Value(Value::Int(6))
         );
     }
 
     #[test]
     fn operates_on_two_floats() {
         assert_eq!(
-            evaluate_number_operator(&Value::Float(2.1), &Value::Float(4.3), |a, b| a + b).unwrap(),
-            Value::Float(6.4),
+            *evaluate_number_operator(&ast(), &Value::Float(2.1), &Value::Float(4.3), |a, b| a + b)
+                .unwrap()
+                .expr,
+            Expression::Value(Value::Float(6.4)),
         );
     }
 
     #[test]
     fn operates_on_mixed_ints_and_floats() {
         assert_eq!(
-            evaluate_number_operator(&Value::Int(2), &Value::Float(4.3), |a, b| a + b).unwrap(),
-            Value::Float(6.3),
+            *evaluate_number_operator(&ast(), &Value::Int(2), &Value::Float(4.3), |a, b| a + b)
+                .unwrap()
+                .expr,
+            Expression::Value(Value::Float(6.3)),
         );
         assert_eq!(
-            evaluate_number_operator(&Value::Float(2.3), &Value::Int(4), |a, b| a + b).unwrap(),
-            Value::Float(6.3),
+            *evaluate_number_operator(&ast(), &Value::Float(2.3), &Value::Int(4), |a, b| a + b)
+                .unwrap()
+                .expr,
+            Expression::Value(Value::Float(6.3)),
         );
     }
 
     #[test]
     fn doesnt_add_bools() {
-        assert_eq!(
-            evaluate_number_operator(&Value::Bool(true), &Value::Int(4), |a, b| a + b).unwrap_err(),
-            "Fuck off with your non-number bullshit.",
+        assert!(
+            evaluate_number_operator(&ast(), &Value::Bool(true), &Value::Int(4), |a, b| a + b)
+                .is_err()
         );
-        assert_eq!(
-            evaluate_number_operator(&Value::Int(4), &Value::Bool(true), |a, b| a + b).unwrap_err(),
-            "Fuck off with your non-number bullshit.",
+        assert!(
+            evaluate_number_operator(&ast(), &Value::Int(4), &Value::Bool(true), |a, b| a + b)
+                .is_err()
         );
-        assert_eq!(
-            evaluate_number_operator(&Value::Bool(true), &Value::Bool(true), |a, b| a + b)
-                .unwrap_err(),
-            "Fuck off with your non-number bullshit.",
+        assert!(
+            evaluate_number_operator(&ast(), &Value::Bool(true), &Value::Bool(true), |a, b| a + b)
+                .is_err()
         );
     }
 
-    fn val_is_nan(value: Value) -> bool {
-        if let Value::Float(num) = value {
-            num.is_nan()
-        } else {
-            false
-        }
+    fn assert_is_nan(actual: Ast) {
+        assert_eq!(format!("{}", actual), "NaN");
     }
 
     #[test]
     fn turns_nan_add_inputs_to_nan_add_outputs() {
-        assert!(val_is_nan(
-            evaluate_number_operator(&Value::Float(NAN), &Value::Int(4), |a, b| a + b).unwrap(),
-        ));
-        assert!(val_is_nan(
-            evaluate_number_operator(&Value::Int(4), &Value::Float(NAN), |a, b| a + b).unwrap(),
-        ));
-        assert!(val_is_nan(
-            evaluate_number_operator(&Value::Float(NAN), &Value::Float(4.2), |a, b| a + b).unwrap(),
-        ));
-        assert!(val_is_nan(
-            evaluate_number_operator(&Value::Float(4.2), &Value::Float(NAN), |a, b| a + b).unwrap(),
-        ));
-        assert!(val_is_nan(
-            evaluate_number_operator(&Value::Float(NAN), &Value::Float(NAN), |a, b| a + b).unwrap(),
-        ));
+        assert_is_nan(
+            evaluate_number_operator(&ast(), &Value::Float(NAN), &Value::Int(4), |a, b| a + b)
+                .unwrap(),
+        );
+        assert_is_nan(
+            evaluate_number_operator(&ast(), &Value::Int(4), &Value::Float(NAN), |a, b| a + b)
+                .unwrap(),
+        );
+        assert_is_nan(
+            evaluate_number_operator(&ast(), &Value::Float(NAN), &Value::Float(4.2), |a, b| a + b)
+                .unwrap(),
+        );
+        assert_is_nan(
+            evaluate_number_operator(&ast(), &Value::Float(4.2), &Value::Float(NAN), |a, b| a + b)
+                .unwrap(),
+        );
+        assert_is_nan(
+            evaluate_number_operator(&ast(), &Value::Float(NAN), &Value::Float(NAN), |a, b| a + b)
+                .unwrap(),
+        );
     }
 }
 
@@ -157,12 +186,12 @@ fn substitute(ast: &Ast, name: &str, value: &Ast) -> Ast {
     }
 }
 
-pub fn evaluate_expression(ast: &Ast) -> Result<Value, Error> {
+fn step_expression(ast: &Ast) -> Result<Ast, Error> {
     let left_loc = ast.left_loc;
     let right_loc = ast.right_loc;
 
     match &*ast.expr {
-        &Expression::Value(ref value) => Ok(value.clone()),
+        &Expression::Value(_) => Ok(ast.clone()),
         &Expression::Ident(ref name) => Err(Error::LRLocated {
             message: format!(
                 "Am I supposed to read your god damn mind?  What's a `{}`?",
@@ -171,84 +200,113 @@ pub fn evaluate_expression(ast: &Ast) -> Result<Value, Error> {
             left_loc,
             right_loc,
         }),
-        &Expression::BinOp(ref operation, ref left, ref right) => match operation {
-            &BinOp::Add => evaluate_number_operator(
-                &evaluate_expression(left)?,
-                &evaluate_expression(right)?,
-                |a, b| a + b,
-            ),
-            &BinOp::Sub => evaluate_number_operator(
-                &evaluate_expression(left)?,
-                &evaluate_expression(right)?,
-                |a, b| a - b,
-            ),
-            &BinOp::Mul => evaluate_number_operator(
-                &evaluate_expression(left)?,
-                &evaluate_expression(right)?,
-                |a, b| a * b,
-            ),
-            &BinOp::Div => match (evaluate_expression(left)?, evaluate_expression(right)?) {
-                (Value::Int(_), Value::Int(0)) => {
-                    Err(String::from("Fuck off with your divide-by-zero bullshit."))
-                }
-                (left_value, right_value) => {
-                    evaluate_number_operator(&left_value, &right_value, |a, b| a / b)
-                }
-            },
-            &BinOp::LEq => match (evaluate_expression(left)?, evaluate_expression(right)?) {
-                (Value::Int(left_value), Value::Int(right_value)) => {
-                    Ok(Value::Bool(left_value <= right_value))
-                }
-                (Value::Float(left_value), Value::Int(right_value)) => {
-                    Ok(Value::Bool(left_value <= right_value as f64))
-                }
-                (Value::Int(left_value), Value::Float(right_value)) => {
-                    Ok(Value::Bool(left_value as f64 <= right_value))
-                }
-                (Value::Float(left_value), Value::Float(right_value)) => {
-                    Ok(Value::Bool(left_value <= right_value))
-                }
-                _ => Err(String::from("Fuck off with your non-number bullshit.")),
-            },
-            &BinOp::Call => {
-                if let Value::Func(ref param_name, ref body) = evaluate_expression(left)? {
-                    Ok(evaluate_expression(&substitute(
-                        body,
-                        param_name,
-                        &Ast {
-                            expr: Box::new(Expression::Value(evaluate_expression(right)?)),
-                            left_loc: right.left_loc,
-                            right_loc: right.right_loc,
-                        },
-                    ))?)
-                } else {
-                    Err(String::from(
-                        "I only call two things on a regular basis: functions, and your mom.\
-                         \nThat's not a function.",
-                    ))
-                }
-            }
-        }.map_err(|message| {
-            (Error::LRLocated {
-                message: message.clone(),
-                left_loc,
-                right_loc,
-            })
-        }),
-        &Expression::If(ref guard, ref consequent, ref alternate) => {
-            match evaluate_expression(guard)? {
-                Value::Bool(guard_value) => {
-                    evaluate_expression(if guard_value { consequent } else { alternate })
-                }
-                _ => Err(Error::LRLocated {
-                    message: String::from("This isn't JavaScript.  Only bools in `if`s.  Dumbass."),
-                    left_loc: ast.left_loc,
-                    right_loc: ast.right_loc,
+        &Expression::BinOp(ref operation, ref left_ast, ref right_ast) => {
+            match (&*left_ast.expr, &*right_ast.expr) {
+                (&Expression::Value(ref left), &Expression::Value(ref right)) => match operation {
+                    &BinOp::Call => {
+                        if let &Value::Func(ref param_name, ref body) = left {
+                            Ok(substitute(
+                                body,
+                                param_name,
+                                &Ast {
+                                    expr: Box::new(Expression::Value(right.clone())),
+                                    left_loc: right_ast.left_loc,
+                                    right_loc: right_ast.right_loc,
+                                },
+                            ))
+                        } else {
+                            Err(Error::LRLocated {
+                                message: String::from(
+                                    "I only call two things on a regular basis: functions, and your mom.\
+                                    \nThat's not a function."
+                                ),
+                                left_loc,
+                                right_loc,
+                            })
+                        }
+                    }
+                    &BinOp::Add => evaluate_number_operator(ast, &left, &right, |a, b| a + b),
+                    &BinOp::Sub => evaluate_number_operator(ast, &left, &right, |a, b| a - b),
+                    &BinOp::Mul => evaluate_number_operator(ast, &left, &right, |a, b| a * b),
+                    &BinOp::Div => match (left, right) {
+                        (&Value::Int(_), &Value::Int(0)) => Err(Error::LRLocated {
+                            message: String::from("Fuck off with your divide-by-zero bullshit."),
+                            left_loc,
+                            right_loc,
+                        }),
+                        (left_value, right_value) => {
+                            evaluate_number_operator(ast, left_value, right_value, |a, b| a / b)
+                        }
+                    },
+                    &BinOp::LEq => Ok(Ast {
+                        expr: Box::new(Expression::Value(Value::Bool(match (left, right) {
+                            (&Value::Int(left_value), &Value::Int(right_value)) => {
+                                Ok(left_value <= right_value)
+                            }
+                            (&Value::Float(left_value), &Value::Int(right_value)) => {
+                                Ok(left_value <= right_value as f64)
+                            }
+                            (&Value::Int(left_value), &Value::Float(right_value)) => {
+                                Ok(left_value as f64 <= right_value)
+                            }
+                            (&Value::Float(left_value), &Value::Float(right_value)) => {
+                                Ok(left_value <= right_value)
+                            }
+                            _ => Err(Error::LRLocated {
+                                message: String::from("Fuck off with your non-number bullshit."),
+                                left_loc,
+                                right_loc,
+                            }),
+                        }?))),
+                        left_loc,
+                        right_loc,
+                    }),
+                },
+                (&Expression::Value(_), _) => Ok(Ast {
+                    expr: Box::new(Expression::BinOp(
+                        operation.clone(),
+                        left_ast.clone(),
+                        step_expression(right_ast)?,
+                    )),
+                    left_loc,
+                    right_loc,
+                }),
+                _ => Ok(Ast {
+                    expr: Box::new(Expression::BinOp(
+                        operation.clone(),
+                        step_expression(left_ast)?,
+                        right_ast.clone(),
+                    )),
+                    left_loc,
+                    right_loc,
                 }),
             }
         }
-        &Expression::Let(ref bind_name, ref bind_value, ref body) => {
-            Ok(evaluate_expression(&substitute(
+        &Expression::If(ref guard, ref consequent, ref alternate) => match &*guard.expr {
+            &Expression::Value(Value::Bool(guard_value)) => {
+                if guard_value {
+                    Ok(consequent.clone())
+                } else {
+                    Ok(alternate.clone())
+                }
+            }
+            &Expression::Value(_) => Err(Error::LRLocated {
+                message: String::from("This isn't JavaScript.  Only bools in `if`s.  Dumbass."),
+                left_loc: ast.left_loc,
+                right_loc: ast.right_loc,
+            }),
+            _ => Ok(Ast {
+                expr: Box::new(Expression::If(
+                    step_expression(guard)?,
+                    consequent.clone(),
+                    alternate.clone(),
+                )),
+                left_loc,
+                right_loc,
+            }),
+        },
+        &Expression::Let(ref bind_name, ref bind_value, ref body) => match &*bind_value.expr {
+            &Expression::Value(_) => Ok(substitute(
                 body,
                 bind_name,
                 &substitute(
@@ -264,8 +322,46 @@ pub fn evaluate_expression(ast: &Ast) -> Result<Value, Error> {
                         right_loc: bind_value.right_loc,
                     },
                 ),
-            ))?)
+            )),
+            _ => Ok(Ast {
+                expr: Box::new(Expression::Let(
+                    bind_name.clone(),
+                    step_expression(bind_value)?,
+                    body.clone(),
+                )),
+                left_loc,
+                right_loc,
+            }),
+        },
+    }
+}
+
+pub fn get_eval_steps(ast: &Ast) -> Result<Vec<Ast>, Error> {
+    let mut ast = ast.clone();
+    let mut steps = Vec::<Ast>::new();
+
+    loop {
+        steps.push(ast.clone());
+        let stepped_ast = step_expression(&ast)?;
+
+        if let &Expression::Value(_) = &*ast.expr {
+            return Ok(steps);
         }
+
+        if stepped_ast == ast {
+            panic!("Infinite loop");
+        }
+
+        ast = stepped_ast;
+    }
+}
+
+pub fn evaluate_expression(ast: &Ast) -> Result<Value, Error> {
+    let steps = get_eval_steps(ast)?;
+    if let &Expression::Value(ref value) = &*steps[steps.len() - 1].expr {
+        Ok(value.clone())
+    } else {
+        panic!("Terminated without a value");
     }
 }
 
