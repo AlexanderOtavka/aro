@@ -1,5 +1,7 @@
 use ast::{Ast, BinOp, Expression, Value};
 use util::Error;
+use std::collections::HashMap;
+use std::f64;
 
 fn evaluate_number_operator<F>(
     ast: &Ast,
@@ -102,7 +104,7 @@ mod evaluate_number_operator {
     }
 
     fn assert_is_nan(actual: Ast) {
-        assert_eq!(format!("{}", actual), "NaN");
+        assert_eq!(format!("{}", actual), "nan");
     }
 
     #[test]
@@ -338,8 +340,24 @@ fn step_expression(ast: &Ast) -> Result<Ast, Error> {
 
 pub fn get_eval_steps(ast: &Ast) -> Result<Vec<Ast>, Error> {
     let mut ast = ast.clone();
-    let mut steps = Vec::<Ast>::new();
 
+    let mut globals = HashMap::new();
+    globals.insert("inf", Value::Float(f64::INFINITY));
+    globals.insert("nan", Value::Float(f64::NAN));
+
+    for (name, value) in globals {
+        ast = substitute(
+            &ast,
+            name,
+            &Ast {
+                expr: Box::new(Expression::Value(value.clone())),
+                left_loc: 0,
+                right_loc: 0,
+            },
+        );
+    }
+
+    let mut steps = Vec::<Ast>::new();
     loop {
         steps.push(ast.clone());
         let stepped_ast = step_expression(&ast)?;
@@ -395,6 +413,16 @@ mod evaluate_expression {
     }
 
     #[test]
+    fn spits_back_out_nan() {
+        assert_eval_eq("nan", "nan");
+    }
+
+    #[test]
+    fn spits_back_out_inf() {
+        assert_eval_eq("inf", "inf");
+    }
+
+    #[test]
     fn doesnt_handle_straight_identifiers() {
         assert_eval_err("foo");
     }
@@ -437,7 +465,7 @@ mod evaluate_expression {
 
     #[test]
     fn divides_zero_by_zero() {
-        assert_eval_eq("0.0 / 0", "NaN");
+        assert_eval_eq("0.0 / 0", "nan");
     }
 
     #[test]

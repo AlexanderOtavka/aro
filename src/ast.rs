@@ -1,4 +1,5 @@
 use std::fmt;
+use std::f64;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Ast {
@@ -76,7 +77,15 @@ impl fmt::Display for Value {
             "{}",
             match self {
                 &Value::Int(value) => format!("{}", value),
-                &Value::Float(value) => format!("{}", value),
+                &Value::Float(value) => {
+                    if value.is_nan() {
+                        String::from("nan")
+                    } else if value == f64::INFINITY {
+                        String::from("inf")
+                    } else {
+                        format!("{}", value)
+                    }
+                }
                 &Value::Bool(true) => String::from("#true ()"),
                 &Value::Bool(false) => String::from("#false ()"),
                 &Value::Func(ref p, ref e) => format!("({} -> {})", p, e),

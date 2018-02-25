@@ -101,15 +101,13 @@ mod source_to_ast {
     }
 
     #[test]
-    #[ignore]
     fn makes_a_nan_tree() {
-        assert_parse_eq(source_to_ast("NaN"), "NaN");
+        assert_parse_eq(source_to_ast("nan"), "(nan)");
     }
 
     #[test]
-    #[ignore]
     fn makes_a_inf_tree() {
-        assert_parse_eq(source_to_ast("inf"), "inf");
+        assert_parse_eq(source_to_ast("inf"), "(inf)");
     }
 
     #[test]
