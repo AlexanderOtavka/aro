@@ -139,7 +139,7 @@ fn evaluate_file(file_name: &str, small_step: bool) -> Result<String, String> {
 
 fn main() {
     let options = clap::App::new("The aro-> Compiler")
-        .version("0.2.0")
+        .version("0.4.0")
         .author("Zander Otavka <otavkaal@grinnell.edu>")
         .arg(
             clap::Arg::with_name("infile")
