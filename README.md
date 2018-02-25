@@ -15,6 +15,35 @@ will run all unit tests inside the docker container.
 
 ## Changelog
 
+### Assignment 4 (2/25/18)
+
+#### New Features
+
+* Added functions and let bindings. Let bindings are recursive, so there is
+  no explicit fixed-point construct. The updated grammar is as follows:
+  ```
+  e ::= n                       // integer
+      | f                       // float
+      | #true() | #false()      // boolean
+      | x                       // identifier
+      | e1 + e1 | e1 - e2 | e1 * e2 | e1 / e2   // arithmetic
+      | e1 <= e2                // comparison
+      | if e1 then e2 else e3   // if
+      | let x <== e1 e2         // recursive let binding
+      | x -> e                  // function declaration
+      | e1 <| e2 | e1 |> e2     // function call
+      | (e)                     // parenthesis
+  ```
+* Added small-step evaluation. Use the `-s` flag to see it in action. It's fun
+  to run it on `examples/recursion.aro` and watch it explode and then collapse
+  again.
+
+#### Changed Features
+
+#### Known Bugs
+
+None.
+
 ### Assignment 3 (2/23/18)
 
 #### New Features
