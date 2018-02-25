@@ -1,0 +1,3 @@
+(value -> value + 1) |> (increment ->
+    5 |> increment |> increment
+)

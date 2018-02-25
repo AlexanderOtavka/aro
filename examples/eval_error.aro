@@ -1,4 +1,4 @@
-if 5 then
+if #false() then
     2 * 1 / 0
 else
-    -10 - -5
+    -10 <| -5

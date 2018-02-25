@@ -1,12 +1,23 @@
 use std::str::FromStr;
 use ast::{Ast, Expression, BinOp, Value};
-use std::f64::{NAN, INFINITY};
 
 grammar;
 
 pub Expr: Ast = {
     <l:@L> "if" <e1:Expr> "then" <e2:Expr> "else" <e3:Expr> <r:@R> =>
         Ast::new(l, r, Expression::If(e1, e2, e3)),
+    <l:@L> "let" <n:Ident> "<==" <v:Expr> <e:Expr> <r:@R> =>
+        Ast::new(l, r, Expression::Let(n, v, e)),
+    <p:Ident> <l:@L> "->" <r:@R> <e:Expr> =>
+        Ast::new(l, r, Expression::Value(Value::Func(p, e))),
+    Call,
+};
+
+Call = {
+    <f:Call> <l:@L> "<|" <r:@R> <a:Comp> =>
+        Ast::new(l, r, Expression::BinOp(BinOp::Call, f, a)),
+    <a:Call> <l:@L> "|>" <r:@R> <f:Comp> =>
+        Ast::new(l, r, Expression::BinOp(BinOp::Call, f, a)),
     Comp,
 };
 
@@ -34,13 +45,16 @@ Value = {
     <l:@L> <v:Int> <r:@R> => Ast::new(l, r, Expression::Value(Value::Int(v))),
     <l:@L> <v:Float> <r:@R> => Ast::new(l, r, Expression::Value(Value::Float(v))),
     <l:@L> <v:Bool> <r:@R> => Ast::new(l, r, Expression::Value(Value::Bool(v))),
+    <l:@L> <v:Ident> <r:@R> => Ast::new(l, r, Expression::Ident(v)),
     "(" <Expr> ")",
 };
 
 Float: f64 = {
     r"-?[0-9]+\.[0-9]+" => f64::from_str(<>).unwrap(),
-    r"NaN" => NAN,
-    r"inf" => INFINITY,
+};
+
+Ident: String = {
+    r"[a-z](_?[a-z])*" => String::from(<>),
 };
 
 Int: i32 = {
@@ -48,6 +62,6 @@ Int: i32 = {
 };
 
 Bool: bool = {
-    r"true" => true,
-    r"false" => false,
+    r"#true" "(" ")" => true,
+    r"#false" "(" ")" => false,
 };

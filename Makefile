@@ -11,7 +11,7 @@ build-release:
 	cargo install --root ~/.cargo cargo-watch
 
 test: ~/.cargo/bin/cargo-watch
-	cargo watch -c -w src -x test
+	cargo watch -w src -s "clear && printf '\e[3J' && cargo test"
 
 clean:
 	cargo clean
