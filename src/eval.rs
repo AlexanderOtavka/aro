@@ -274,13 +274,13 @@ mod evaluate_expression {
     use super::*;
     use parse::source_to_ast;
 
-    fn assert_eval_eq(source: &str, result: &str) {
+    fn assert_eval_eq(actual: &str, expected: &str) {
         assert_eq!(
             format!(
                 "{}",
-                evaluate_expression(&source_to_ast(source).unwrap()).unwrap()
+                evaluate_expression(&source_to_ast(actual).unwrap()).unwrap()
             ),
-            result
+            expected
         )
     }
 
