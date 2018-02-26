@@ -159,18 +159,18 @@ fn substitute(ast: &Ast, name: &str, value: &Ast) -> Ast {
             left_loc: ast.left_loc,
             right_loc: ast.right_loc,
         },
-        &Expression::Let(ref bind_name, ref bind_value, ref body) => Ast {
-            expr: Box::new(Expression::Let(
-                bind_name.clone(),
-                bind_value.clone(),
-                if bind_name == name {
-                    body.clone()
-                } else {
-                    substitute(body, name, value)
-                },
-            )),
-            left_loc: ast.left_loc,
-            right_loc: ast.right_loc,
+        &Expression::Let(ref bind_name, ref bind_value, ref body) => if bind_name == name {
+            ast.clone()
+        } else {
+            Ast {
+                expr: Box::new(Expression::Let(
+                    bind_name.clone(),
+                    substitute(bind_value, name, value),
+                    substitute(body, name, value),
+                )),
+                left_loc: ast.left_loc,
+                right_loc: ast.right_loc,
+            }
         },
         &Expression::Value(Value::Func(ref param_name, ref body)) => Ast {
             expr: Box::new(Expression::Value(Value::Func(
@@ -499,6 +499,18 @@ mod evaluate_expression {
             "
             let added_val <== 5
             ((inc -> inc <| added_val) <| (x -> x + 1))
+            ",
+            "6",
+        );
+    }
+
+    #[test]
+    fn substitutes_nested_let_expression() {
+        assert_eval_eq(
+            "
+            let x <== 5
+            let y <== x + 1
+            y
             ",
             "6",
         );
