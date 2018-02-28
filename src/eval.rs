@@ -159,22 +159,32 @@ fn substitute(ast: &Ast, name: &str, value: &Ast) -> Ast {
             left_loc: ast.left_loc,
             right_loc: ast.right_loc,
         },
-        &Expression::Let(ref bind_name, ref bind_value, ref body) => if bind_name == name {
-            ast.clone()
-        } else {
-            Ast {
-                expr: Box::new(Expression::Let(
-                    bind_name.clone(),
-                    substitute(bind_value, name, value),
-                    substitute(body, name, value),
-                )),
-                left_loc: ast.left_loc,
-                right_loc: ast.right_loc,
+        &Expression::Let(ref bind_name, ref bind_type, ref bind_value, ref body) => {
+            if bind_name == name {
+                ast.clone()
+            } else {
+                Ast {
+                    expr: Box::new(Expression::Let(
+                        bind_name.clone(),
+                        bind_type.clone(),
+                        substitute(bind_value, name, value),
+                        substitute(body, name, value),
+                    )),
+                    left_loc: ast.left_loc,
+                    right_loc: ast.right_loc,
+                }
             }
-        },
-        &Expression::Value(Value::Func(ref param_name, ref body)) => Ast {
+        }
+        &Expression::Value(Value::Func(
+            ref param_name,
+            ref param_type,
+            ref body_type,
+            ref body,
+        )) => Ast {
             expr: Box::new(Expression::Value(Value::Func(
                 param_name.clone(),
+                param_type.clone(),
+                body_type.clone(),
                 if param_name == name {
                     body.clone()
                 } else {
@@ -206,7 +216,7 @@ fn step_expression(ast: &Ast) -> Result<Ast, Error> {
             match (&*left_ast.expr, &*right_ast.expr) {
                 (&Expression::Value(ref left), &Expression::Value(ref right)) => match operation {
                     &BinOp::Call => {
-                        if let &Value::Func(ref param_name, ref body) = left {
+                        if let &Value::Func(ref param_name, _, _, ref body) = left {
                             Ok(substitute(
                                 body,
                                 param_name,
@@ -307,34 +317,38 @@ fn step_expression(ast: &Ast) -> Result<Ast, Error> {
                 right_loc,
             }),
         },
-        &Expression::Let(ref bind_name, ref bind_value, ref body) => match &*bind_value.expr {
-            &Expression::Value(_) => Ok(substitute(
-                body,
-                bind_name,
-                &substitute(
-                    bind_value,
+        &Expression::Let(ref bind_name, ref bind_type, ref bind_value, ref body) => {
+            match &*bind_value.expr {
+                &Expression::Value(_) => Ok(substitute(
+                    body,
                     bind_name,
-                    &Ast {
-                        expr: Box::new(Expression::Let(
-                            bind_name.clone(),
-                            bind_value.clone(),
-                            bind_value.clone(),
-                        )),
-                        left_loc: bind_value.left_loc,
-                        right_loc: bind_value.right_loc,
-                    },
-                ),
-            )),
-            _ => Ok(Ast {
-                expr: Box::new(Expression::Let(
-                    bind_name.clone(),
-                    step_expression(bind_value)?,
-                    body.clone(),
+                    &substitute(
+                        bind_value,
+                        bind_name,
+                        &Ast {
+                            expr: Box::new(Expression::Let(
+                                bind_name.clone(),
+                                bind_type.clone(),
+                                bind_value.clone(),
+                                bind_value.clone(),
+                            )),
+                            left_loc: bind_value.left_loc,
+                            right_loc: bind_value.right_loc,
+                        },
+                    ),
                 )),
-                left_loc,
-                right_loc,
-            }),
-        },
+                _ => Ok(Ast {
+                    expr: Box::new(Expression::Let(
+                        bind_name.clone(),
+                        bind_type.clone(),
+                        step_expression(bind_value)?,
+                        body.clone(),
+                    )),
+                    left_loc,
+                    right_loc,
+                }),
+            }
+        }
     }
 }
 
@@ -490,15 +504,18 @@ mod evaluate_expression {
 
     #[test]
     fn substitutes_in_a_nested_function_call() {
-        assert_eval_eq("(inc -> inc <| 5) <| (x -> x + 1)", "6");
+        assert_eval_eq(
+            "(inc: (Int -> Int) -Int-> inc <| 5) <| (x: Int -Int-> x + 1)",
+            "6",
+        );
     }
 
     #[test]
     fn substitutes_with_a_let_expression() {
         assert_eval_eq(
             "
-            let added_val <== 5
-            ((inc -> inc <| added_val) <| (x -> x + 1))
+            let added_val: Int <== 5
+            ((inc: (Int -> Int) -Int-> inc <| added_val) <| (x: Int -Int-> x + 1))
             ",
             "6",
         );
@@ -508,8 +525,8 @@ mod evaluate_expression {
     fn substitutes_nested_let_expression() {
         assert_eval_eq(
             "
-            let x <== 5
-            let y <== x + 1
+            let x: Int <== 5
+            let y: Int <== x + 1
             y
             ",
             "6",
@@ -520,7 +537,7 @@ mod evaluate_expression {
     fn supports_recursion_in_the_let_expression() {
         assert_eval_eq(
             "
-            let factorial <== n ->
+            let factorial: (Int -> Int) <== n: Int -Int->
                 if n <= 0 then
                     1
                 else
@@ -534,7 +551,10 @@ mod evaluate_expression {
 
     #[test]
     fn doesnt_substitute_shadowed_variables() {
-        assert_eval_eq("(x -> x -> x + 1) <| 5", "(x -> ((x) + 1))");
+        assert_eval_eq(
+            "(x: Int -(Int -> Int)-> x: Int -Int-> x + 1) <| 5",
+            "(x: Int -Int-> ((x) + 1))",
+        );
     }
 
     #[test]

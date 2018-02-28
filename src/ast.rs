@@ -14,7 +14,7 @@ pub enum Expression {
     BinOp(BinOp, Ast, Ast),
     If(Ast, Ast, Ast),
     Ident(String),
-    Let(String, Ast, Ast),
+    Let(String, TypeAst, Ast, Ast),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -32,7 +32,22 @@ pub enum Value {
     Int(i32),
     Float(f64),
     Bool(bool),
-    Func(String, Ast),
+    Func(String, TypeAst, TypeAst, Ast),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct TypeAst {
+    pub left_loc: usize,
+    pub right_loc: usize,
+    pub expr: Box<Type>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum Type {
+    Int,
+    Float,
+    Bool,
+    Func(TypeAst, TypeAst),
 }
 
 impl Ast {
@@ -65,7 +80,9 @@ impl fmt::Display for Ast {
             ),
             &Expression::If(ref c, ref t, ref e) => write!(f, "(if {} then {} else {})", c, t, e),
             &Expression::Ident(ref n) => write!(f, "({})", n),
-            &Expression::Let(ref n, ref v, ref e) => write!(f, "(let {} <== {} {})", n, v, e),
+            &Expression::Let(ref n, ref t, ref v, ref e) => {
+                write!(f, "(let {}: {} <== {} {})", n, t, v, e)
+            }
         }
     }
 }
@@ -88,7 +105,40 @@ impl fmt::Display for Value {
                 }
                 &Value::Bool(true) => String::from("#true ()"),
                 &Value::Bool(false) => String::from("#false ()"),
-                &Value::Func(ref p, ref e) => format!("({} -> {})", p, e),
+                &Value::Func(ref p, ref tp, ref te, ref e) => {
+                    format!("({}: {} -{}-> {})", p, tp, te, e)
+                }
+            }
+        )
+    }
+}
+
+impl TypeAst {
+    pub fn new(left_loc: usize, right_loc: usize, expr: Type) -> TypeAst {
+        TypeAst {
+            left_loc,
+            right_loc,
+            expr: Box::new(expr),
+        }
+    }
+}
+
+impl fmt::Display for TypeAst {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.expr)
+    }
+}
+
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                &Type::Int => String::from("Int"),
+                &Type::Float => String::from("Float"),
+                &Type::Bool => String::from("Bool"),
+                &Type::Func(ref input, ref output) => format!("({} -> {})", input, output),
             }
         )
     }

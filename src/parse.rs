@@ -144,7 +144,7 @@ mod source_to_ast {
 
     #[test]
     fn makes_a_simple_function_tree() {
-        assert_parse_eq(source_to_ast("a -> 5"), "(a -> 5)");
+        assert_parse_eq(source_to_ast("a: Int -Int-> 5"), "(a: Int -Int-> 5)");
     }
 
     #[test]
@@ -167,12 +167,18 @@ mod source_to_ast {
 
     #[test]
     fn makes_a_nested_function_tree() {
-        assert_parse_eq(source_to_ast("a -> a <| 5 + 1"), "(a -> ((a) <| (5 + 1)))");
+        assert_parse_eq(
+            source_to_ast("a: (Int -> Bool) -Bool-> a <| 5 + 1"),
+            "(a: (Int -> Bool) -Bool-> ((a) <| (5 + 1)))",
+        );
     }
 
     #[test]
     fn makes_a_let_tree() {
-        assert_parse_eq(source_to_ast("let a <== 5 a"), "(let a <== 5 (a))");
+        assert_parse_eq(
+            source_to_ast("let a: Int <== 5 a"),
+            "(let a: Int <== 5 (a))",
+        );
     }
 
     #[test]

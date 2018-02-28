@@ -1,3 +1,4 @@
-(a -> b -> a / b) |> (divide ->
+(a: Int -(Int -> Float)-> b: Float -Float-> a / b)
+|> (divide: (Int -> Float -> Float) -Float->
     5 |> divide <| 2.0
 )

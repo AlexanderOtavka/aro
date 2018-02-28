@@ -1,15 +1,28 @@
 use std::str::FromStr;
-use ast::{Ast, Expression, BinOp, Value};
+use ast::{Ast, Expression, BinOp, Value, TypeAst, Type};
 
 grammar;
+
+pub Type: TypeAst = {
+    <p:ValueType> <l:@L> "->" <r:@R> <e:Type> =>
+        TypeAst::new(l, r, Type::Func(p, e)),
+    ValueType,
+};
+
+ValueType = {
+    <l:@L> "Int" <r:@R> => TypeAst::new(l, r, Type::Int),
+    <l:@L> "Float" <r:@R> => TypeAst::new(l, r, Type::Float),
+    <l:@L> "Bool" <r:@R> => TypeAst::new(l, r, Type::Bool),
+    "(" <Type> ")",
+};
 
 pub Expr: Ast = {
     <l:@L> "if" <e1:Expr> "then" <e2:Expr> "else" <e3:Expr> <r:@R> =>
         Ast::new(l, r, Expression::If(e1, e2, e3)),
-    <l:@L> "let" <n:Ident> "<==" <v:Expr> <e:Expr> <r:@R> =>
-        Ast::new(l, r, Expression::Let(n, v, e)),
-    <p:Ident> <l:@L> "->" <r:@R> <e:Expr> =>
-        Ast::new(l, r, Expression::Value(Value::Func(p, e))),
+    <l:@L> "let" <n:Ident> ":" <t:Type> "<==" <v:Expr> <e:Expr> <r:@R> =>
+        Ast::new(l, r, Expression::Let(n, t, v, e)),
+    <p:Ident> <l:@L> ":" <pt:ValueType> "-" <et:ValueType> "->" <r:@R> <e:Expr> =>
+        Ast::new(l, r, Expression::Value(Value::Func(p, pt, et, e))),
     Call,
 };
 
