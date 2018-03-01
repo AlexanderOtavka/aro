@@ -83,36 +83,6 @@ mod evaluate_source {
     }
 
     #[test]
-    fn evaluates_an_if_expression() {
-        assert_eq!(
-            evaluate_source(
-                "
-                if 20 <= 10 then
-                    2 * (0 / 0)
-                else
-                    -10 - -5
-                ",
-                false
-            ).unwrap(),
-            "-5"
-        );
-    }
-
-    #[test]
-    fn does_zero_division_with_floats() {
-        assert_eq!(
-            evaluate_source(
-                "
-                1 / 0.0 -
-                    100000000000000000000000000000000000000000000000000000.0
-                ",
-                false
-            ).unwrap(),
-            "inf"
-        );
-    }
-
-    #[test]
     fn reports_an_error() {
         assert!(
             evaluate_source(
