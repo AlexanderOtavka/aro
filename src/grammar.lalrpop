@@ -12,6 +12,14 @@ ValueType = {
     <l:@L> "Int" <r:@R> => TypeAst::new(l, r, Type::Int),
     <l:@L> "Float" <r:@R> => TypeAst::new(l, r, Type::Float),
     <l:@L> "Bool" <r:@R> => TypeAst::new(l, r, Type::Bool),
+
+    <l:@L> "(" ")" <r:@R> => TypeAst::new(l, r, Type::Tuple(vec![])),
+    <l:@L> "(" <h:Type> <t: Type+ > ")" <r:@R> => TypeAst::new(l, r, Type::Tuple({
+        let mut vec = t;
+        vec.insert(0, h);
+        vec
+    })),
+
     "(" <Type> ")",
 };
 

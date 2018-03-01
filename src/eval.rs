@@ -194,6 +194,15 @@ fn substitute(ast: &Ast, name: &str, value: &Ast) -> Ast {
             left_loc: ast.left_loc,
             right_loc: ast.right_loc,
         },
+        &Expression::Value(Value::Tuple(ref vec)) => Ast::new(
+            ast.left_loc,
+            ast.right_loc,
+            Expression::Value(Value::Tuple(
+                vec.into_iter()
+                    .map(|element| substitute(element, name, value))
+                    .collect(),
+            )),
+        ),
         &Expression::Value(_) => ast.clone(),
     }
 }
@@ -203,6 +212,23 @@ fn step_ast(ast: &Ast) -> Result<Ast, Error> {
     let right_loc = ast.right_loc;
 
     match &*ast.expr {
+        &Expression::Value(Value::Tuple(ref vec)) => {
+            let mut stepped_tup = Vec::new();
+
+            for value in vec {
+                if let &Expression::Value(_) = &*value.expr {
+                    stepped_tup.push(value.clone());
+                } else {
+                    stepped_tup.push(step_ast(value)?);
+                }
+            }
+
+            Ok(Ast::new(
+                left_loc,
+                right_loc,
+                Expression::Value(Value::Tuple(stepped_tup)),
+            ))
+        }
         &Expression::Value(_) => Ok(ast.clone()),
         &Expression::Ident(ref name) => Err(Error::LRLocated {
             message: format!(
@@ -376,7 +402,7 @@ pub fn get_eval_steps(ast: &Ast) -> Result<Vec<Ast>, Error> {
         steps.push(ast.clone());
         let stepped_ast = step_ast(&ast)?;
 
-        if let &Expression::Value(_) = &*ast.expr {
+        if ast.is_term() {
             return Ok(steps);
         }
 
@@ -550,6 +576,18 @@ mod evaluate_ast {
             y
             ",
             "6",
+        );
+    }
+
+    #[test]
+    fn substitutes_in_tuples() {
+        assert_eval_eq(
+            "
+            let x: Int <== 5
+            let tup: (Int Float) <== (x 2.3)
+            tup
+            ",
+            "(5 2.3)",
         );
     }
 

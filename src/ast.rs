@@ -1,7 +1,7 @@
 use std::fmt;
 use std::f64;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct Ast {
     pub left_loc: usize,
     pub right_loc: usize,
@@ -58,6 +58,14 @@ impl Ast {
             left_loc,
             right_loc,
             expr: Box::new(expr),
+        }
+    }
+
+    pub fn is_term(&self) -> bool {
+        match &*self.expr {
+            &Expression::Value(Value::Tuple(ref vec)) => vec.into_iter().all(|ast| ast.is_term()),
+            &Expression::Value(_) => true,
+            _ => false,
         }
     }
 }
@@ -128,6 +136,12 @@ impl fmt::Display for Value {
                 }
             }
         )
+    }
+}
+
+impl PartialEq for Ast {
+    fn eq(&self, other: &Ast) -> bool {
+        self.expr == other.expr
     }
 }
 

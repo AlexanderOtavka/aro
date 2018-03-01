@@ -270,6 +270,18 @@ mod typecheck_ast {
     }
 
     #[test]
+    fn checks_tuples_with_identifiers() {
+        assert_typecheck_eq(
+            "
+            let x: Int <== 5
+            let tup: (Int Float) <== (x 2.3)
+            tup
+            ",
+            "(Int Float)",
+        );
+    }
+
+    #[test]
     fn supports_recursion_in_the_let_expression() {
         assert_typecheck_eq(
             "
