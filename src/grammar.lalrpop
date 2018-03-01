@@ -4,8 +4,7 @@ use ast::{Ast, Expression, BinOp, Value, TypeAst, Type};
 grammar;
 
 pub Type: TypeAst = {
-    <p:ValueType> <l:@L> "->" <r:@R> <e:Type> =>
-        TypeAst::new(l, r, Type::Func(p, e)),
+    <l:@L> <p:ValueType> "->" <e:Type> <r:@R> => TypeAst::new(l, r, Type::Func(p, e)),
     ValueType,
 };
 
@@ -27,30 +26,25 @@ pub Expr: Ast = {
 };
 
 Call = {
-    <f:Call> <l:@L> "<|" <r:@R> <a:Comp> =>
-        Ast::new(l, r, Expression::BinOp(BinOp::Call, f, a)),
-    <a:Call> <l:@L> "|>" <r:@R> <f:Comp> =>
-        Ast::new(l, r, Expression::BinOp(BinOp::Call, f, a)),
+    <l:@L> <f:Call> "<|" <a:Comp> <r:@R> => Ast::new(l, r, Expression::BinOp(BinOp::Call, f, a)),
+    <l:@L> <a:Call> "|>" <f:Comp> <r:@R> => Ast::new(l, r, Expression::BinOp(BinOp::Call, f, a)),
     Comp,
 };
 
 Comp = {
-    <a:Comp> <l:@L> "<=" <r:@R> <b:Arith> =>
-        Ast::new(l, r, Expression::BinOp(BinOp::LEq, a, b)),
+    <l:@L> <a:Comp> "<=" <b:Arith> <r:@R> => Ast::new(l, r, Expression::BinOp(BinOp::LEq, a, b)),
     Arith,
 };
 
 Arith = {
-    <a:Arith> <l:@L> "+" <r:@R> <b:Factor> =>
-        Ast::new(l, r, Expression::BinOp(BinOp::Add, a, b)),
-    <a:Arith> <l:@L> "-" <r:@R> <b:Factor> =>
-        Ast::new(l, r, Expression::BinOp(BinOp::Sub, a, b)),
+    <l:@L> <a:Arith> "+" <b:Factor> <r:@R> => Ast::new(l, r, Expression::BinOp(BinOp::Add, a, b)),
+    <l:@L> <a:Arith> "-" <b:Factor> <r:@R> => Ast::new(l, r, Expression::BinOp(BinOp::Sub, a, b)),
     Factor,
 };
 
 Factor = {
-    <a:Factor> <l:@L> "*" <r:@R> <b:Value> => Ast::new(l, r, Expression::BinOp(BinOp::Mul, a, b)),
-    <a:Factor> <l:@L> "/" <r:@R> <b:Value> => Ast::new(l, r, Expression::BinOp(BinOp::Div, a, b)),
+    <l:@L> <a:Factor> "*" <b:Value> <r:@R> => Ast::new(l, r, Expression::BinOp(BinOp::Mul, a, b)),
+    <l:@L> <a:Factor> "/" <b:Value> <r:@R> => Ast::new(l, r, Expression::BinOp(BinOp::Div, a, b)),
     Value,
 };
 
