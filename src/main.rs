@@ -8,18 +8,22 @@
 
 extern crate clap;
 extern crate lalrpop_util;
-mod parse;
-mod eval;
 mod ast;
 mod grammar;
 mod util;
+mod parse;
+mod typecheck;
+mod eval;
 
 use std::io::prelude::*;
 use std::process::exit;
+use std::collections::HashMap;
 use util::Error;
 
 fn evaluate_source(input: &str, small_step: bool) -> Result<String, Error> {
     let ast = parse::source_to_ast(input)?;
+
+    typecheck::typecheck_ast(&ast, &HashMap::new())?;
 
     if small_step {
         let steps = eval::get_eval_steps(&ast)?;

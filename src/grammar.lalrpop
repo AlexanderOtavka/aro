@@ -21,7 +21,7 @@ pub Expr: Ast = {
         Ast::new(l, r, Expression::If(e1, e2, e3)),
     <l:@L> "let" <n:Ident> ":" <t:Type> "<==" <v:Expr> <e:Expr> <r:@R> =>
         Ast::new(l, r, Expression::Let(n, t, v, e)),
-    <p:Ident> <l:@L> ":" <pt:ValueType> "-" <et:ValueType> "->" <r:@R> <e:Expr> =>
+    <l:@L> <p:Ident> ":" <pt:ValueType> "-" <et:ValueType> "->" <e:Expr> <r:@R> =>
         Ast::new(l, r, Expression::Value(Value::Func(p, pt, et, e))),
     Call,
 };

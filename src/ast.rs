@@ -35,7 +35,7 @@ pub enum Value {
     Func(String, TypeAst, TypeAst, Ast),
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct TypeAst {
     pub left_loc: usize,
     pub right_loc: usize,
@@ -141,5 +141,11 @@ impl fmt::Display for Type {
                 &Type::Func(ref input, ref output) => format!("({} -> {})", input, output),
             }
         )
+    }
+}
+
+impl PartialEq for TypeAst {
+    fn eq(&self, other: &TypeAst) -> bool {
+        self.expr == other.expr
     }
 }
