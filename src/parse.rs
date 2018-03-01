@@ -1,9 +1,9 @@
-use ast::Ast;
+use ast::{Ast, Expression};
 use grammar::parse_Expr;
 use lalrpop_util::ParseError;
 use util::Error;
 
-pub fn source_to_ast<'input>(source: &'input str) -> Result<Ast, Error> {
+pub fn source_to_ast<'input>(source: &'input str) -> Result<Ast<Expression>, Error> {
     parse_Expr(source).map_err(|err| match err {
         ParseError::InvalidToken { location } => Error::Located {
             message: String::from("Bitch, do I look like I speak perl?"),
@@ -72,7 +72,7 @@ pub fn source_to_ast<'input>(source: &'input str) -> Result<Ast, Error> {
 mod source_to_ast {
     use super::*;
 
-    fn assert_parse_eq(actual: Result<Ast, Error>, expected: &str) {
+    fn assert_parse_eq(actual: Result<Ast<Expression>, Error>, expected: &str) {
         assert_eq!(format!("{}", actual.unwrap()), expected);
     }
 

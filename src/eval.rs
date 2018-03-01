@@ -4,11 +4,11 @@ use std::collections::HashMap;
 use std::f64;
 
 fn evaluate_number_operator<F>(
-    ast: &Ast,
+    ast: &Ast<Expression>,
     left: &Value,
     right: &Value,
     evaluate: F,
-) -> Result<Ast, Error>
+) -> Result<Ast<Expression>, Error>
 where
     F: Fn(f64, f64) -> f64,
 {
@@ -43,7 +43,7 @@ mod evaluate_number_operator {
     use super::*;
     use std::f64::NAN;
 
-    fn ast() -> Ast {
+    fn ast() -> Ast<Expression> {
         Ast {
             expr: Box::new(Expression::Value(Value::Int(1))),
             left_loc: 0,
@@ -103,7 +103,7 @@ mod evaluate_number_operator {
         );
     }
 
-    fn assert_is_nan(actual: Ast) {
+    fn assert_is_nan(actual: Ast<Expression>) {
         assert_eq!(format!("{}", actual), "nan");
     }
 
@@ -132,7 +132,7 @@ mod evaluate_number_operator {
     }
 }
 
-fn substitute(ast: &Ast, name: &str, value: &Ast) -> Ast {
+fn substitute(ast: &Ast<Expression>, name: &str, value: &Ast<Expression>) -> Ast<Expression> {
     match &*ast.expr {
         &Expression::Ident(ref ident_name) => {
             if ident_name == name {
@@ -194,7 +194,7 @@ fn substitute(ast: &Ast, name: &str, value: &Ast) -> Ast {
             left_loc: ast.left_loc,
             right_loc: ast.right_loc,
         },
-        &Expression::Value(Value::Tuple(ref vec)) => Ast::new(
+        &Expression::Value(Value::Tuple(ref vec)) => Ast::<Expression>::new(
             ast.left_loc,
             ast.right_loc,
             Expression::Value(Value::Tuple(
@@ -207,7 +207,7 @@ fn substitute(ast: &Ast, name: &str, value: &Ast) -> Ast {
     }
 }
 
-fn step_ast(ast: &Ast) -> Result<Ast, Error> {
+fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
     let left_loc = ast.left_loc;
     let right_loc = ast.right_loc;
 
@@ -223,7 +223,7 @@ fn step_ast(ast: &Ast) -> Result<Ast, Error> {
                 }
             }
 
-            Ok(Ast::new(
+            Ok(Ast::<Expression>::new(
                 left_loc,
                 right_loc,
                 Expression::Value(Value::Tuple(stepped_tup)),
@@ -351,16 +351,16 @@ fn step_ast(ast: &Ast) -> Result<Ast, Error> {
                     &substitute(
                         bind_value,
                         bind_name,
-                        &Ast {
-                            expr: Box::new(Expression::Let(
+                        &Ast::<Expression>::new(
+                            bind_value.left_loc,
+                            bind_value.right_loc,
+                            Expression::Let(
                                 bind_name.clone(),
                                 bind_type.clone(),
                                 bind_value.clone(),
                                 bind_value.clone(),
-                            )),
-                            left_loc: bind_value.left_loc,
-                            right_loc: bind_value.right_loc,
-                        },
+                            ),
+                        ),
                     ),
                 )),
                 _ => Ok(Ast {
@@ -378,7 +378,7 @@ fn step_ast(ast: &Ast) -> Result<Ast, Error> {
     }
 }
 
-pub fn get_eval_steps(ast: &Ast) -> Result<Vec<Ast>, Error> {
+pub fn get_eval_steps(ast: &Ast<Expression>) -> Result<Vec<Ast<Expression>>, Error> {
     let mut ast = ast.clone();
 
     let mut globals = HashMap::new();
@@ -397,7 +397,7 @@ pub fn get_eval_steps(ast: &Ast) -> Result<Vec<Ast>, Error> {
         );
     }
 
-    let mut steps = Vec::<Ast>::new();
+    let mut steps = Vec::<Ast<Expression>>::new();
     loop {
         steps.push(ast.clone());
         let stepped_ast = step_ast(&ast)?;
@@ -414,7 +414,7 @@ pub fn get_eval_steps(ast: &Ast) -> Result<Vec<Ast>, Error> {
     }
 }
 
-pub fn evaluate_ast(ast: &Ast) -> Result<Value, Error> {
+pub fn evaluate_ast(ast: &Ast<Expression>) -> Result<Value, Error> {
     let steps = get_eval_steps(ast)?;
     if let &Expression::Value(ref value) = &*steps[steps.len() - 1].expr {
         Ok(value.clone())

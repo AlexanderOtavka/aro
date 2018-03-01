@@ -2,19 +2,19 @@ use std::fmt;
 use std::f64;
 
 #[derive(Debug, Clone)]
-pub struct Ast {
+pub struct Ast<T> {
     pub left_loc: usize,
     pub right_loc: usize,
-    pub expr: Box<Expression>,
+    pub expr: Box<T>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Expression {
     Value(Value),
-    BinOp(BinOp, Ast, Ast),
-    If(Ast, Ast, Ast),
+    BinOp(BinOp, Ast<Expression>, Ast<Expression>),
+    If(Ast<Expression>, Ast<Expression>, Ast<Expression>),
     Ident(String),
-    Let(String, TypeAst, Ast, Ast),
+    Let(String, Ast<Type>, Ast<Expression>, Ast<Expression>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -32,15 +32,14 @@ pub enum Value {
     Int(i32),
     Float(f64),
     Bool(bool),
-    Func(String, TypeAst, TypeAst, Ast),
-    Tuple(Vec<Ast>),
+    Func(String, Ast<Type>, Ast<Type>, Ast<Expression>),
+    Tuple(Vec<Ast<Expression>>),
 }
 
-#[derive(Debug, Clone)]
-pub struct TypeAst {
-    pub left_loc: usize,
-    pub right_loc: usize,
-    pub expr: Box<Type>,
+#[derive(Debug, PartialEq, Clone)]
+pub enum Pattern {
+    Ident(String, Ast<Type>),
+    Tuple(Vec<Pattern>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -48,12 +47,12 @@ pub enum Type {
     Int,
     Float,
     Bool,
-    Func(TypeAst, TypeAst),
-    Tuple(Vec<TypeAst>),
+    Func(Ast<Type>, Ast<Type>),
+    Tuple(Vec<Ast<Type>>),
 }
 
-impl Ast {
-    pub fn new(left_loc: usize, right_loc: usize, expr: Expression) -> Ast {
+impl Ast<Expression> {
+    pub fn new(left_loc: usize, right_loc: usize, expr: Expression) -> Ast<Expression> {
         Ast {
             left_loc,
             right_loc,
@@ -70,9 +69,31 @@ impl Ast {
     }
 }
 
-impl fmt::Display for Ast {
+impl Ast<Type> {
+    pub fn new(left_loc: usize, right_loc: usize, expr: Type) -> Ast<Type> {
+        Ast {
+            left_loc,
+            right_loc,
+            expr: Box::new(expr),
+        }
+    }
+}
+
+impl<T: PartialEq> PartialEq for Ast<T> {
+    fn eq(&self, other: &Ast<T>) -> bool {
+        self.expr == other.expr
+    }
+}
+
+impl<T: fmt::Display> fmt::Display for Ast<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match &*self.expr {
+        write!(f, "{}", self.expr)
+    }
+}
+
+impl fmt::Display for Expression {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
             &Expression::Value(ref value) => value.fmt(f),
             &Expression::BinOp(ref op, ref a, ref b) => write!(
                 f,
@@ -90,6 +111,7 @@ impl fmt::Display for Ast {
             ),
             &Expression::If(ref c, ref t, ref e) => write!(f, "(if {} then {} else {})", c, t, e),
             &Expression::Ident(ref n) => write!(f, "({})", n),
+            // &Expression::Let(ref p, ref v, ref e) => write!(f, "(let {} <== {} {})", p, v, e),
             &Expression::Let(ref n, ref t, ref v, ref e) => {
                 write!(f, "(let {}: {} <== {} {})", n, t, v, e)
             }
@@ -139,25 +161,33 @@ impl fmt::Display for Value {
     }
 }
 
-impl PartialEq for Ast {
-    fn eq(&self, other: &Ast) -> bool {
-        self.expr == other.expr
-    }
-}
-
-impl TypeAst {
-    pub fn new(left_loc: usize, right_loc: usize, expr: Type) -> TypeAst {
-        TypeAst {
-            left_loc,
-            right_loc,
-            expr: Box::new(expr),
-        }
-    }
-}
-
-impl fmt::Display for TypeAst {
+impl fmt::Display for Pattern {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.expr)
+        write!(
+            f,
+            "{}",
+            match self {
+                &Pattern::Ident(ref name, ref type_annotation) => {
+                    format!("{}: {}", name, type_annotation)
+                }
+                &Pattern::Tuple(ref vec) => {
+                    let mut string = String::new();
+                    string += "(";
+
+                    if vec.len() >= 1 {
+                        string += &format!("{}", vec[0]);
+
+                        for element in &vec[1..] {
+                            string += &format!(" {}", element);
+                        }
+                    }
+
+                    string += ")";
+
+                    string
+                }
+            }
+        )
     }
 }
 
@@ -189,11 +219,5 @@ impl fmt::Display for Type {
                 }
             }
         )
-    }
-}
-
-impl PartialEq for TypeAst {
-    fn eq(&self, other: &TypeAst) -> bool {
-        self.expr == other.expr
     }
 }

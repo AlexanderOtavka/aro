@@ -1,4 +1,4 @@
-use ast::{Ast, BinOp, Expression, Type, TypeAst, Value};
+use ast::{Ast, BinOp, Expression, Type, Value};
 use util::Error;
 use std::collections::HashMap;
 
@@ -17,7 +17,7 @@ impl Error {
     }
 }
 
-pub fn typecheck_ast(ast: &Ast, env: &HashMap<String, Type>) -> Result<Type, Error> {
+pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Result<Type, Error> {
     let left_loc = ast.left_loc;
     let right_loc = ast.right_loc;
 
@@ -30,11 +30,11 @@ pub fn typecheck_ast(ast: &Ast, env: &HashMap<String, Type>) -> Result<Type, Err
                 let mut type_vec = Vec::new();
 
                 for item in vec {
-                    type_vec.push(TypeAst {
-                        expr: Box::new(typecheck_ast(item, env)?),
-                        left_loc: item.left_loc,
-                        right_loc: item.right_loc,
-                    })
+                    type_vec.push(Ast::<Type>::new(
+                        item.left_loc,
+                        item.right_loc,
+                        typecheck_ast(item, env)?,
+                    ))
                 }
 
                 type_vec

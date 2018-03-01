@@ -1,20 +1,20 @@
 use std::str::FromStr;
-use ast::{Ast, Expression, BinOp, Value, TypeAst, Type};
+use ast::{Ast, Expression, BinOp, Value, Type, Pattern};
 
 grammar;
 
-pub Type: TypeAst = {
-    <l:@L> <p:ValueType> "->" <e:Type> <r:@R> => TypeAst::new(l, r, Type::Func(p, e)),
+pub Type: Ast<Type> = {
+    <l:@L> <p:ValueType> "->" <e:Type> <r:@R> => Ast::<Type>::new(l, r, Type::Func(p, e)),
     ValueType,
 };
 
 ValueType = {
-    <l:@L> "Int" <r:@R> => TypeAst::new(l, r, Type::Int),
-    <l:@L> "Float" <r:@R> => TypeAst::new(l, r, Type::Float),
-    <l:@L> "Bool" <r:@R> => TypeAst::new(l, r, Type::Bool),
+    <l:@L> "Int" <r:@R> => Ast::<Type>::new(l, r, Type::Int),
+    <l:@L> "Float" <r:@R> => Ast::<Type>::new(l, r, Type::Float),
+    <l:@L> "Bool" <r:@R> => Ast::<Type>::new(l, r, Type::Bool),
 
-    <l:@L> "(" ")" <r:@R> => TypeAst::new(l, r, Type::Tuple(vec![])),
-    <l:@L> "(" <h:Type> <t: Type+ > ")" <r:@R> => TypeAst::new(l, r, Type::Tuple({
+    <l:@L> "(" ")" <r:@R> => Ast::<Type>::new(l, r, Type::Tuple(vec![])),
+    <l:@L> "(" <h:Type> <t: Type+ > ")" <r:@R> => Ast::<Type>::new(l, r, Type::Tuple({
         let mut vec = t;
         vec.insert(0, h);
         vec
@@ -23,56 +23,69 @@ ValueType = {
     "(" <Type> ")",
 };
 
-pub Expr: Ast = {
+pub Expr: Ast<Expression> = {
     <l:@L> "if" <e1:Expr> "then" <e2:Expr> "else" <e3:Expr> <r:@R> =>
-        Ast::new(l, r, Expression::If(e1, e2, e3)),
+        Ast::<Expression>::new(l, r, Expression::If(e1, e2, e3)),
 
     <l:@L> "let" <n:Ident> ":" <t:Type> "<==" <v:Expr> <e:Expr> <r:@R> =>
-        Ast::new(l, r, Expression::Let(n, t, v, e)),
+        Ast::<Expression>::new(l, r, Expression::Let(n, t, v, e)),
 
     <l:@L> <p:Ident> ":" <pt:ValueType> "-" <et:ValueType> "->" <e:Expr> <r:@R> =>
-        Ast::new(l, r, Expression::Value(Value::Func(p, pt, et, e))),
+        Ast::<Expression>::new(l, r, Expression::Value(Value::Func(p, pt, et, e))),
 
     Call,
 };
 
 Call = {
-    <l:@L> <f:Call> "<|" <a:Comp> <r:@R> => Ast::new(l, r, Expression::BinOp(BinOp::Call, f, a)),
-    <l:@L> <a:Call> "|>" <f:Comp> <r:@R> => Ast::new(l, r, Expression::BinOp(BinOp::Call, f, a)),
+    <l:@L> <f:Call> "<|" <a:Comp> <r:@R> => Ast::<Expression>::new(l, r, Expression::BinOp(BinOp::Call, f, a)),
+    <l:@L> <a:Call> "|>" <f:Comp> <r:@R> => Ast::<Expression>::new(l, r, Expression::BinOp(BinOp::Call, f, a)),
     Comp,
 };
 
 Comp = {
-    <l:@L> <a:Comp> "<=" <b:Arith> <r:@R> => Ast::new(l, r, Expression::BinOp(BinOp::LEq, a, b)),
+    <l:@L> <a:Comp> "<=" <b:Arith> <r:@R> => Ast::<Expression>::new(l, r, Expression::BinOp(BinOp::LEq, a, b)),
     Arith,
 };
 
 Arith = {
-    <l:@L> <a:Arith> "+" <b:Factor> <r:@R> => Ast::new(l, r, Expression::BinOp(BinOp::Add, a, b)),
-    <l:@L> <a:Arith> "-" <b:Factor> <r:@R> => Ast::new(l, r, Expression::BinOp(BinOp::Sub, a, b)),
+    <l:@L> <a:Arith> "+" <b:Factor> <r:@R> => Ast::<Expression>::new(l, r, Expression::BinOp(BinOp::Add, a, b)),
+    <l:@L> <a:Arith> "-" <b:Factor> <r:@R> => Ast::<Expression>::new(l, r, Expression::BinOp(BinOp::Sub, a, b)),
     Factor,
 };
 
 Factor = {
-    <l:@L> <a:Factor> "*" <b:Value> <r:@R> => Ast::new(l, r, Expression::BinOp(BinOp::Mul, a, b)),
-    <l:@L> <a:Factor> "/" <b:Value> <r:@R> => Ast::new(l, r, Expression::BinOp(BinOp::Div, a, b)),
+    <l:@L> <a:Factor> "*" <b:Value> <r:@R> => Ast::<Expression>::new(l, r, Expression::BinOp(BinOp::Mul, a, b)),
+    <l:@L> <a:Factor> "/" <b:Value> <r:@R> => Ast::<Expression>::new(l, r, Expression::BinOp(BinOp::Div, a, b)),
     Value,
 };
 
 Value = {
-    <l:@L> <v:Int> <r:@R> => Ast::new(l, r, Expression::Value(Value::Int(v))),
-    <l:@L> <v:Float> <r:@R> => Ast::new(l, r, Expression::Value(Value::Float(v))),
-    <l:@L> <v:Bool> <r:@R> => Ast::new(l, r, Expression::Value(Value::Bool(v))),
-    <l:@L> <v:Ident> <r:@R> => Ast::new(l, r, Expression::Ident(v)),
+    <l:@L> <v:Int> <r:@R> => Ast::<Expression>::new(l, r, Expression::Value(Value::Int(v))),
+    <l:@L> <v:Float> <r:@R> => Ast::<Expression>::new(l, r, Expression::Value(Value::Float(v))),
+    <l:@L> <v:Bool> <r:@R> => Ast::<Expression>::new(l, r, Expression::Value(Value::Bool(v))),
+    <l:@L> <v:Ident> <r:@R> => Ast::<Expression>::new(l, r, Expression::Ident(v)),
 
-    <l:@L> "(" ")" <r:@R> => Ast::new(l, r, Expression::Value(Value::Tuple(vec![]))),
-    <l:@L> "(" <h:Expr> <t: Expr+ > ")" <r:@R> => Ast::new(l, r, Expression::Value(Value::Tuple({
+    <l:@L> "(" ")" <r:@R> => Ast::<Expression>::new(l, r, Expression::Value(Value::Tuple(vec![]))),
+    <l:@L> "(" <h:Expr> <t: Expr+ > ")" <r:@R> => Ast::<Expression>::new(l, r, Expression::Value(Value::Tuple({
         let mut vec = t;
         vec.insert(0, h);
         vec
     }))),
 
     "(" <Expr> ")",
+};
+
+Pattern: Pattern = {
+    "(" ")" => Pattern::Tuple(vec![]),
+    "(" <h:Pattern> <t: Pattern+ > ")" => Pattern::Tuple({
+        let mut vec = t;
+        vec.insert(0, h);
+        vec
+    }),
+
+    <n:Ident> ":" <t:ValueType> => Pattern::Ident(n, t),
+
+    "(" <Pattern> ")"
 };
 
 Float: f64 = {
