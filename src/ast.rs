@@ -33,6 +33,7 @@ pub enum Value {
     Float(f64),
     Bool(bool),
     Func(String, TypeAst, TypeAst, Ast),
+    Tuple(Vec<Ast>),
 }
 
 #[derive(Debug, Clone)]
@@ -48,6 +49,7 @@ pub enum Type {
     Float,
     Bool,
     Func(TypeAst, TypeAst),
+    Tuple(Vec<TypeAst>),
 }
 
 impl Ast {
@@ -108,6 +110,22 @@ impl fmt::Display for Value {
                 &Value::Func(ref p, ref tp, ref te, ref e) => {
                     format!("({}: {} -{}-> {})", p, tp, te, e)
                 }
+                &Value::Tuple(ref vec) => {
+                    let mut string = String::new();
+                    string += "(";
+
+                    if vec.len() >= 1 {
+                        string += &format!("{}", vec[0]);
+
+                        for element in &vec[1..] {
+                            string += &format!(" {}", element);
+                        }
+                    }
+
+                    string += ")";
+
+                    string
+                }
             }
         )
     }
@@ -139,6 +157,22 @@ impl fmt::Display for Type {
                 &Type::Float => String::from("Float"),
                 &Type::Bool => String::from("Bool"),
                 &Type::Func(ref input, ref output) => format!("({} -> {})", input, output),
+                &Type::Tuple(ref vec) => {
+                    let mut string = String::new();
+                    string += "(";
+
+                    if vec.len() >= 1 {
+                        string += &format!("{}", vec[0]);
+
+                        for element in &vec[1..] {
+                            string += &format!(" {}", element);
+                        }
+                    }
+
+                    string += ")";
+
+                    string
+                }
             }
         )
     }

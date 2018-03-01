@@ -118,6 +118,14 @@ mod source_to_ast {
     }
 
     #[test]
+    fn makes_a_tuple_tree() {
+        assert_parse_eq(source_to_ast("()"), "()");
+        assert_parse_eq(source_to_ast("(1)"), "1");
+        assert_parse_eq(source_to_ast("(1  #false())"), "(1 #false ())");
+        assert_parse_eq(source_to_ast("(1  #false()  3.1)"), "(1 #false () 3.1)");
+    }
+
+    #[test]
     fn makes_a_simple_plus_tree() {
         assert_parse_eq(source_to_ast("2 + 5.1"), "(2 + 5.1)");
     }
@@ -189,10 +197,5 @@ mod source_to_ast {
     #[test]
     fn complains_about_empty_input() {
         assert!(source_to_ast("").is_err());
-    }
-
-    #[test]
-    fn doesnt_like_empty_parens() {
-        assert!(source_to_ast("()").is_err());
     }
 }

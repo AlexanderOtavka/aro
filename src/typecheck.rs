@@ -1,4 +1,4 @@
-use ast::{Ast, BinOp, Expression, Type, Value};
+use ast::{Ast, BinOp, Expression, Type, TypeAst, Value};
 use util::Error;
 use std::collections::HashMap;
 
@@ -26,6 +26,19 @@ pub fn typecheck_ast(ast: &Ast, env: &HashMap<String, Type>) -> Result<Type, Err
             &Value::Int(_) => Ok(Type::Int),
             &Value::Float(_) => Ok(Type::Float),
             &Value::Bool(_) => Ok(Type::Bool),
+            &Value::Tuple(ref vec) => Ok(Type::Tuple({
+                let mut type_vec = Vec::new();
+
+                for item in vec {
+                    type_vec.push(TypeAst {
+                        expr: Box::new(typecheck_ast(item, env)?),
+                        left_loc: item.left_loc,
+                        right_loc: item.right_loc,
+                    })
+                }
+
+                type_vec
+            })),
             &Value::Func(ref param_name, ref param_type, ref body_type, ref body) => {
                 let mut body_env = env.clone();
                 body_env.insert(param_name.clone(), *param_type.expr.clone());

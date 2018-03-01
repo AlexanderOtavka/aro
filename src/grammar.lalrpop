@@ -56,6 +56,14 @@ Value = {
     <l:@L> <v:Float> <r:@R> => Ast::new(l, r, Expression::Value(Value::Float(v))),
     <l:@L> <v:Bool> <r:@R> => Ast::new(l, r, Expression::Value(Value::Bool(v))),
     <l:@L> <v:Ident> <r:@R> => Ast::new(l, r, Expression::Ident(v)),
+
+    <l:@L> "(" ")" <r:@R> => Ast::new(l, r, Expression::Value(Value::Tuple(vec![]))),
+    <l:@L> "(" <h:Expr> <t: Expr+ > ")" <r:@R> => Ast::new(l, r, Expression::Value(Value::Tuple({
+        let mut vec = t;
+        vec.insert(0, h);
+        vec
+    }))),
+
     "(" <Expr> ")",
 };
 
