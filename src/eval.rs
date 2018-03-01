@@ -488,6 +488,18 @@ mod evaluate_expression {
     }
 
     #[test]
+    fn handles_nested_arithmatic() {
+        assert_eval_eq("1 + (2 * 3)", "7");
+    }
+
+    #[test]
+    fn compares_with_leq() {
+        assert_eval_eq("3 <= 2", "#false ()");
+        assert_eval_eq("2 <= 2", "#true ()");
+        assert_eval_eq("1 <= 2", "#true ()");
+    }
+
+    #[test]
     fn returns_the_consequent_of_an_if() {
         assert_eval_eq("if 1 <= 1 then 1 else 2", "1");
     }
@@ -555,17 +567,5 @@ mod evaluate_expression {
             "(x: Int -(Int -> Int)-> x: Int -Int-> x + 1) <| 5",
             "(x: Int -Int-> ((x) + 1))",
         );
-    }
-
-    #[test]
-    fn handles_a_nested_tree() {
-        assert_eval_eq("1 + (2 * 3)", "7");
-    }
-
-    #[test]
-    fn compares_with_leq() {
-        assert_eval_eq("3 <= 2", "#false ()");
-        assert_eval_eq("2 <= 2", "#true ()");
-        assert_eval_eq("1 <= 2", "#true ()");
     }
 }
