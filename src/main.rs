@@ -37,7 +37,7 @@ fn evaluate_source(input: &str, small_step: bool) -> Result<String, Error> {
 
         Ok(output)
     } else {
-        let value = eval::evaluate_expression(&ast)?;
+        let value = eval::evaluate_ast(&ast)?;
 
         Ok(format!("{}", value))
     }

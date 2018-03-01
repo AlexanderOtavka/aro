@@ -198,7 +198,7 @@ fn substitute(ast: &Ast, name: &str, value: &Ast) -> Ast {
     }
 }
 
-fn step_expression(ast: &Ast) -> Result<Ast, Error> {
+fn step_ast(ast: &Ast) -> Result<Ast, Error> {
     let left_loc = ast.left_loc;
     let right_loc = ast.right_loc;
 
@@ -278,7 +278,7 @@ fn step_expression(ast: &Ast) -> Result<Ast, Error> {
                     expr: Box::new(Expression::BinOp(
                         operation.clone(),
                         left_ast.clone(),
-                        step_expression(right_ast)?,
+                        step_ast(right_ast)?,
                     )),
                     left_loc,
                     right_loc,
@@ -286,7 +286,7 @@ fn step_expression(ast: &Ast) -> Result<Ast, Error> {
                 _ => Ok(Ast {
                     expr: Box::new(Expression::BinOp(
                         operation.clone(),
-                        step_expression(left_ast)?,
+                        step_ast(left_ast)?,
                         right_ast.clone(),
                     )),
                     left_loc,
@@ -309,7 +309,7 @@ fn step_expression(ast: &Ast) -> Result<Ast, Error> {
             }),
             _ => Ok(Ast {
                 expr: Box::new(Expression::If(
-                    step_expression(guard)?,
+                    step_ast(guard)?,
                     consequent.clone(),
                     alternate.clone(),
                 )),
@@ -341,7 +341,7 @@ fn step_expression(ast: &Ast) -> Result<Ast, Error> {
                     expr: Box::new(Expression::Let(
                         bind_name.clone(),
                         bind_type.clone(),
-                        step_expression(bind_value)?,
+                        step_ast(bind_value)?,
                         body.clone(),
                     )),
                     left_loc,
@@ -374,7 +374,7 @@ pub fn get_eval_steps(ast: &Ast) -> Result<Vec<Ast>, Error> {
     let mut steps = Vec::<Ast>::new();
     loop {
         steps.push(ast.clone());
-        let stepped_ast = step_expression(&ast)?;
+        let stepped_ast = step_ast(&ast)?;
 
         if let &Expression::Value(_) = &*ast.expr {
             return Ok(steps);
@@ -388,7 +388,7 @@ pub fn get_eval_steps(ast: &Ast) -> Result<Vec<Ast>, Error> {
     }
 }
 
-pub fn evaluate_expression(ast: &Ast) -> Result<Value, Error> {
+pub fn evaluate_ast(ast: &Ast) -> Result<Value, Error> {
     let steps = get_eval_steps(ast)?;
     if let &Expression::Value(ref value) = &*steps[steps.len() - 1].expr {
         Ok(value.clone())
@@ -398,22 +398,19 @@ pub fn evaluate_expression(ast: &Ast) -> Result<Value, Error> {
 }
 
 #[cfg(test)]
-mod evaluate_expression {
+mod evaluate_ast {
     use super::*;
     use parse::source_to_ast;
 
     fn assert_eval_eq(actual: &str, expected: &str) {
         assert_eq!(
-            format!(
-                "{}",
-                evaluate_expression(&source_to_ast(actual).unwrap()).unwrap()
-            ),
+            format!("{}", evaluate_ast(&source_to_ast(actual).unwrap()).unwrap()),
             expected
         );
     }
 
     fn assert_eval_err(source: &str) {
-        assert!(evaluate_expression(&source_to_ast(source).unwrap()).is_err());
+        assert!(evaluate_ast(&source_to_ast(source).unwrap()).is_err());
     }
 
     #[test]
