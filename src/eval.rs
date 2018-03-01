@@ -490,13 +490,9 @@ mod evaluate_ast {
     }
 
     #[test]
-    fn divides_zero_by_zero() {
-        assert_eval_eq("0.0 / 0", "nan");
-    }
-
-    #[test]
     fn divides_floats_by_zero() {
         assert_eval_eq("3.0 / 0", "inf");
+        assert_eval_eq("0.0 / 0", "nan");
     }
 
     #[test]
