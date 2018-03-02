@@ -27,8 +27,8 @@ pub Expr: Ast<Expression> = {
     <l:@L> "if" <e1:Expr> "then" <e2:Expr> "else" <e3:Expr> <r:@R> =>
         Ast::<Expression>::new(l, r, Expression::If(e1, e2, e3)),
 
-    <l:@L> "let" <n:Ident> ":" <t:Type> "<==" <v:Expr> <e:Expr> <r:@R> =>
-        Ast::<Expression>::new(l, r, Expression::Let(n, t, v, e)),
+    <l:@L> "let" <p:Pattern> "<==" <v:Expr> <e:Expr> <r:@R> =>
+        Ast::<Expression>::new(l, r, Expression::Let(p, v, e)),
 
     <l:@L> <p:Ident> ":" <pt:ValueType> "-" <et:ValueType> "->" <e:Expr> <r:@R> =>
         Ast::<Expression>::new(l, r, Expression::Value(Value::Func(p, pt, et, e))),
@@ -75,15 +75,15 @@ Value = {
     "(" <Expr> ")",
 };
 
-Pattern: Pattern = {
-    "(" ")" => Pattern::Tuple(vec![]),
-    "(" <h:Pattern> <t: Pattern+ > ")" => Pattern::Tuple({
+Pattern: Ast<Pattern> = {
+    <l:@L> "(" ")" <r:@R> => Ast::<Pattern>::new(l, r, Pattern::Tuple(vec![])),
+    <l:@L> "(" <h:Pattern> <t: Pattern+ > ")" <r:@R> =>  Ast::<Pattern>::new(l, r, Pattern::Tuple({
         let mut vec = t;
         vec.insert(0, h);
         vec
-    }),
+    })),
 
-    <n:Ident> ":" <t:ValueType> => Pattern::Ident(n, t),
+    <l:@L> <n:Ident> ":" <t:ValueType> <r:@R> => Ast::<Pattern>::new(l, r, Pattern::Ident(n, t)),
 
     "(" <Pattern> ")"
 };

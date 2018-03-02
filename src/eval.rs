@@ -1,7 +1,8 @@
-use ast::{Ast, BinOp, Expression, Value};
+use ast::{Ast, BinOp, Expression, Pattern, Type, Value};
 use util::Error;
 use std::collections::HashMap;
 use std::f64;
+use std::iter::Iterator;
 
 fn evaluate_number_operator<F>(
     ast: &Ast<Expression>,
@@ -132,78 +133,94 @@ mod evaluate_number_operator {
     }
 }
 
-fn substitute(ast: &Ast<Expression>, name: &str, value: &Ast<Expression>) -> Ast<Expression> {
-    match &*ast.expr {
-        &Expression::Ident(ref ident_name) => {
-            if ident_name == name {
-                value.clone()
-            } else {
-                ast.clone()
-            }
-        }
-        &Expression::BinOp(ref op, ref left, ref right) => Ast {
-            expr: Box::new(Expression::BinOp(
-                op.clone(),
-                substitute(left, name, value),
-                substitute(right, name, value),
-            )),
-            left_loc: ast.left_loc,
-            right_loc: ast.right_loc,
-        },
-        &Expression::If(ref c, ref t, ref e) => Ast {
-            expr: Box::new(Expression::If(
-                substitute(c, name, value),
-                substitute(t, name, value),
-                substitute(e, name, value),
-            )),
-            left_loc: ast.left_loc,
-            right_loc: ast.right_loc,
-        },
-        &Expression::Let(ref bind_name, ref bind_type, ref bind_value, ref body) => {
-            if bind_name == name {
-                ast.clone()
-            } else {
-                Ast {
-                    expr: Box::new(Expression::Let(
-                        bind_name.clone(),
-                        bind_type.clone(),
-                        substitute(bind_value, name, value),
-                        substitute(body, name, value),
-                    )),
-                    left_loc: ast.left_loc,
-                    right_loc: ast.right_loc,
+fn substitute(
+    ast: &Ast<Expression>,
+    pattern: &Ast<Pattern>,
+    value: &Ast<Expression>,
+) -> Ast<Expression> {
+    match &*pattern.expr {
+        &Pattern::Tuple(ref vec) => {
+            let mut substituted_ast = ast.clone();
+
+            if let &Expression::Value(Value::Tuple(ref value_vec)) = &*value.expr {
+                for (el, value_el) in Iterator::zip(vec.into_iter(), value_vec.into_iter()) {
+                    substituted_ast = substitute(&substituted_ast, el, value_el);
                 }
             }
+
+            substituted_ast
         }
-        &Expression::Value(Value::Func(
-            ref param_name,
-            ref param_type,
-            ref body_type,
-            ref body,
-        )) => Ast {
-            expr: Box::new(Expression::Value(Value::Func(
-                param_name.clone(),
-                param_type.clone(),
-                body_type.clone(),
-                if param_name == name {
-                    body.clone()
+        &Pattern::Ident(ref name, _) => match &*ast.expr {
+            &Expression::Ident(ref ident_name) => {
+                if ident_name == name {
+                    value.clone()
                 } else {
-                    substitute(body, name, value)
-                },
-            ))),
-            left_loc: ast.left_loc,
-            right_loc: ast.right_loc,
+                    ast.clone()
+                }
+            }
+            &Expression::BinOp(ref op, ref left, ref right) => Ast {
+                expr: Box::new(Expression::BinOp(
+                    op.clone(),
+                    substitute(left, pattern, value),
+                    substitute(right, pattern, value),
+                )),
+                left_loc: ast.left_loc,
+                right_loc: ast.right_loc,
+            },
+            &Expression::If(ref c, ref t, ref e) => Ast {
+                expr: Box::new(Expression::If(
+                    substitute(c, pattern, value),
+                    substitute(t, pattern, value),
+                    substitute(e, pattern, value),
+                )),
+                left_loc: ast.left_loc,
+                right_loc: ast.right_loc,
+            },
+            &Expression::Let(ref bind_pattern, ref bind_value, ref body) => {
+                if bind_pattern.contains_name(name) {
+                    ast.clone()
+                } else {
+                    Ast {
+                        expr: Box::new(Expression::Let(
+                            bind_pattern.clone(),
+                            substitute(bind_value, pattern, value),
+                            substitute(body, pattern, value),
+                        )),
+                        left_loc: ast.left_loc,
+                        right_loc: ast.right_loc,
+                    }
+                }
+            }
+            &Expression::Value(Value::Func(
+                ref param_name,
+                ref param_type,
+                ref body_type,
+                ref body,
+            )) => Ast {
+                expr: Box::new(Expression::Value(Value::Func(
+                    param_name.clone(),
+                    param_type.clone(),
+                    body_type.clone(),
+                    if param_name == name {
+                        body.clone()
+                    } else {
+                        substitute(body, pattern, value)
+                    },
+                ))),
+                left_loc: ast.left_loc,
+                right_loc: ast.right_loc,
+            },
+            &Expression::Value(Value::Tuple(ref vec)) => Ast::<Expression>::new(
+                ast.left_loc,
+                ast.right_loc,
+                Expression::Value(Value::Tuple(
+                    vec.into_iter()
+                        .map(|element| substitute(element, pattern, value))
+                        .collect(),
+                )),
+            ),
+            &Expression::Value(_) => ast.clone(),
         },
-        &Expression::Value(Value::Tuple(ref vec)) => Ast::<Expression>::new(
-            ast.left_loc,
-            ast.right_loc,
-            Expression::Value(Value::Tuple(
-                vec.into_iter()
-                    .map(|element| substitute(element, name, value))
-                    .collect(),
-            )),
-        ),
-        &Expression::Value(_) => ast.clone(),
     }
 }
 
@@ -242,10 +259,14 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
             match (&*left_ast.expr, &*right_ast.expr) {
                 (&Expression::Value(ref left), &Expression::Value(ref right)) => match operation {
                     &BinOp::Call => {
-                        if let &Value::Func(ref param_name, _, _, ref body) = left {
+                        if let &Value::Func(ref param_name, ref param_type, _, ref body) = left {
                             Ok(substitute(
                                 body,
-                                param_name,
+                                &Ast::<Pattern>::new(
+                                    left_loc,
+                                    right_loc,
+                                    Pattern::Ident(param_name.clone(), param_type.clone()),
+                                ),
                                 &Ast {
                                     expr: Box::new(Expression::Value(right.clone())),
                                     left_loc: right_ast.left_loc,
@@ -343,38 +364,34 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
                 right_loc,
             }),
         },
-        &Expression::Let(ref bind_name, ref bind_type, ref bind_value, ref body) => {
-            match &*bind_value.expr {
-                &Expression::Value(_) => Ok(substitute(
-                    body,
-                    bind_name,
-                    &substitute(
-                        bind_value,
-                        bind_name,
-                        &Ast::<Expression>::new(
-                            bind_value.left_loc,
-                            bind_value.right_loc,
-                            Expression::Let(
-                                bind_name.clone(),
-                                bind_type.clone(),
-                                bind_value.clone(),
-                                bind_value.clone(),
-                            ),
+        &Expression::Let(ref bind_pattern, ref bind_value, ref body) => match &*bind_value.expr {
+            &Expression::Value(_) => Ok(substitute(
+                body,
+                bind_pattern,
+                &substitute(
+                    bind_value,
+                    bind_pattern,
+                    &Ast::<Expression>::new(
+                        bind_value.left_loc,
+                        bind_value.right_loc,
+                        Expression::Let(
+                            bind_pattern.clone(),
+                            bind_value.clone(),
+                            bind_value.clone(),
                         ),
                     ),
+                ),
+            )),
+            _ => Ok(Ast {
+                expr: Box::new(Expression::Let(
+                    bind_pattern.clone(),
+                    step_ast(bind_value)?,
+                    body.clone(),
                 )),
-                _ => Ok(Ast {
-                    expr: Box::new(Expression::Let(
-                        bind_name.clone(),
-                        bind_type.clone(),
-                        step_ast(bind_value)?,
-                        body.clone(),
-                    )),
-                    left_loc,
-                    right_loc,
-                }),
-            }
-        }
+                left_loc,
+                right_loc,
+            }),
+        },
     }
 }
 
@@ -388,7 +405,14 @@ pub fn get_eval_steps(ast: &Ast<Expression>) -> Result<Vec<Ast<Expression>>, Err
     for (name, value) in globals {
         ast = substitute(
             &ast,
-            name,
+            &Ast::<Pattern>::new(
+                0,
+                0,
+                Pattern::Ident(
+                    String::from(name),
+                    Ast::<Type>::new(0, 0, Type::Tuple(vec![])),
+                ),
+            ),
             &Ast {
                 expr: Box::new(Expression::Value(value.clone())),
                 left_loc: 0,

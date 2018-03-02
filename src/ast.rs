@@ -1,4 +1,5 @@
 use std::fmt;
+use std::fmt::{Display, Formatter};
 use std::f64;
 
 #[derive(Debug, Clone)]
@@ -14,7 +15,7 @@ pub enum Expression {
     BinOp(BinOp, Ast<Expression>, Ast<Expression>),
     If(Ast<Expression>, Ast<Expression>, Ast<Expression>),
     Ident(String),
-    Let(String, Ast<Type>, Ast<Expression>, Ast<Expression>),
+    Let(Ast<Pattern>, Ast<Expression>, Ast<Expression>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -39,7 +40,7 @@ pub enum Value {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Pattern {
     Ident(String, Ast<Type>),
-    Tuple(Vec<Pattern>),
+    Tuple(Vec<Ast<Pattern>>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -51,15 +52,17 @@ pub enum Type {
     Tuple(Vec<Ast<Type>>),
 }
 
-impl Ast<Expression> {
-    pub fn new(left_loc: usize, right_loc: usize, expr: Expression) -> Ast<Expression> {
+impl<T> Ast<T> {
+    pub fn new(left_loc: usize, right_loc: usize, expr: T) -> Ast<T> {
         Ast {
             left_loc,
             right_loc,
             expr: Box::new(expr),
         }
     }
+}
 
+impl Ast<Expression> {
     pub fn is_term(&self) -> bool {
         match &*self.expr {
             &Expression::Value(Value::Tuple(ref vec)) => vec.into_iter().all(|ast| ast.is_term()),
@@ -69,12 +72,11 @@ impl Ast<Expression> {
     }
 }
 
-impl Ast<Type> {
-    pub fn new(left_loc: usize, right_loc: usize, expr: Type) -> Ast<Type> {
-        Ast {
-            left_loc,
-            right_loc,
-            expr: Box::new(expr),
+impl Ast<Pattern> {
+    pub fn contains_name(&self, name: &str) -> bool {
+        match &*self.expr {
+            &Pattern::Ident(ref ident_name, _) => name == ident_name,
+            &Pattern::Tuple(ref vec) => vec.into_iter().any(|el| el.contains_name(name)),
         }
     }
 }
@@ -85,14 +87,14 @@ impl<T: PartialEq> PartialEq for Ast<T> {
     }
 }
 
-impl<T: fmt::Display> fmt::Display for Ast<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl<T: Display> Display for Ast<T> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}", self.expr)
     }
 }
 
-impl fmt::Display for Expression {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl Display for Expression {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             &Expression::Value(ref value) => value.fmt(f),
             &Expression::BinOp(ref op, ref a, ref b) => write!(
@@ -111,16 +113,13 @@ impl fmt::Display for Expression {
             ),
             &Expression::If(ref c, ref t, ref e) => write!(f, "(if {} then {} else {})", c, t, e),
             &Expression::Ident(ref n) => write!(f, "({})", n),
-            // &Expression::Let(ref p, ref v, ref e) => write!(f, "(let {} <== {} {})", p, v, e),
-            &Expression::Let(ref n, ref t, ref v, ref e) => {
-                write!(f, "(let {}: {} <== {} {})", n, t, v, e)
-            }
+            &Expression::Let(ref p, ref v, ref e) => write!(f, "(let {} <== {} {})", p, v, e),
         }
     }
 }
 
-impl fmt::Display for Value {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl Display for Value {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
             "{}",
@@ -161,8 +160,8 @@ impl fmt::Display for Value {
     }
 }
 
-impl fmt::Display for Pattern {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl Display for Pattern {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
             "{}",
@@ -191,8 +190,8 @@ impl fmt::Display for Pattern {
     }
 }
 
-impl fmt::Display for Type {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl Display for Type {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
             "{}",

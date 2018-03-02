@@ -1,6 +1,7 @@
-use ast::{Ast, BinOp, Expression, Type, Value};
+use ast::{Ast, BinOp, Expression, Pattern, Type, Value};
 use util::Error;
 use std::collections::HashMap;
+use std::iter::Iterator;
 
 impl Error {
     pub fn type_error(left_loc: usize, right_loc: usize, expected: &Type, actual: &Type) -> Error {
@@ -13,6 +14,30 @@ impl Error {
             ),
             left_loc,
             right_loc,
+        }
+    }
+}
+
+fn build_env(env: &mut HashMap<String, Type>, pattern: &Ast<Pattern>) {
+    match &*pattern.expr {
+        &Pattern::Ident(ref name, ref ident_type) => {
+            env.insert(name.clone(), *ident_type.expr.clone());
+        }
+        &Pattern::Tuple(ref vec) => for el in vec {
+            build_env(env, el);
+        },
+    };
+}
+
+impl Ast<Type> {
+    pub fn from_pattern(pattern: &Ast<Pattern>) -> Ast<Type> {
+        match &*pattern.expr {
+            &Pattern::Ident(_, ref ident_type) => ident_type.clone(),
+            &Pattern::Tuple(ref vec) => Ast::<Type>::new(
+                pattern.left_loc,
+                pattern.right_loc,
+                Type::Tuple(vec.into_iter().map(Ast::from_pattern).collect()),
+            ),
         }
     }
 }
@@ -93,16 +118,18 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
                 }
             }
         }
-        &Expression::Let(ref name, ref value_type, ref value, ref body) => {
+        &Expression::Let(ref pattern, ref value, ref body) => {
             let mut body_env = env.clone();
-            body_env.insert(name.clone(), *value_type.expr.clone());
+            build_env(&mut body_env, &pattern);
 
+            let declared_value_type = *Ast::<Type>::from_pattern(pattern).expr;
             let actual_value_type = typecheck_ast(value, &body_env)?;
-            if actual_value_type != *value_type.expr {
+
+            if actual_value_type != declared_value_type {
                 Err(Error::type_error(
                     value.left_loc,
                     value.right_loc,
-                    &*value_type.expr,
+                    &declared_value_type,
                     &actual_value_type,
                 ))
             } else {
@@ -207,8 +234,15 @@ mod typecheck_ast {
     }
 
     #[test]
-    fn doesnt_handle_straight_identifiers() {
+    fn doesnt_like_unknown_identifiers() {
         assert_typecheck_err("foo");
+    }
+
+    #[test]
+    #[ignore]
+    fn checks_global_identifiers() {
+        assert_typecheck_eq("inf", "Float");
+        assert_typecheck_eq("nan", "Float");
     }
 
     #[test]
@@ -278,6 +312,17 @@ mod typecheck_ast {
             tup
             ",
             "(Int Float)",
+        );
+    }
+
+    #[test]
+    fn checks_destructured_tuples() {
+        assert_typecheck_eq(
+            "
+            let (x: Int y: Float) <== (2 2.3)
+            x + y
+            ",
+            "Float",
         );
     }
 
