@@ -30,8 +30,10 @@ pub Expr: Ast<Expression> = {
     <l:@L> "let" <p:Pattern> "<==" <v:Expr> <e:Expr> <r:@R> =>
         Ast::<Expression>::new(l, r, Expression::Let(p, v, e)),
 
-    <l:@L> <p:Ident> ":" <pt:ValueType> "-" <et:ValueType> "->" <e:Expr> <r:@R> =>
-        Ast::<Expression>::new(l, r, Expression::Value(Value::Func(p, pt, et, e))),
+    <l:@L> <p:IdentPattern> "-" <et:ValueType> "->" <e:Expr> <r:@R> =>
+        Ast::<Expression>::new(l, r, Expression::Value(Value::Func(p, et, e))),
+    <l:@L> "fn" <p:Pattern> "-" <et:ValueType> "->" <e:Expr> <r:@R> =>
+        Ast::<Expression>::new(l, r, Expression::Value(Value::Func(p, et, e))),
 
     Call,
 };
@@ -83,9 +85,13 @@ Pattern: Ast<Pattern> = {
         vec
     })),
 
-    <l:@L> <n:Ident> ":" <t:ValueType> <r:@R> => Ast::<Pattern>::new(l, r, Pattern::Ident(n, t)),
+    IdentPattern,
 
     "(" <Pattern> ")"
+};
+
+IdentPattern: Ast<Pattern> = {
+    <l:@L> <n:Ident> ":" <t:ValueType> <r:@R> => Ast::<Pattern>::new(l, r, Pattern::Ident(n, t)),
 };
 
 Float: f64 = {

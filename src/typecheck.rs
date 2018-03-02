@@ -64,9 +64,9 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
 
                 type_vec
             })),
-            &Value::Func(ref param_name, ref param_type, ref body_type, ref body) => {
+            &Value::Func(ref pattern, ref body_type, ref body) => {
                 let mut body_env = env.clone();
-                body_env.insert(param_name.clone(), *param_type.expr.clone());
+                build_env(&mut body_env, pattern);
 
                 let actual_body_type = typecheck_ast(body, &body_env)?;
                 if *body_type.expr != actual_body_type {
@@ -77,7 +77,10 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
                         &actual_body_type,
                     ))
                 } else {
-                    Ok(Type::Func(param_type.clone(), body_type.clone()))
+                    Ok(Type::Func(
+                        Ast::<Type>::from_pattern(pattern),
+                        body_type.clone(),
+                    ))
                 }
             }
         },
@@ -323,6 +326,22 @@ mod typecheck_ast {
             x + y
             ",
             "Float",
+        );
+        assert_typecheck_eq(
+            "
+            fn (x: Int  y: Bool  z: Float) -Float->
+                if y then
+                    x * 1.0
+                else
+                    z
+            ",
+            "((Int Bool Float) -> Float)",
+        );
+        assert_typecheck_eq(
+            "
+            fn () -Float-> 5.0 + 1
+            ",
+            "(() -> Float)",
         );
     }
 

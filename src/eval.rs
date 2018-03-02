@@ -191,17 +191,11 @@ fn substitute(
                     }
                 }
             }
-            &Expression::Value(Value::Func(
-                ref param_name,
-                ref param_type,
-                ref body_type,
-                ref body,
-            )) => Ast {
+            &Expression::Value(Value::Func(ref param_pattern, ref body_type, ref body)) => Ast {
                 expr: Box::new(Expression::Value(Value::Func(
-                    param_name.clone(),
-                    param_type.clone(),
+                    param_pattern.clone(),
                     body_type.clone(),
-                    if param_name == name {
+                    if param_pattern.contains_name(name) {
                         body.clone()
                     } else {
                         substitute(body, pattern, value)
@@ -255,18 +249,19 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
             left_loc,
             right_loc,
         }),
-        &Expression::BinOp(ref operation, ref left_ast, ref right_ast) => {
-            match (&*left_ast.expr, &*right_ast.expr) {
-                (&Expression::Value(ref left), &Expression::Value(ref right)) => match operation {
+        &Expression::BinOp(ref operation, ref left_ast, ref right_ast) => match (
+            &*left_ast.expr,
+            &*right_ast.expr,
+        ) {
+            (&Expression::Value(ref left), &Expression::Value(ref right))
+                if left_ast.is_term() && right_ast.is_term() =>
+            {
+                match operation {
                     &BinOp::Call => {
-                        if let &Value::Func(ref param_name, ref param_type, _, ref body) = left {
+                        if let &Value::Func(ref pattern, _, ref body) = left {
                             Ok(substitute(
                                 body,
-                                &Ast::<Pattern>::new(
-                                    left_loc,
-                                    right_loc,
-                                    Pattern::Ident(param_name.clone(), param_type.clone()),
-                                ),
+                                pattern,
                                 &Ast {
                                     expr: Box::new(Expression::Value(right.clone())),
                                     left_loc: right_ast.left_loc,
@@ -320,27 +315,27 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
                         left_loc,
                         right_loc,
                     }),
-                },
-                (&Expression::Value(_), _) => Ok(Ast {
-                    expr: Box::new(Expression::BinOp(
-                        operation.clone(),
-                        left_ast.clone(),
-                        step_ast(right_ast)?,
-                    )),
-                    left_loc,
-                    right_loc,
-                }),
-                _ => Ok(Ast {
-                    expr: Box::new(Expression::BinOp(
-                        operation.clone(),
-                        step_ast(left_ast)?,
-                        right_ast.clone(),
-                    )),
-                    left_loc,
-                    right_loc,
-                }),
+                }
             }
-        }
+            (&Expression::Value(_), _) if left_ast.is_term() => Ok(Ast {
+                expr: Box::new(Expression::BinOp(
+                    operation.clone(),
+                    left_ast.clone(),
+                    step_ast(right_ast)?,
+                )),
+                left_loc,
+                right_loc,
+            }),
+            _ => Ok(Ast {
+                expr: Box::new(Expression::BinOp(
+                    operation.clone(),
+                    step_ast(left_ast)?,
+                    right_ast.clone(),
+                )),
+                left_loc,
+                right_loc,
+            }),
+        },
         &Expression::If(ref guard, ref consequent, ref alternate) => match &*guard.expr {
             &Expression::Value(Value::Bool(guard_value)) => {
                 if guard_value {
@@ -364,8 +359,8 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
                 right_loc,
             }),
         },
-        &Expression::Let(ref bind_pattern, ref bind_value, ref body) => match &*bind_value.expr {
-            &Expression::Value(_) => Ok(substitute(
+        &Expression::Let(ref bind_pattern, ref bind_value, ref body) => if bind_value.is_term() {
+            Ok(substitute(
                 body,
                 bind_pattern,
                 &substitute(
@@ -381,8 +376,9 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
                         ),
                     ),
                 ),
-            )),
-            _ => Ok(Ast {
+            ))
+        } else {
+            Ok(Ast {
                 expr: Box::new(Expression::Let(
                     bind_pattern.clone(),
                     step_ast(bind_value)?,
@@ -390,7 +386,7 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
                 )),
                 left_loc,
                 right_loc,
-            }),
+            })
         },
     }
 }
@@ -616,6 +612,30 @@ mod evaluate_ast {
     }
 
     #[test]
+    fn destructures_tuples() {
+        assert_eval_eq(
+            "
+            let x: Int <== 5
+            let (a: Int  b: Float) <== (x 2.3)
+            a + b
+            ",
+            "7.3",
+        );
+        assert_eval_eq(
+            "
+            (2  5.3  #true ()) |> (fn (a: Int  b: Float  bool: Bool) -Float-> a + b)
+            ",
+            "7.3",
+        );
+        assert_eval_eq(
+            "
+            () |> (fn () -Int-> 2 + 3)
+            ",
+            "5",
+        );
+    }
+
+    #[test]
     fn supports_recursion_in_the_let_expression() {
         assert_eval_eq(
             "
@@ -635,7 +655,7 @@ mod evaluate_ast {
     fn doesnt_substitute_shadowed_variables() {
         assert_eval_eq(
             "(x: Int -(Int -> Int)-> x: Int -Int-> x + 1) <| 5",
-            "(x: Int -Int-> ((x) + 1))",
+            "(fn x: Int -Int-> ((x) + 1))",
         );
     }
 }

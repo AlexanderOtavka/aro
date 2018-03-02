@@ -33,7 +33,7 @@ pub enum Value {
     Int(i32),
     Float(f64),
     Bool(bool),
-    Func(String, Ast<Type>, Ast<Type>, Ast<Expression>),
+    Func(Ast<Pattern>, Ast<Type>, Ast<Expression>),
     Tuple(Vec<Ast<Expression>>),
 }
 
@@ -136,9 +136,7 @@ impl Display for Value {
                 }
                 &Value::Bool(true) => String::from("#true ()"),
                 &Value::Bool(false) => String::from("#false ()"),
-                &Value::Func(ref p, ref tp, ref te, ref e) => {
-                    format!("({}: {} -{}-> {})", p, tp, te, e)
-                }
+                &Value::Func(ref p, ref te, ref e) => format!("(fn {} -{}-> {})", p, te, e),
                 &Value::Tuple(ref vec) => {
                     let mut string = String::new();
                     string += "(";
