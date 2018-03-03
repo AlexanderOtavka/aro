@@ -259,7 +259,6 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
                 match operation {
                     &BinOp::Call => {
                         if let &Value::Hook(ref name, _) = left {
-                            let name_string = name.join(".");
                             match name.join(".").as_str() {
                                 "std.list.push" => {
                                     if let &Value::Tuple(ref right_vec) = right {
