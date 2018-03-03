@@ -48,6 +48,7 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
 
     match &*ast.expr {
         &Expression::Value(ref value) => match value {
+            &Value::Hook(_, ref hook_type) => Ok(*hook_type.expr.clone()),
             &Value::Int(_) => Ok(Type::Int),
             &Value::Float(_) => Ok(Type::Float),
             &Value::Bool(_) => Ok(Type::Bool),

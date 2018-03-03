@@ -170,7 +170,10 @@ mod evaluate_file {
 
     #[test]
     fn list() {
-        assert_eq!(evaluate_file("examples/list.aro", false).unwrap(), "[]")
+        assert_eq!(
+            evaluate_file("examples/list.aro", false).unwrap(),
+            "[1 2 3 4]"
+        )
     }
 
     #[test]

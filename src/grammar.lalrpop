@@ -56,6 +56,9 @@ Value = {
 
     <l:@L> "[" <e: Expr* > "]" <r:@R> => Ast::<Expression>::new(l, r, Expression::Value(Value::List(e))),
 
+    <l:@L> "@hook" "(" r#"""# <n:Ident> r#"""# <t:Type> ")" <r:@R> =>
+        Ast::<Expression>::new(l, r, Expression::Value(Value::Hook(n, t))),
+
     "(" <Expr> ")",
 };
 

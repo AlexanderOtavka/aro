@@ -258,7 +258,94 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
             {
                 match operation {
                     &BinOp::Call => {
-                        if let &Value::Func(ref pattern, _, ref body) = left {
+                        if let &Value::Hook(ref name, _) = left {
+                            match name.as_str() {
+                                "list_push" => {
+                                    if let &Value::Tuple(ref right_vec) = right {
+                                        let el = &right_vec[0];
+                                        let list = &right_vec[1];
+
+                                        if let &Expression::Value(Value::List(ref vec)) =
+                                            &*list.expr
+                                        {
+                                            let mut list = vec.clone();
+                                            list.insert(0, el.clone());
+
+                                            Ok(Ast::<Expression>::new(
+                                                left_loc,
+                                                right_loc,
+                                                Expression::Value(Value::List(list)),
+                                            ))
+                                        } else {
+                                            panic!("Second tuple arg should be list.")
+                                        }
+                                    } else {
+                                        panic!("list_push arg should be tuple.")
+                                    }
+                                }
+                                "list_is_empty" => {
+                                    if let &Value::List(ref vec) = right {
+                                        Ok(Ast::<Expression>::new(
+                                            left_loc,
+                                            right_loc,
+                                            Expression::Value(Value::Bool(vec.is_empty())),
+                                        ))
+                                    } else {
+                                        panic!("list_is_empty arg should be list.")
+                                    }
+                                }
+                                "list_head" => {
+                                    if let &Value::List(ref vec) = right {
+                                        if vec.is_empty() {
+                                            Err(Error::LRLocated {
+                                                message: String::from(
+                                                    "As always, you can't get head.\n\
+                                                     Especially not from an empty list.",
+                                                ),
+                                                left_loc: right_ast.left_loc,
+                                                right_loc: right_ast.right_loc,
+                                            })
+                                        } else {
+                                            Ok(vec[0].clone())
+                                        }
+                                    } else {
+                                        panic!("list_head arg should be list.")
+                                    }
+                                }
+                                "list_tail" => {
+                                    if let &Value::List(ref vec) = right {
+                                        if vec.is_empty() {
+                                            Err(Error::LRLocated {
+                                                message: String::from(
+                                                    "There's no tail on that list.",
+                                                ),
+                                                left_loc: right_ast.left_loc,
+                                                right_loc: right_ast.right_loc,
+                                            })
+                                        } else {
+                                            Ok(Ast::<Expression>::new(
+                                                left_loc,
+                                                right_loc,
+                                                Expression::Value(Value::List(Vec::from(
+                                                    &vec[1..],
+                                                ))),
+                                            ))
+                                        }
+                                    } else {
+                                        panic!("list_tail arg should be list.")
+                                    }
+                                }
+                                _ => Err(Error::LRLocated {
+                                    message: format!(
+                                        "`{}` ain't gonna hook up with your ugly ass.\n\
+                                         'Cuz it's not a hook.",
+                                        name
+                                    ),
+                                    left_loc: left_ast.left_loc,
+                                    right_loc: left_ast.right_loc,
+                                }),
+                            }
+                        } else if let &Value::Func(ref pattern, _, ref body) = left {
                             Ok(substitute(
                                 body,
                                 pattern,
@@ -659,6 +746,98 @@ mod evaluate_ast {
         assert_eval_eq(
             "(x: Int -(Int -> Int)-> x: Int -Int-> x + 1) <| 5",
             "(fn x: Int -Int-> ((x) + 1))",
+        );
+    }
+
+    #[test]
+    fn list_push_hook() {
+        assert_eval_eq(
+            r#"
+            (1 [2 3]) |> @hook("list_push"  ((Int  [Int..]) -> [Int..]))
+            "#,
+            "[1 2 3]",
+        );
+        assert_eval_eq(
+            r#"
+            (1 []) |> @hook("list_push"  ((Int  [Int..]) -> [Int..]))
+            "#,
+            "[1]",
+        );
+        assert_eval_eq(
+            r#"
+            (1.6 [2.1 3.7]) |> @hook("list_push"  ((Float  [Float..]) -> [Float..]))
+            "#,
+            "[1.6 2.1 3.7]",
+        );
+    }
+
+    #[test]
+    fn list_is_empty_hook() {
+        assert_eval_eq(
+            r#"
+            [1 2 3] |> @hook("list_is_empty"  ([Int..] -> Bool))
+            "#,
+            "#false ()",
+        );
+        assert_eval_eq(
+            r#"
+            [] |> @hook("list_is_empty"  ([Int..] -> Bool))
+            "#,
+            "#true ()",
+        );
+        assert_eval_eq(
+            r#"
+            [#true() #false()] |> @hook("list_is_empty"  ([Bool..] -> Bool))
+            "#,
+            "#false ()",
+        );
+        assert_eval_eq(
+            r#"
+            [] |> @hook("list_is_empty"  ([Float..] -> Bool))
+            "#,
+            "#true ()",
+        );
+    }
+
+    #[test]
+    fn list_head_hook() {
+        assert_eval_eq(
+            r#"
+            [1 2 3] |> @hook("list_head"  ([Int..] -> Int))
+            "#,
+            "1",
+        );
+        assert_eval_err(
+            r#"
+            [] |> @hook("list_head"  ([Int..] -> Int))
+            "#,
+        );
+        assert_eval_eq(
+            r#"
+            [#true() #false()] |> @hook("list_head"  ([Bool..] -> Bool))
+            "#,
+            "#true ()",
+        );
+    }
+
+    #[test]
+    fn list_tail_hook() {
+        assert_eval_eq(
+            r#"
+            [1 2 3] |> @hook("list_tail"  ([Int..] -> Int))
+            "#,
+            "[2 3]",
+        );
+        assert_eval_err(
+            r#"
+            [] |> @hook("list_tail"  ([Int..] -> Int))
+            "#,
+        );
+        assert_eval_eq(
+            r#"
+            [#true() #false()] |> @hook("list_tail"  ([Bool..] -> Bool))
+            "#,
+            "[#false ()]",
         );
     }
 }

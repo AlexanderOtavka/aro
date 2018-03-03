@@ -1,4 +1,26 @@
-let list: [Int..] <== [1 2 3]
+let push: (Int -> [Int..] -> [Int..]) <==
+    el: Int -([Int..] -> [Int..])-> list: [Int..] -[Int..]->
+        (el list) |> @hook("list_push"  ((Int  [Int..]) -> [Int..]))
+let is_empty: ([Int..] -> Bool) <==
+    @hook("list_is_empty" ([Int..] -> Bool))
+let head: ([Int..] -> Int) <==
+    @hook("list_head" ([Int..] -> Int))
+let tail: ([Int..] -> [Int..]) <==
+    @hook("list_tail" ([Int..] -> [Int..]))
+
+let concat: ([Int..] -> [Int..] -> [Int..]) <==
+    first: [Int..] -([Int..] -> [Int..])-> second: [Int..] -[Int..]->
+        if first |> is_empty then
+            second
+        else
+            first
+                |> tail
+                |> concat <| second
+                |> (push <| (first |> head))
+
+let some_numbers: [Int..] <== [1 2 3]
 let empty: [Int..] <== []
 
-empty
+some_numbers
+    |> concat <| empty
+    |> concat <| [4]
