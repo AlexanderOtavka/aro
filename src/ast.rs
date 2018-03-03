@@ -37,7 +37,7 @@ pub enum Value {
     Func(Ast<Pattern>, Ast<Type>, Ast<Expression>),
     Tuple(Vec<Ast<Expression>>),
     List(Vec<Ast<Expression>>),
-    Hook(String, Ast<Type>),
+    Hook(Vec<String>, Ast<Type>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -68,6 +68,24 @@ impl<T> Ast<T> {
 }
 
 impl Ast<Expression> {
+    pub fn new_hook(
+        left_loc: usize,
+        right_loc: usize,
+        name: &str,
+        hook_type: Ast<Type>,
+    ) -> Ast<Expression> {
+        let path = name[1..name.len() - 1] // Wipe away the surrounding quotes
+            .split(".")
+            .map(String::from)
+            .collect::<Vec<_>>();
+
+        Ast::<Expression>::new(
+            left_loc,
+            right_loc,
+            Expression::Value(Value::Hook(path, hook_type)),
+        )
+    }
+
     pub fn is_term(&self) -> bool {
         match &*self.expr {
             &Expression::Value(Value::Tuple(ref vec)) => vec.into_iter().all(|ast| ast.is_term()),
@@ -262,7 +280,9 @@ impl Display for Value {
                 &Value::Func(ref p, ref te, ref e) => format!("(fn {} -{}-> {})", p, te, e),
                 &Value::Tuple(ref vec) => sequence_to_str("(", vec, ")"),
                 &Value::List(ref vec) => sequence_to_str("[", vec, "]"),
-                &Value::Hook(ref name, ref hook_type) => format!("@hook({} {})", name, hook_type),
+                &Value::Hook(ref name, ref hook_type) => {
+                    format!("@hook({} {})", name.join("."), hook_type)
+                }
             }
         )
     }

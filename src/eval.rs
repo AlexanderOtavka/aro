@@ -259,8 +259,9 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
                 match operation {
                     &BinOp::Call => {
                         if let &Value::Hook(ref name, _) = left {
-                            match name.as_str() {
-                                "list_push" => {
+                            let name_string = name.join(".");
+                            match name.join(".").as_str() {
+                                "std.list.push" => {
                                     if let &Value::Tuple(ref right_vec) = right {
                                         let el = &right_vec[0];
                                         let list = &right_vec[1];
@@ -283,7 +284,7 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
                                         panic!("list_push arg should be tuple.")
                                     }
                                 }
-                                "list_is_empty" => {
+                                "std.list.is_empty" => {
                                     if let &Value::List(ref vec) = right {
                                         Ok(Ast::<Expression>::new(
                                             left_loc,
@@ -294,7 +295,7 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
                                         panic!("list_is_empty arg should be list.")
                                     }
                                 }
-                                "list_head" => {
+                                "std.list.head" => {
                                     if let &Value::List(ref vec) = right {
                                         if vec.is_empty() {
                                             Err(Error::LRLocated {
@@ -312,7 +313,7 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
                                         panic!("list_head arg should be list.")
                                     }
                                 }
-                                "list_tail" => {
+                                "std.list.tail" => {
                                     if let &Value::List(ref vec) = right {
                                         if vec.is_empty() {
                                             Err(Error::LRLocated {
@@ -335,11 +336,11 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
                                         panic!("list_tail arg should be list.")
                                     }
                                 }
-                                _ => Err(Error::LRLocated {
+                                name_string => Err(Error::LRLocated {
                                     message: format!(
                                         "`{}` ain't gonna hook up with your ugly ass.\n\
                                          'Cuz it's not a hook.",
-                                        name
+                                        name_string
                                     ),
                                     left_loc: left_ast.left_loc,
                                     right_loc: left_ast.right_loc,
@@ -753,19 +754,19 @@ mod evaluate_ast {
     fn list_push_hook() {
         assert_eval_eq(
             r#"
-            (1 [2 3]) |> @hook("list_push"  ((Int  [Int..]) -> [Int..]))
+            (1 [2 3]) |> @hook("std.list.push"  ((Int  [Int..]) -> [Int..]))
             "#,
             "[1 2 3]",
         );
         assert_eval_eq(
             r#"
-            (1 []) |> @hook("list_push"  ((Int  [Int..]) -> [Int..]))
+            (1 []) |> @hook("std.list.push"  ((Int  [Int..]) -> [Int..]))
             "#,
             "[1]",
         );
         assert_eval_eq(
             r#"
-            (1.6 [2.1 3.7]) |> @hook("list_push"  ((Float  [Float..]) -> [Float..]))
+            (1.6 [2.1 3.7]) |> @hook("std.list.push"  ((Float  [Float..]) -> [Float..]))
             "#,
             "[1.6 2.1 3.7]",
         );
@@ -775,25 +776,25 @@ mod evaluate_ast {
     fn list_is_empty_hook() {
         assert_eval_eq(
             r#"
-            [1 2 3] |> @hook("list_is_empty"  ([Int..] -> Bool))
+            [1 2 3] |> @hook("std.list.is_empty"  ([Int..] -> Bool))
             "#,
             "#false ()",
         );
         assert_eval_eq(
             r#"
-            [] |> @hook("list_is_empty"  ([Int..] -> Bool))
+            [] |> @hook("std.list.is_empty"  ([Int..] -> Bool))
             "#,
             "#true ()",
         );
         assert_eval_eq(
             r#"
-            [#true() #false()] |> @hook("list_is_empty"  ([Bool..] -> Bool))
+            [#true() #false()] |> @hook("std.list.is_empty"  ([Bool..] -> Bool))
             "#,
             "#false ()",
         );
         assert_eval_eq(
             r#"
-            [] |> @hook("list_is_empty"  ([Float..] -> Bool))
+            [] |> @hook("std.list.is_empty"  ([Float..] -> Bool))
             "#,
             "#true ()",
         );
@@ -803,18 +804,18 @@ mod evaluate_ast {
     fn list_head_hook() {
         assert_eval_eq(
             r#"
-            [1 2 3] |> @hook("list_head"  ([Int..] -> Int))
+            [1 2 3] |> @hook("std.list.head"  ([Int..] -> Int))
             "#,
             "1",
         );
         assert_eval_err(
             r#"
-            [] |> @hook("list_head"  ([Int..] -> Int))
+            [] |> @hook("std.list.head"  ([Int..] -> Int))
             "#,
         );
         assert_eval_eq(
             r#"
-            [#true() #false()] |> @hook("list_head"  ([Bool..] -> Bool))
+            [#true() #false()] |> @hook("std.list.head"  ([Bool..] -> Bool))
             "#,
             "#true ()",
         );
@@ -824,18 +825,18 @@ mod evaluate_ast {
     fn list_tail_hook() {
         assert_eval_eq(
             r#"
-            [1 2 3] |> @hook("list_tail"  ([Int..] -> Int))
+            [1 2 3] |> @hook("std.list.tail"  ([Int..] -> Int))
             "#,
             "[2 3]",
         );
         assert_eval_err(
             r#"
-            [] |> @hook("list_tail"  ([Int..] -> Int))
+            [] |> @hook("std.list.tail"  ([Int..] -> Int))
             "#,
         );
         assert_eval_eq(
             r#"
-            [#true() #false()] |> @hook("list_tail"  ([Bool..] -> Bool))
+            [#true() #false()] |> @hook("std.list.tail"  ([Bool..] -> Bool))
             "#,
             "[#false ()]",
         );

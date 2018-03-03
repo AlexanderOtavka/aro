@@ -56,8 +56,8 @@ Value = {
 
     <l:@L> "[" <e: Expr* > "]" <r:@R> => Ast::<Expression>::new(l, r, Expression::Value(Value::List(e))),
 
-    <l:@L> "@hook" "(" r#"""# <n:Ident> r#"""# <t:Type> ")" <r:@R> =>
-        Ast::<Expression>::new(l, r, Expression::Value(Value::Hook(n, t))),
+    <l:@L> "@hook" "(" <n:r#""([a-z](_?[a-z])*\.)+[a-z](_?[a-z])*""#> <t:Type> ")" <r:@R> =>
+        Ast::<Expression>::new_hook(l, r, n, t),
 
     "(" <Expr> ")",
 };
