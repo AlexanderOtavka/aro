@@ -1,4 +1,4 @@
-if #false() then
-    2 * 1 / 0
-else
-    -10 <| -5
+let x: Int <== 5
+let y: Int <== 0
+
+x / y

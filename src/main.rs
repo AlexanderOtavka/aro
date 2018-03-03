@@ -132,6 +132,75 @@ fn evaluate_file(file_name: &str, small_step: bool) -> Result<String, String> {
     evaluate_source(&input_string, small_step).map_err(|err| err.as_string(&input_string))
 }
 
+#[cfg(test)]
+mod evaluate_file {
+    use super::*;
+
+    #[test]
+    fn basic_expressions() {
+        assert_eq!(
+            evaluate_file("examples/basic_expressions.aro", false).unwrap(),
+            "-5"
+        )
+    }
+
+    #[test]
+    fn eval_error() {
+        assert_eq!(
+            evaluate_file("examples/eval_error.aro", false).unwrap_err(),
+            "Fuck off with your divide-by-zero bullshit.\
+             \n      |\
+             \n    4 | x / y\
+             \n      | ^^^^^"
+        )
+    }
+
+    #[test]
+    fn function_calls() {
+        assert_eq!(
+            evaluate_file("examples/function_calls.aro", false).unwrap(),
+            "2.5"
+        )
+    }
+
+    #[test]
+    fn let_expressions() {
+        assert_eq!(evaluate_file("examples/let.aro", false).unwrap(), "2.5")
+    }
+
+    #[test]
+    fn parse_error() {
+        assert_eq!(
+            evaluate_file("examples/parse_error.aro", false).unwrap_err(),
+            "Bitch, do I look like I speak perl?\
+             \n      |\
+             \n    4 |     -10 & -5\
+             \n      |         ^"
+        )
+    }
+
+    #[test]
+    fn recursion() {
+        assert_eq!(
+            evaluate_file("examples/recursion.aro", false).unwrap(),
+            "120"
+        )
+    }
+
+    #[test]
+    fn right_pipe() {
+        assert_eq!(
+            evaluate_file("examples/right_pipe.aro", false).unwrap(),
+            "7"
+        )
+    }
+
+    #[test]
+    fn tuple() {
+        assert_eq!(evaluate_file("examples/tuple.aro", false).unwrap(), "12.29")
+    }
+}
+
 fn main() {
     let options = clap::App::new("The aro-> Compiler")
         .version("0.4.0")
