@@ -12,6 +12,8 @@ let concat: ([Int..] -> [Int..] -> [Int..]) <==
     first: [Int..] -([Int..] -> [Int..])-> second: [Int..] -[Int..]->
         if first |> is_empty then
             second
+        else if second |> is_empty then
+            first
         else
             push
                 <| (first |> head)
@@ -22,4 +24,5 @@ let empty: [Int..] <== []
 
 some_numbers
     |> concat <| empty
+    |> concat <| []
     |> concat <| [4]

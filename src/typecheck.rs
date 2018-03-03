@@ -170,7 +170,7 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
                 let right_type = typecheck_ast(right, env)?;
 
                 if let Type::Func(ref param_type, ref output_type) = left_type {
-                    if right_type != *param_type.expr {
+                    if !param_type.expr.is_sub_type(&right_type) {
                         Err(Error::type_error(
                             right.left_loc,
                             right.right_loc,
