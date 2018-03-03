@@ -244,7 +244,7 @@ fn handle_hook_call(
                     panic!("Second tuple arg should be list.")
                 }
             } else {
-                panic!("list_push arg should be tuple.")
+                panic!("list.push arg should be tuple.")
             }
         }
         "std.list.is_empty" => {
@@ -255,7 +255,7 @@ fn handle_hook_call(
                     Expression::Value(Value::Bool(vec.is_empty())),
                 ))
             } else {
-                panic!("list_is_empty arg should be list.")
+                panic!("list.is_empty arg should be list.")
             }
         }
         "std.list.head" => {
@@ -273,7 +273,7 @@ fn handle_hook_call(
                     Ok(vec[0].clone())
                 }
             } else {
-                panic!("list_head arg should be list.")
+                panic!("list.head arg should be list.")
             }
         }
         "std.list.tail" => {
@@ -292,7 +292,7 @@ fn handle_hook_call(
                     ))
                 }
             } else {
-                panic!("list_tail arg should be list.")
+                panic!("list.tail arg should be list.")
             }
         }
         _ => {
