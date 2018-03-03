@@ -19,14 +19,29 @@ use std::io::prelude::*;
 use std::process::exit;
 use std::collections::HashMap;
 use util::Error;
+use ast::{Type, Value};
+use std::f64;
 
 fn evaluate_source(input: &str, small_step: bool) -> Result<String, Error> {
     let ast = parse::source_to_ast(input)?;
 
-    typecheck::typecheck_ast(&ast, &HashMap::new())?;
+    let mut globals = HashMap::new();
+    globals.insert(
+        String::from("inf"),
+        (Value::Float(f64::INFINITY), Type::Float),
+    );
+    globals.insert(String::from("nan"), (Value::Float(f64::NAN), Type::Float));
+
+    typecheck::typecheck_ast(
+        &ast,
+        &globals
+            .iter()
+            .map(|(name, &(_, ref value_type))| (name.clone(), value_type.clone()))
+            .collect(),
+    )?;
 
     if small_step {
-        let steps = eval::get_eval_steps(&ast)?;
+        let steps = eval::get_eval_steps(&ast, &globals)?;
 
         let mut output = String::new();
         for step in &steps[0..(steps.len() - 1)] {
@@ -37,7 +52,7 @@ fn evaluate_source(input: &str, small_step: bool) -> Result<String, Error> {
 
         Ok(output)
     } else {
-        let value = eval::evaluate_ast(&ast)?;
+        let value = eval::evaluate_ast(&ast, &globals)?;
 
         Ok(format!("{}", value))
     }
@@ -53,6 +68,12 @@ mod evaluate_source {
         assert_eq!(evaluate_source("-51", false).unwrap(), "-51");
         assert_eq!(evaluate_source("#false ()", false).unwrap(), "#false ()");
         assert_eq!(evaluate_source("#true ()", false).unwrap(), "#true ()");
+    }
+
+    #[test]
+    fn spits_out_inf_and_nan() {
+        assert_eq!(evaluate_source("inf", false).unwrap(), "inf");
+        assert_eq!(evaluate_source("nan", false).unwrap(), "nan");
     }
 
     #[test]

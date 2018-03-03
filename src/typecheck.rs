@@ -242,10 +242,17 @@ mod typecheck_ast {
     }
 
     #[test]
-    #[ignore]
     fn checks_global_identifiers() {
-        assert_typecheck_eq("inf", "Float");
-        assert_typecheck_eq("nan", "Float");
+        let mut globals = HashMap::new();
+        globals.insert(String::from("global_val"), Type::Int);
+
+        assert_eq!(
+            format!(
+                "{}",
+                typecheck_ast(&source_to_ast("global_val").unwrap(), &globals).unwrap()
+            ),
+            "Int"
+        );
     }
 
     #[test]

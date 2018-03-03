@@ -391,29 +391,21 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
     }
 }
 
-pub fn get_eval_steps(ast: &Ast<Expression>) -> Result<Vec<Ast<Expression>>, Error> {
+pub fn get_eval_steps(
+    ast: &Ast<Expression>,
+    globals: &HashMap<String, (Value, Type)>,
+) -> Result<Vec<Ast<Expression>>, Error> {
     let mut ast = ast.clone();
 
-    let mut globals = HashMap::new();
-    globals.insert("inf", Value::Float(f64::INFINITY));
-    globals.insert("nan", Value::Float(f64::NAN));
-
-    for (name, value) in globals {
+    for (name, &(ref value, _)) in globals {
         ast = substitute(
             &ast,
             &Ast::<Pattern>::new(
                 0,
                 0,
-                Pattern::Ident(
-                    String::from(name),
-                    Ast::<Type>::new(0, 0, Type::Tuple(vec![])),
-                ),
+                Pattern::Ident(name.clone(), Ast::<Type>::new(0, 0, Type::Tuple(vec![]))),
             ),
-            &Ast {
-                expr: Box::new(Expression::Value(value.clone())),
-                left_loc: 0,
-                right_loc: 0,
-            },
+            &Ast::<Expression>::new(0, 0, Expression::Value(value.clone())),
         );
     }
 
@@ -434,8 +426,11 @@ pub fn get_eval_steps(ast: &Ast<Expression>) -> Result<Vec<Ast<Expression>>, Err
     }
 }
 
-pub fn evaluate_ast(ast: &Ast<Expression>) -> Result<Value, Error> {
-    let steps = get_eval_steps(ast)?;
+pub fn evaluate_ast(
+    ast: &Ast<Expression>,
+    globals: &HashMap<String, (Value, Type)>,
+) -> Result<Value, Error> {
+    let steps = get_eval_steps(ast, globals)?;
     if let &Expression::Value(ref value) = &*steps[steps.len() - 1].expr {
         Ok(value.clone())
     } else {
@@ -450,13 +445,16 @@ mod evaluate_ast {
 
     fn assert_eval_eq(actual: &str, expected: &str) {
         assert_eq!(
-            format!("{}", evaluate_ast(&source_to_ast(actual).unwrap()).unwrap()),
+            format!(
+                "{}",
+                evaluate_ast(&source_to_ast(actual).unwrap(), &HashMap::new()).unwrap()
+            ),
             expected
         );
     }
 
     fn assert_eval_err(source: &str) {
-        assert!(evaluate_ast(&source_to_ast(source).unwrap()).is_err());
+        assert!(evaluate_ast(&source_to_ast(source).unwrap(), &HashMap::new()).is_err());
     }
 
     #[test]
@@ -485,13 +483,17 @@ mod evaluate_ast {
     }
 
     #[test]
-    fn spits_back_out_nan() {
-        assert_eval_eq("nan", "nan");
-    }
+    fn spits_back_out_globals() {
+        let mut globals = HashMap::new();
+        globals.insert(String::from("global_val"), (Value::Int(5), Type::Int));
 
-    #[test]
-    fn spits_back_out_inf() {
-        assert_eval_eq("inf", "inf");
+        assert_eq!(
+            format!(
+                "{}",
+                evaluate_ast(&source_to_ast("global_val").unwrap(), &globals).unwrap()
+            ),
+            "5"
+        );
     }
 
     #[test]
