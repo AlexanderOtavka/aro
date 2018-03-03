@@ -218,6 +218,89 @@ fn substitute(
     }
 }
 
+fn handle_hook_call(
+    path: &Vec<String>,
+    left_loc: usize,
+    right_loc: usize,
+    param_ast: &Ast<Expression>,
+    param_value: &Value,
+) -> Option<Result<Ast<Expression>, Error>> {
+    Some(match path.join(".").as_str() {
+        "std.list.push" => {
+            if let &Value::Tuple(ref right_vec) = param_value {
+                let el = &right_vec[0];
+                let list = &right_vec[1];
+
+                if let &Expression::Value(Value::List(ref vec)) = &*list.expr {
+                    let mut list = vec.clone();
+                    list.insert(0, el.clone());
+
+                    Ok(Ast::<Expression>::new(
+                        left_loc,
+                        right_loc,
+                        Expression::Value(Value::List(list)),
+                    ))
+                } else {
+                    panic!("Second tuple arg should be list.")
+                }
+            } else {
+                panic!("list_push arg should be tuple.")
+            }
+        }
+        "std.list.is_empty" => {
+            if let &Value::List(ref vec) = param_value {
+                Ok(Ast::<Expression>::new(
+                    left_loc,
+                    right_loc,
+                    Expression::Value(Value::Bool(vec.is_empty())),
+                ))
+            } else {
+                panic!("list_is_empty arg should be list.")
+            }
+        }
+        "std.list.head" => {
+            if let &Value::List(ref vec) = param_value {
+                if vec.is_empty() {
+                    Err(Error::LRLocated {
+                        message: String::from(
+                            "As always, you can't get head.\n\
+                             Especially not from an empty list.",
+                        ),
+                        left_loc: param_ast.left_loc,
+                        right_loc: param_ast.right_loc,
+                    })
+                } else {
+                    Ok(vec[0].clone())
+                }
+            } else {
+                panic!("list_head arg should be list.")
+            }
+        }
+        "std.list.tail" => {
+            if let &Value::List(ref vec) = param_value {
+                if vec.is_empty() {
+                    Err(Error::LRLocated {
+                        message: String::from("There's no tail on that list."),
+                        left_loc: param_ast.left_loc,
+                        right_loc: param_ast.right_loc,
+                    })
+                } else {
+                    Ok(Ast::<Expression>::new(
+                        left_loc,
+                        right_loc,
+                        Expression::Value(Value::List(Vec::from(&vec[1..]))),
+                    ))
+                }
+            } else {
+                panic!("list_tail arg should be list.")
+            }
+        }
+        _ => {
+            return None;
+        }
+    })
+}
+
 fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
     let left_loc = ast.left_loc;
     let right_loc = ast.right_loc;
@@ -258,88 +341,14 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
             {
                 match operation {
                     &BinOp::Call => {
-                        if let &Value::Hook(ref name, _) = left {
-                            match name.join(".").as_str() {
-                                "std.list.push" => {
-                                    if let &Value::Tuple(ref right_vec) = right {
-                                        let el = &right_vec[0];
-                                        let list = &right_vec[1];
-
-                                        if let &Expression::Value(Value::List(ref vec)) =
-                                            &*list.expr
-                                        {
-                                            let mut list = vec.clone();
-                                            list.insert(0, el.clone());
-
-                                            Ok(Ast::<Expression>::new(
-                                                left_loc,
-                                                right_loc,
-                                                Expression::Value(Value::List(list)),
-                                            ))
-                                        } else {
-                                            panic!("Second tuple arg should be list.")
-                                        }
-                                    } else {
-                                        panic!("list_push arg should be tuple.")
-                                    }
-                                }
-                                "std.list.is_empty" => {
-                                    if let &Value::List(ref vec) = right {
-                                        Ok(Ast::<Expression>::new(
-                                            left_loc,
-                                            right_loc,
-                                            Expression::Value(Value::Bool(vec.is_empty())),
-                                        ))
-                                    } else {
-                                        panic!("list_is_empty arg should be list.")
-                                    }
-                                }
-                                "std.list.head" => {
-                                    if let &Value::List(ref vec) = right {
-                                        if vec.is_empty() {
-                                            Err(Error::LRLocated {
-                                                message: String::from(
-                                                    "As always, you can't get head.\n\
-                                                     Especially not from an empty list.",
-                                                ),
-                                                left_loc: right_ast.left_loc,
-                                                right_loc: right_ast.right_loc,
-                                            })
-                                        } else {
-                                            Ok(vec[0].clone())
-                                        }
-                                    } else {
-                                        panic!("list_head arg should be list.")
-                                    }
-                                }
-                                "std.list.tail" => {
-                                    if let &Value::List(ref vec) = right {
-                                        if vec.is_empty() {
-                                            Err(Error::LRLocated {
-                                                message: String::from(
-                                                    "There's no tail on that list.",
-                                                ),
-                                                left_loc: right_ast.left_loc,
-                                                right_loc: right_ast.right_loc,
-                                            })
-                                        } else {
-                                            Ok(Ast::<Expression>::new(
-                                                left_loc,
-                                                right_loc,
-                                                Expression::Value(Value::List(Vec::from(
-                                                    &vec[1..],
-                                                ))),
-                                            ))
-                                        }
-                                    } else {
-                                        panic!("list_tail arg should be list.")
-                                    }
-                                }
-                                name_string => Err(Error::LRLocated {
+                        if let &Value::Hook(ref path, _) = left {
+                            match handle_hook_call(path, left_loc, right_loc, right_ast, right) {
+                                Some(result) => result,
+                                None => Err(Error::LRLocated {
                                     message: format!(
                                         "`{}` ain't gonna hook up with your ugly ass.\n\
                                          'Cuz it's not a hook.",
-                                        name_string
+                                        path.join(".")
                                     ),
                                     left_loc: left_ast.left_loc,
                                     right_loc: left_ast.right_loc,
