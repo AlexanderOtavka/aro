@@ -1,3 +1,9 @@
 {
-  "rust-client.channel": "beta"
+  "rust-client.channel": "beta",
+  "cSpell.words": [
+    "concat",
+    "lalrpop",
+    "lexes",
+    "oooh"
+  ]
 }
