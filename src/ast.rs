@@ -1,6 +1,7 @@
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::f64;
+use std::iter::Iterator;
 
 #[derive(Debug, Clone)]
 pub struct Ast<T> {
@@ -35,6 +36,7 @@ pub enum Value {
     Bool(bool),
     Func(Ast<Pattern>, Ast<Type>, Ast<Expression>),
     Tuple(Vec<Ast<Expression>>),
+    List(Vec<Ast<Expression>>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -48,8 +50,10 @@ pub enum Type {
     Int,
     Float,
     Bool,
+    Empty,
     Func(Ast<Type>, Ast<Type>),
     Tuple(Vec<Ast<Type>>),
+    List(Ast<Type>),
 }
 
 impl<T> Ast<T> {
@@ -72,6 +76,110 @@ impl Ast<Expression> {
     }
 }
 
+impl Type {
+    pub fn is_sub_type(&self, other: &Type) -> bool {
+        match (self, other) {
+            (_, &Type::Empty)
+            | (&Type::Bool, &Type::Bool)
+            | (&Type::Int, &Type::Int)
+            | (&Type::Float, &Type::Float) => true,
+            (&Type::Func(ref self_in, ref self_out), &Type::Func(ref other_in, ref other_out)) => {
+                self_out.is_sub_type(other_out) && other_in.is_sub_type(self_in)
+            }
+            (&Type::Tuple(ref self_vec), &Type::Tuple(ref other_vec)) => {
+                self_vec.len() == other_vec.len()
+                    && Iterator::zip(self_vec.into_iter(), other_vec.into_iter())
+                        .all(|(self_el, other_el)| self_el.is_sub_type(other_el))
+            }
+            (&Type::List(ref self_el), &Type::List(ref other_el)) => self_el.is_sub_type(other_el),
+            _ => false,
+        }
+    }
+}
+
+impl Ast<Type> {
+    pub fn is_sub_type(&self, other: &Ast<Type>) -> bool {
+        self.expr.is_sub_type(&other.expr)
+    }
+}
+
+#[cfg(test)]
+mod is_sub_type {
+    use super::*;
+
+    fn ast(t: Type) -> Ast<Type> {
+        Ast::<Type>::new(0, 0, t)
+    }
+
+    #[test]
+    fn same_type() {
+        // let x: [] <== []
+        //   same ^^     ^^ same
+        // Empty.is_sub_type(Empty) = true  -- so this typechecks (if [] were allowed)
+        assert!(ast(Type::Empty).is_sub_type(&ast(Type::Empty)));
+
+        assert!(ast(Type::Int).is_sub_type(&ast(Type::Int)));
+        assert!(ast(Type::Bool).is_sub_type(&ast(Type::Bool)));
+        assert!(ast(Type::Float).is_sub_type(&ast(Type::Float)));
+
+        assert!(Type::Int.is_sub_type(&Type::Int));
+    }
+
+    #[test]
+    fn empty() {
+        // let x: [Int..] <== []
+        //    sub ^^^^^^^     ^^ supertype
+        // Int.is_sub_type(Empty) = true  -- so this typechecks
+        assert!(ast(Type::Int).is_sub_type(&ast(Type::Empty)));
+
+        // let x: [] <== [5]
+        //  super ^^     ^^^ subtype
+        // Empty.is_sub_type(Int) = false  -- so this does not typecheck
+        assert!(!ast(Type::Empty).is_sub_type(&ast(Type::Int)));
+    }
+
+    //
+    // The general form is:
+    // declared.is_sub_type(value) <=> it typechecks
+    //
+
+    // It's wierder with functions:
+    #[test]
+    fn with_functions() {
+        // let x: (Int -> [Int..]) <== x: Int -[]-> []
+        //    sub ^^^^^^^^^^^^^^^^     ^^^^^^^^^^^^^^^ super
+        // (Int -> [Int..]).is_sub_type(Int -> []) = true  -- so this typechecks
+        // because:
+        //   self_out.is_sub_type(other_out)
+        //   <=> [Int..].is_sub_type([])
+        //   <=> Int.is_sub_type(Empty)
+        assert!(
+            ast(Type::Func(ast(Type::Int), ast(Type::Int)))
+                .is_sub_type(&ast(Type::Func(ast(Type::Int), ast(Type::Empty))))
+        );
+
+        // Reverse them, and it's false
+        assert!(!ast(Type::Func(ast(Type::Int), ast(Type::Empty)))
+            .is_sub_type(&ast(Type::Func(ast(Type::Int), ast(Type::Int)))));
+
+        // let x: ([] -> Int) <== x: [Int..] -Int-> 1
+        //    sub ^^^^^^^^^^^     ^^^^^^^^^^^^^^^^^^^ super
+        // ([] -> Int).is_sub_type([Int..] -> Int) = true  -- so this typechecks
+        // because:
+        //   other_in.is_sub_type(self_in)
+        //   <=> [Int..].is_sub_type([])
+        //   <=> Int.is_sub_type(Empty)
+        assert!(
+            ast(Type::Func(ast(Type::Empty), ast(Type::Int)))
+                .is_sub_type(&ast(Type::Func(ast(Type::Int), ast(Type::Int))))
+        );
+
+        // Again, reverse them, and it's false
+        assert!(!ast(Type::Func(ast(Type::Int), ast(Type::Int)))
+            .is_sub_type(&ast(Type::Func(ast(Type::Empty), ast(Type::Int)))));
+    }
+}
+
 impl Ast<Pattern> {
     pub fn contains_name(&self, name: &str) -> bool {
         match &*self.expr {
@@ -85,6 +193,20 @@ impl<T: PartialEq> PartialEq for Ast<T> {
     fn eq(&self, other: &Ast<T>) -> bool {
         self.expr == other.expr
     }
+}
+
+fn sequence_to_str<T: Display>(start: &str, sequence: &Vec<T>, end: &str) -> String {
+    let mut string = String::new();
+
+    if sequence.len() >= 1 {
+        string += &format!("{}", sequence[0]);
+
+        for element in &sequence[1..] {
+            string += &format!(" {}", element);
+        }
+    }
+
+    format!("{}{}{}", start, string, end)
 }
 
 impl<T: Display> Display for Ast<T> {
@@ -137,22 +259,8 @@ impl Display for Value {
                 &Value::Bool(true) => String::from("#true ()"),
                 &Value::Bool(false) => String::from("#false ()"),
                 &Value::Func(ref p, ref te, ref e) => format!("(fn {} -{}-> {})", p, te, e),
-                &Value::Tuple(ref vec) => {
-                    let mut string = String::new();
-                    string += "(";
-
-                    if vec.len() >= 1 {
-                        string += &format!("{}", vec[0]);
-
-                        for element in &vec[1..] {
-                            string += &format!(" {}", element);
-                        }
-                    }
-
-                    string += ")";
-
-                    string
-                }
+                &Value::Tuple(ref vec) => sequence_to_str("(", vec, ")"),
+                &Value::List(ref vec) => sequence_to_str("[", vec, "]"),
             }
         )
     }
@@ -167,22 +275,7 @@ impl Display for Pattern {
                 &Pattern::Ident(ref name, ref type_annotation) => {
                     format!("{}: {}", name, type_annotation)
                 }
-                &Pattern::Tuple(ref vec) => {
-                    let mut string = String::new();
-                    string += "(";
-
-                    if vec.len() >= 1 {
-                        string += &format!("{}", vec[0]);
-
-                        for element in &vec[1..] {
-                            string += &format!(" {}", element);
-                        }
-                    }
-
-                    string += ")";
-
-                    string
-                }
+                &Pattern::Tuple(ref vec) => sequence_to_str("(", vec, ")"),
             }
         )
     }
@@ -197,23 +290,10 @@ impl Display for Type {
                 &Type::Int => String::from("Int"),
                 &Type::Float => String::from("Float"),
                 &Type::Bool => String::from("Bool"),
+                &Type::Empty => String::from("Empty"),
                 &Type::Func(ref input, ref output) => format!("({} -> {})", input, output),
-                &Type::Tuple(ref vec) => {
-                    let mut string = String::new();
-                    string += "(";
-
-                    if vec.len() >= 1 {
-                        string += &format!("{}", vec[0]);
-
-                        for element in &vec[1..] {
-                            string += &format!(" {}", element);
-                        }
-                    }
-
-                    string += ")";
-
-                    string
-                }
+                &Type::Tuple(ref vec) => sequence_to_str("(", vec, ")"),
+                &Type::List(ref element_type) => format!("[{}..]", element_type),
             }
         )
     }

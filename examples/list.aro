@@ -1,0 +1,4 @@
+let list: [Int..] <== [1 2 3]
+let empty: [Int..] <== []
+
+empty

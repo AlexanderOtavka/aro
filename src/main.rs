@@ -169,6 +169,11 @@ mod evaluate_file {
     }
 
     #[test]
+    fn list() {
+        assert_eq!(evaluate_file("examples/list.aro", false).unwrap(), "[]")
+    }
+
+    #[test]
     fn parse_error() {
         assert_eq!(
             evaluate_file("examples/parse_error.aro", false).unwrap_err(),

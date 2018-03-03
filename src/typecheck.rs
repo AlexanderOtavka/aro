@@ -64,12 +64,36 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
 
                 type_vec
             })),
+            &Value::List(ref vec) => Ok(Type::List(Ast::<Type>::new(left_loc, right_loc, {
+                if vec.is_empty() {
+                    Type::Empty
+                } else {
+                    let mut inferred_type = typecheck_ast(&vec[0], env)?;
+
+                    for item in &vec[1..] {
+                        let next_type = typecheck_ast(item, env)?;
+
+                        if next_type != inferred_type {
+                            return Err(Error::type_error(
+                                item.left_loc,
+                                item.right_loc,
+                                &inferred_type,
+                                &next_type,
+                            ));
+                        }
+
+                        inferred_type = next_type;
+                    }
+
+                    inferred_type
+                }
+            }))),
             &Value::Func(ref pattern, ref body_type, ref body) => {
                 let mut body_env = env.clone();
                 build_env(&mut body_env, pattern);
 
                 let actual_body_type = typecheck_ast(body, &body_env)?;
-                if *body_type.expr != actual_body_type {
+                if !body_type.expr.is_sub_type(&actual_body_type) {
                     Err(Error::type_error(
                         body.left_loc,
                         body.right_loc,
@@ -128,7 +152,7 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
             let declared_value_type = *Ast::<Type>::from_pattern(pattern).expr;
             let actual_value_type = typecheck_ast(value, &body_env)?;
 
-            if actual_value_type != declared_value_type {
+            if !declared_value_type.is_sub_type(&actual_value_type) {
                 Err(Error::type_error(
                     value.left_loc,
                     value.right_loc,

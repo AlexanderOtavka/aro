@@ -360,6 +360,7 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
             }),
         },
         &Expression::Let(ref bind_pattern, ref bind_value, ref body) => if bind_value.is_term() {
+            // TODO: improve error message when doing non-function recursion
             Ok(substitute(
                 body,
                 bind_pattern,
