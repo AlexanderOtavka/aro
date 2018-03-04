@@ -17,6 +17,7 @@ pub enum Expression {
     If(Ast<Expression>, Ast<Expression>, Ast<Expression>),
     Ident(String),
     Let(Ast<Pattern>, Ast<Expression>, Ast<Expression>),
+    GenericFunc(String, Ast<Expression>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -52,6 +53,8 @@ pub enum Type {
     Float,
     Bool,
     Empty,
+    Generic(String),
+    Ident(String),
     Func(Ast<Type>, Ast<Type>),
     Tuple(Vec<Ast<Type>>),
     List(Ast<Type>),
@@ -255,6 +258,7 @@ impl Display for Expression {
             &Expression::If(ref c, ref t, ref e) => write!(f, "(if {} then {} else {})", c, t, e),
             &Expression::Ident(ref n) => write!(f, "({})", n),
             &Expression::Let(ref p, ref v, ref e) => write!(f, "(let {} <== {} {})", p, v, e),
+            &Expression::GenericFunc(ref n, ref e) => write!(f, "({} -> {})", n, e),
         }
     }
 }
@@ -313,6 +317,7 @@ impl Display for Type {
                 &Type::Float => String::from("Float"),
                 &Type::Bool => String::from("Bool"),
                 &Type::Empty => String::from("Empty"),
+                &Type::Ident(ref name) | &Type::Generic(ref name) => format!("({})", name),
                 &Type::Func(ref input, ref output) => format!("({} -> {})", input, output),
                 &Type::Tuple(ref vec) => sequence_to_str("(", vec, ")"),
                 &Type::List(ref element_type) => format!("[{}..]", element_type),

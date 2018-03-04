@@ -47,6 +47,11 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
     let right_loc = ast.right_loc;
 
     match &*ast.expr {
+        &Expression::GenericFunc(ref type_name, ref body) => {
+            let mut env = env.clone();
+            env.insert(type_name.clone(), Type::Generic(type_name.clone()));
+            typecheck_ast(body, &env)
+        }
         &Expression::Value(ref value) => match value {
             &Value::Hook(_, ref hook_type) => Ok(*hook_type.expr.clone()),
             &Value::Int(_) => Ok(Type::Int),
@@ -285,26 +290,33 @@ mod typecheck_ast {
         assert_typecheck_eq("1 + 2", "Int");
         assert_typecheck_eq("-1.0 / -2", "Float");
         assert_typecheck_eq("1.0 * 2.0", "Float");
+        assert_typecheck_err("1.0 + #true()");
+        assert_typecheck_err("#true() + #true()");
     }
 
     #[test]
     fn checks_nested_arithmatic() {
         assert_typecheck_eq("1 + (2 * 3)", "Int");
+        assert_typecheck_err("1 + (#false() * 3)");
+        assert_typecheck_err("#true() + (#false() * #true())");
     }
 
     #[test]
     fn checks_leq() {
         assert_typecheck_eq("3 <= 2", "Bool");
+        assert_typecheck_eq("3.1 <= 2", "Bool");
+        assert_typecheck_eq("3.1 <= 2.3", "Bool");
+        assert_typecheck_eq("3 <= 2.3", "Bool");
+        assert_typecheck_err("#false() <= #true()");
+        assert_typecheck_err("#false() <= 3");
     }
 
     #[test]
     fn checks_an_if() {
         assert_typecheck_eq("if 1 <= 1 then 1 else 2", "Int");
-    }
-
-    #[test]
-    fn requires_a_bool_if_guard() {
+        assert_typecheck_eq("if #false() then 1.1 else 2.0", "Float");
         assert_typecheck_err("if 1 then 2 else 3");
+        assert_typecheck_err("if #false() then 2.1 else 3");
     }
 
     #[test]
@@ -312,6 +324,18 @@ mod typecheck_ast {
         assert_typecheck_eq(
             "(inc: (Int -> Int) -Int-> inc <| 5) <| (x: Int -Int-> x + 1)",
             "Int",
+        );
+        assert_typecheck_eq(
+            "(inc: (Int -> Float) -Float-> inc <| 5) <| (x: Int -Float-> x + 1.0)",
+            "Float",
+        );
+        assert_typecheck_err("(inc: (Int -> Float) -Int-> inc <| 5) <| (x: Int -Int-> x + 1)");
+        assert_typecheck_err("(inc: (Int -> Float) -Float-> inc <| 5) <| (x: Int -Int-> x + 1)");
+        assert_typecheck_err(
+            "(inc: (Float -> Float) -Float-> inc <| 5) <| (x: Float -Float-> x + 1)",
+        );
+        assert_typecheck_err(
+            "(inc: (Float -> Float) -Int-> inc <| 5) <| (x: Float -Float-> x + 1)",
         );
     }
 

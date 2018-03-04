@@ -156,6 +156,11 @@ mod source_to_ast {
     }
 
     #[test]
+    fn spits_out_type_identifiers() {
+        assert_parse_eq(source_to_ast("a: Foo -Int-> 5"), "(fn a: (Foo) -Int-> 5)");
+    }
+
+    #[test]
     fn makes_an_if_tree() {
         assert_parse_eq(
             source_to_ast("if #true () then 2 else 5"),
