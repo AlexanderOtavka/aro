@@ -1,7 +1,7 @@
-let divide: (Int -> Float -> Float) <==
+let divide_by: (Int -> Float -> Float) <==
     a: Int -(Float -> Float)-> b: Float -Float-> a / b
 
 let x: Int <== 5
 let y: Float <== x - 3.0
 
-x |> divide <| y
+x |> divide_by <| y
