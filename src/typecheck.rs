@@ -153,7 +153,7 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
             let declared_value_type = *Ast::<Type>::from_pattern(pattern).expr;
             let actual_value_type = typecheck_ast(value, &body_env)?;
 
-            if !declared_value_type.is_sub_type(&actual_value_type) {
+            if !actual_value_type.is_sub_type(&declared_value_type) {
                 Err(Error::type_error(
                     value.left_loc,
                     value.right_loc,
@@ -170,7 +170,7 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
                 let right_type = typecheck_ast(right, env)?;
 
                 if let Type::Func(ref param_type, ref output_type) = left_type {
-                    if !param_type.expr.is_sub_type(&right_type) {
+                    if !right_type.is_sub_type(&param_type.expr) {
                         Err(Error::type_error(
                             right.left_loc,
                             right.right_loc,
@@ -336,6 +336,18 @@ mod typecheck_ast {
             ",
             "Int",
         );
+    }
+
+    #[test]
+    fn checks_list_subtype_assignments() {
+        assert_typecheck_eq(
+            "
+            let x: [Int..] <== []
+            x
+            ",
+            "[Int..]",
+        );
+        assert_typecheck_eq("[] |> (x: [Int..] -[Int..]-> x)", "[Int..]");
     }
 
     #[test]
