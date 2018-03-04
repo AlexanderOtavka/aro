@@ -101,7 +101,7 @@ impl Ast<Expression> {
 impl Type {
     pub fn is_sub_type(&self, other: &Type) -> bool {
         match (self, other) {
-            (_, &Type::Empty)
+            (&Type::Empty, _)
             | (&Type::Bool, &Type::Bool)
             | (&Type::Int, &Type::Int)
             | (&Type::Float, &Type::Float) => true,
@@ -149,56 +149,57 @@ mod is_sub_type {
 
     #[test]
     fn empty() {
+        // An empty list IS A list of integers.  Thus, Empty is subtype of Int
         // let x: [Int..] <== []
-        //    sub ^^^^^^^     ^^ supertype
-        // Int.is_sub_type(Empty) = true  -- so this typechecks
-        assert!(ast(Type::Int).is_sub_type(&ast(Type::Empty)));
+        //  super ^^^^^^^     ^^ subtype
+        // Empty.is_sub_type(Int) = true  -- so this typechecks
+        assert!(ast(Type::Empty).is_sub_type(&ast(Type::Int)));
 
         // let x: [] <== [5]
-        //  super ^^     ^^^ subtype
-        // Empty.is_sub_type(Int) = false  -- so this does not typecheck
-        assert!(!ast(Type::Empty).is_sub_type(&ast(Type::Int)));
+        //    sub ^^     ^^^ supertype
+        // Int.is_sub_type(Empty) = false  -- so this does not typecheck
+        assert!(!ast(Type::Int).is_sub_type(&ast(Type::Empty)));
     }
 
     //
     // The general form is:
-    // declared.is_sub_type(value) <=> it typechecks
+    // value.is_sub_type(declared) <=> it typechecks
     //
 
     // It's wierder with functions:
     #[test]
     fn with_functions() {
         // let x: (Int -> [Int..]) <== x: Int -[]-> []
-        //    sub ^^^^^^^^^^^^^^^^     ^^^^^^^^^^^^^^^ super
-        // (Int -> [Int..]).is_sub_type(Int -> []) = true  -- so this typechecks
+        //  super ^^^^^^^^^^^^^^^^     ^^^^^^^^^^^^^^^ subtype
+        // (Int -> []).is_sub_type(Int -> [Int..]) = true  -- so this typechecks
         // because:
-        //   self_out.is_sub_type(other_out)
-        //   <=> [Int..].is_sub_type([])
-        //   <=> Int.is_sub_type(Empty)
+        //   value_out.is_sub_type(delcared_out)
+        //   <=> [].is_sub_type([Int..])
+        //   <=> Empty.is_sub_type(Int)
         assert!(
-            ast(Type::Func(ast(Type::Int), ast(Type::Int)))
-                .is_sub_type(&ast(Type::Func(ast(Type::Int), ast(Type::Empty))))
-        );
-
-        // Reverse them, and it's false
-        assert!(!ast(Type::Func(ast(Type::Int), ast(Type::Empty)))
-            .is_sub_type(&ast(Type::Func(ast(Type::Int), ast(Type::Int)))));
-
-        // let x: ([] -> Int) <== x: [Int..] -Int-> 1
-        //    sub ^^^^^^^^^^^     ^^^^^^^^^^^^^^^^^^^ super
-        // ([] -> Int).is_sub_type([Int..] -> Int) = true  -- so this typechecks
-        // because:
-        //   other_in.is_sub_type(self_in)
-        //   <=> [Int..].is_sub_type([])
-        //   <=> Int.is_sub_type(Empty)
-        assert!(
-            ast(Type::Func(ast(Type::Empty), ast(Type::Int)))
+            ast(Type::Func(ast(Type::Int), ast(Type::Empty)))
                 .is_sub_type(&ast(Type::Func(ast(Type::Int), ast(Type::Int))))
         );
 
-        // Again, reverse them, and it's false
+        // Reverse them, and it's false
         assert!(!ast(Type::Func(ast(Type::Int), ast(Type::Int)))
-            .is_sub_type(&ast(Type::Func(ast(Type::Empty), ast(Type::Int)))));
+            .is_sub_type(&ast(Type::Func(ast(Type::Int), ast(Type::Empty)))));
+
+        // let x: ([] -> Int) <== x: [Int..] -Int-> 1
+        //  super ^^^^^^^^^^^     ^^^^^^^^^^^^^^^^^^^ subtype
+        // ([Int..] -> Int).is_sub_type([] -> Int) = true  -- so this typechecks
+        // because:
+        //   declared_in.is_sub_type(value_in)
+        //   <=> [].is_sub_type([Int..])
+        //   <=> Empty.is_sub_type(Int)
+        assert!(
+            ast(Type::Func(ast(Type::Int), ast(Type::Int)))
+                .is_sub_type(&ast(Type::Func(ast(Type::Empty), ast(Type::Int))))
+        );
+
+        // Again, reverse them, and it's false
+        assert!(!ast(Type::Func(ast(Type::Empty), ast(Type::Int)))
+            .is_sub_type(&ast(Type::Func(ast(Type::Int), ast(Type::Int)))));
     }
 }
 
