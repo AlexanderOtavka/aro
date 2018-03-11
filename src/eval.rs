@@ -151,7 +151,7 @@ fn substitute(
             substituted_ast
         }
         &Pattern::Ident(ref name, _) => match &*ast.expr {
-            &Expression::GenericFunc(_, ref body) => substitute(body, pattern, value),
+            &Expression::GenericCall(ref expr, _) => substitute(expr, pattern, value),
             &Expression::Ident(ref ident_name) => {
                 if ident_name == name {
                     value.clone()
@@ -205,6 +205,9 @@ fn substitute(
                 left_loc: ast.left_loc,
                 right_loc: ast.right_loc,
             },
+            &Expression::Value(Value::GenericFunc(_, _, _, ref body)) => {
+                substitute(body, pattern, value)
+            }
             &Expression::Value(Value::Tuple(ref vec)) => Ast::<Expression>::new(
                 ast.left_loc,
                 ast.right_loc,
@@ -307,7 +310,8 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
     let right_loc = ast.right_loc;
 
     match &*ast.expr {
-        &Expression::GenericFunc(_, ref body) => Ok(body.clone()),
+        &Expression::Value(Value::GenericFunc(_, _, _, ref body)) => Ok(body.clone()),
+        &Expression::GenericCall(ref expr, _) => Ok(expr.clone()),
         &Expression::Value(Value::Tuple(ref vec)) => {
             let mut stepped_tup = Vec::new();
 

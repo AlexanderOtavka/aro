@@ -1,0 +1,4 @@
+let three_el_list: (El: Any -> El -> [El..]) <==
+    T: Any -(T -> [T..])-> el: T -[T..]-> [el el el]
+
+three_el_list <| type Int <| 5

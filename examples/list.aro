@@ -1,28 +1,30 @@
-let push: (Int -> [Int..] -> [Int..]) <==
-    el: Int -([Int..] -> [Int..])-> list: [Int..] -[Int..]->
-        (el list) |> @hook("std.list.push"  ((Int  [Int..]) -> [Int..]))
-let is_empty: ([Int..] -> Bool) <==
-    @hook("std.list.is_empty" ([Int..] -> Bool))
-let head: ([Int..] -> Int) <==
-    @hook("std.list.head" ([Int..] -> Int))
-let tail: ([Int..] -> [Int..]) <==
-    @hook("std.list.tail" ([Int..] -> [Int..]))
+let push: (T: Any -> T -> [T..] -> [T..]) <==
+    T: Any -(T -> [T..] -> [T..])-> el: T -([T..] -> [T..])-> list: [T..] -[T..]->
+        (el list) |> @hook("std.list.push"  ((T  [T..]) -> [T..]))
+let is_empty: (T: Any -> [T..] -> Bool) <==
+    @hook("std.list.is_empty" (T: Any -> [T..] -> Bool))
+let head: (T: Any -> [T..] -> T) <==
+    @hook("std.list.head" (T: Any -> [T..] -> T))
+let tail: (T: Any -> [T..] -> [T..]) <==
+    @hook("std.list.tail" (T: Any -> [T..] -> [T..]))
 
-let concat: ([Int..] -> [Int..] -> [Int..]) <==
-    first: [Int..] -([Int..] -> [Int..])-> second: [Int..] -[Int..]->
-        if first |> is_empty then
+let concat: (T: Any -> [T..] -> [T..] -> [T..]) <==
+    T: Any -([T..] -> [T..] -> [T..])->
+    first: [T..] -([T..] -> [T..])->
+    second: [T..] -[T..]->
+        if first |> (is_empty <| type T) then
             second
-        else if second |> is_empty then
+        else if second |> (is_empty <| type T) then
             first
         else
-            push
-                <| (first |> head)
-                <| (first |> tail |> concat <| second)
+            (push <| type T)
+                <| (first |> (head <| type T))
+                <| (first |> (tail <| type T) |> (concat <| type T) <| second)
 
 let some_numbers: [Int..] <== [1 2 3]
 let empty: [Int..] <== []
 
 some_numbers
-    |> concat <| empty
-    |> concat <| []
-    |> concat <| [4]
+    |> (concat <| type Int) <| empty
+    |> (concat <| type Int) <| []
+    |> (concat <| type Int) <| [4]

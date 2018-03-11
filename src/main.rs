@@ -164,6 +164,14 @@ mod evaluate_file {
     }
 
     #[test]
+    fn generics_expressions() {
+        assert_eq!(
+            evaluate_file("examples/generics.aro", false).unwrap(),
+            "[5 5 5]"
+        )
+    }
+
+    #[test]
     fn let_expressions() {
         assert_eq!(evaluate_file("examples/let.aro", false).unwrap(), "2.5")
     }
