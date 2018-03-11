@@ -217,6 +217,15 @@ fn substitute(
                         .collect(),
                 )),
             ),
+            &Expression::Value(Value::List(ref vec)) => Ast::<Expression>::new(
+                ast.left_loc,
+                ast.right_loc,
+                Expression::Value(Value::List(
+                    vec.into_iter()
+                        .map(|element| substitute(element, pattern, value))
+                        .collect(),
+                )),
+            ),
             &Expression::Value(_) => ast.clone(),
         },
     }
