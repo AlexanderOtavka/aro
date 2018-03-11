@@ -29,14 +29,14 @@ fn build_env(env: &mut HashMap<String, Type>, pattern: &Ast<Pattern>) {
     };
 }
 
-fn substitute_generic(ast: &Ast<Type>, name: &str, new_name: &str) -> Ast<Type> {
+fn rename_type(ast: &Ast<Type>, name: &str, new_name: &str) -> Ast<Type> {
     match &*ast.expr {
         &Type::Func(ref input, ref output) => Ast::<Type>::new(
             ast.left_loc,
             ast.right_loc,
             Type::Func(
-                substitute_generic(input, name, new_name),
-                substitute_generic(output, name, new_name),
+                rename_type(input, name, new_name),
+                rename_type(output, name, new_name),
             ),
         ),
         &Type::GenericFunc(ref param_name, ref param_supertype, ref output) => {
@@ -48,8 +48,8 @@ fn substitute_generic(ast: &Ast<Type>, name: &str, new_name: &str) -> Ast<Type> 
                     ast.right_loc,
                     Type::GenericFunc(
                         param_name.clone(),
-                        substitute_generic(param_supertype, name, new_name),
-                        substitute_generic(output, name, new_name),
+                        rename_type(param_supertype, name, new_name),
+                        rename_type(output, name, new_name),
                     ),
                 )
             }
@@ -66,14 +66,14 @@ fn substitute_generic(ast: &Ast<Type>, name: &str, new_name: &str) -> Ast<Type> 
         &Type::List(ref el_type) => Ast::<Type>::new(
             ast.left_loc,
             ast.right_loc,
-            Type::List(substitute_generic(el_type, name, new_name)),
+            Type::List(rename_type(el_type, name, new_name)),
         ),
         &Type::Tuple(ref vec) => Ast::<Type>::new(
             ast.left_loc,
             ast.right_loc,
             Type::Tuple(
                 vec.into_iter()
-                    .map(|element| substitute_generic(element, name, new_name))
+                    .map(|element| rename_type(element, name, new_name))
                     .collect(),
             ),
         ),
@@ -97,7 +97,7 @@ impl Type {
                 &Type::GenericFunc(ref self_name, ref self_super, ref self_out),
                 &Type::GenericFunc(ref other_name, ref other_super, ref other_out),
             ) => {
-                let other_out = &substitute_generic(other_out, other_name, self_name);
+                let other_out = &rename_type(other_out, other_name, self_name);
                 self_out.is_sub_type(other_out) && other_super.is_sub_type(self_super)
             }
             (&Type::Tuple(ref self_vec), &Type::Tuple(ref other_vec)) => {
