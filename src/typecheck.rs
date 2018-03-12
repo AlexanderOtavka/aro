@@ -694,4 +694,139 @@ mod typecheck_ast {
             "(Int -> Int)",
         );
     }
+
+    #[test]
+    fn checks_generic_functions() {
+        assert_typecheck_eq(
+            "
+            T: Int -(T -> T -> [T..])->
+            x: T -(T -> [T..])->
+            y: T -[T..]->
+                [x  y]
+            ",
+            "(T: Int -> ((T) -> ((T) -> [(T)..])))",
+        );
+        assert_typecheck_eq(
+            "
+            T: Any -(T -> T -> [T..])->
+            x: T -(T -> [T..])->
+            y: T -[T..]->
+                [x  y]
+            ",
+            "(T: Any -> ((T) -> ((T) -> [(T)..])))",
+        );
+    }
+
+    #[test]
+    fn checks_immediately_invoked_generic_functions() {
+        assert_typecheck_eq(
+            "
+            type Int |> (
+                T: Int -(T -> T -> [T..])->
+                x: T -(T -> [T..])->
+                y: T -[T..]->
+                    [x  y]
+            )
+            ",
+            "(Int -> (Int -> [Int..]))",
+        );
+        assert_typecheck_eq(
+            "
+            type Int |> (
+                T: Any -(T -> T -> [T..])->
+                x: T -(T -> [T..])->
+                y: T -[T..]->
+                    [x  y]
+            )
+            ",
+            "(Int -> (Int -> [Int..]))",
+        );
+        assert_typecheck_err(
+            "
+            type Bool |> (
+                T: Int -(T -> T -> [T..])->
+                x: T -(T -> [T..])->
+                y: T -[T..]->
+                    [x  y]
+            )
+            ",
+        );
+        assert_typecheck_err(
+            "
+            type Float |> (
+                T: Int -(T -> T -> [T..])->
+                x: T -(T -> [T..])->
+                y: T -[T..]->
+                    [x  y]
+            )
+            ",
+        );
+    }
+
+    #[test]
+    fn checks_generic_function_calls() {
+        assert_typecheck_eq(
+            "
+            let make_two_list: (El: Any -> El -> El-> [El..]) <==
+                T: Any -(T -> T -> [T..])->
+                x: T -(T -> [T..])->
+                y: T -[T..]->
+                    [x  y]
+
+            make_two_list <| type Bool
+            ",
+            "(Bool -> (Bool -> [Bool..]))",
+        );
+        assert_typecheck_eq(
+            "
+            let make_two_list: (El: Bool -> El -> El-> [El..]) <==
+                T: Any -(T -> T -> [T..])->
+                x: T -(T -> [T..])->
+                y: T -[T..]->
+                    [x  y]
+
+            make_two_list <| type Bool
+            ",
+            "(Bool -> (Bool -> [Bool..]))",
+        );
+        assert_typecheck_err(
+            "
+            let make_two_list: (El: Bool -> El -> El-> [El..]) <==
+                T: Any -(T -> T -> [T..])->
+                x: T -(T -> [T..])->
+                y: T -[T..]->
+                    [x  y]
+
+            make_two_list <| type Int
+            ",
+        );
+        assert_typecheck_err(
+            "
+            let make_two_list: (El: Any -> El -> El-> [El..]) <==
+                T: Bool -(T -> T -> [T..])->
+                x: T -(T -> [T..])->
+                y: T -[T..]->
+                    [x  y]
+
+            make_two_list <| type Bool
+            ",
+        );
+    }
+
+    #[test]
+    #[ignore]
+    fn checks_generic_subtyping() {
+        assert_typecheck_eq(
+            "
+            let add: (T: Float -> T -> T -> T) <==
+                T: Float -(T -> T -> T)->
+                x: T -(T -> [T..])->
+                y: T -[T..]->
+                    x + y
+
+            add <| type Float
+            ",
+            "(Float -> (Float -> Float))",
+        );
+    }
 }

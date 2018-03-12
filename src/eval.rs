@@ -750,6 +750,18 @@ mod evaluate_ast {
     }
 
     #[test]
+    fn substitutes_in_lists() {
+        assert_eval_eq(
+            "
+            let x: Float <== 5.0
+            let list: [Float..] <== [x 2.3 x]
+            list
+            ",
+            "[5 2.3 5]",
+        );
+    }
+
+    #[test]
     fn supports_recursion_in_the_let_expression() {
         assert_eval_eq(
             "
