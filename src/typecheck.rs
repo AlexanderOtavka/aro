@@ -696,6 +696,14 @@ mod typecheck_ast {
     }
 
     #[test]
+    #[ignore]
+    fn doesnt_like_unbound_type_names() {
+        assert_typecheck_err("let foo: Foo <== 5  foo");
+        assert_typecheck_err("x: Foo -Int-> 5");
+        assert_typecheck_err("T: Any -(Foo -> Int)-> x: Foo -Int-> 5");
+    }
+
+    #[test]
     fn checks_generic_functions() {
         assert_typecheck_eq(
             "
