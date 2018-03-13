@@ -279,6 +279,46 @@ fn substitute_type(ast: &Ast<Type>, name: &str, value: &Ast<Type>) -> Ast<Type> 
     }
 }
 
+fn evaluate_type(ast: &Ast<Type>, env: &HashMap<String, Type>) -> Result<Type, Error> {
+    match &*ast.expr {
+        &Type::Func(ref input, ref output) => Ok(Type::Func(
+            input.replace_expr(evaluate_type(input, env)?),
+            output.replace_expr(evaluate_type(output, env)?),
+        )),
+        &Type::GenericFunc(ref param_name, ref param_supertype, ref output) => {
+            let env = &mut env.clone();
+            let param_supertype_type = evaluate_type(param_supertype, env)?;
+            env.insert(param_name.clone(), param_supertype_type.clone());
+            Ok(Type::GenericFunc(
+                param_name.clone(),
+                param_supertype.replace_expr(param_supertype_type),
+                output.replace_expr(evaluate_type(output, env)?),
+            ))
+        }
+        &Type::Ident(ref ident_name) => if env.contains_key(ident_name) {
+            Ok(*ast.expr.clone())
+        } else {
+            Err(Error::LRLocated {
+                message: format!("Wut `{}`?  Dat ain't no type.", ident_name),
+                left_loc: ast.left_loc,
+                right_loc: ast.right_loc,
+            })
+        },
+        &Type::List(ref el_type) => Ok(Type::List(
+            el_type.replace_expr(evaluate_type(el_type, env)?),
+        )),
+        &Type::Tuple(ref vec) => Ok(Type::Tuple({
+            let mut new_vec = Vec::new();
+            for element in vec {
+                new_vec.push(element.replace_expr(evaluate_type(element, env)?));
+            }
+
+            new_vec
+        })),
+        expr => Ok(expr.clone()),
+    }
+}
+
 pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Result<Type, Error> {
     let left_loc = ast.left_loc;
     let right_loc = ast.right_loc;
@@ -326,42 +366,47 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
                     inferred_type
                 }
             }))),
-            &Value::Func(ref pattern, ref body_type, ref body) => {
+            &Value::Func(ref pattern, ref body_type_ast, ref body) => {
                 let mut body_env = env.clone();
                 build_env(&mut body_env, pattern);
 
+                let param_type_ast = Ast::<Type>::from_pattern(pattern);
+                let declared_param_type = evaluate_type(&param_type_ast, env)?;
+                let declared_body_type = evaluate_type(body_type_ast, env)?;
                 let actual_body_type = typecheck_ast(body, &body_env)?;
-                if !actual_body_type.is_sub_type(&body_type.expr, env) {
+                if !actual_body_type.is_sub_type(&declared_body_type, env) {
                     Err(Error::type_error(
                         body.left_loc,
                         body.right_loc,
-                        &*body_type.expr,
+                        &declared_body_type,
                         &actual_body_type,
                     ))
                 } else {
                     Ok(Type::Func(
-                        Ast::<Type>::from_pattern(pattern),
-                        body_type.clone(),
+                        param_type_ast.replace_expr(declared_param_type),
+                        body_type_ast.clone(),
                     ))
                 }
             }
-            &Value::GenericFunc(ref type_name, ref supertype, ref body_type, ref body) => {
+            &Value::GenericFunc(ref type_name, ref supertype, ref body_type_ast, ref body) => {
                 let env = &mut env.clone();
-                env.insert(type_name.clone(), *supertype.expr.clone());
+                let declared_supertype = evaluate_type(supertype, env)?;
+                env.insert(type_name.clone(), declared_supertype.clone());
 
+                let declared_body_type = evaluate_type(body_type_ast, env)?;
                 let actual_body_type = typecheck_ast(body, env)?;
-                if !actual_body_type.is_sub_type(&body_type.expr, env) {
+                if !actual_body_type.is_sub_type(&declared_body_type, env) {
                     Err(Error::type_error(
                         body.left_loc,
                         body.right_loc,
-                        &*body_type.expr,
+                        &declared_body_type,
                         &actual_body_type,
                     ))
                 } else {
                     Ok(Type::GenericFunc(
                         type_name.clone(),
-                        supertype.clone(),
-                        body_type.clone(),
+                        supertype.replace_expr(declared_supertype),
+                        body_type_ast.replace_expr(declared_body_type),
                     ))
                 }
             }
@@ -431,7 +476,7 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
             let mut body_env = env.clone();
             build_env(&mut body_env, &pattern);
 
-            let declared_value_type = *Ast::<Type>::from_pattern(pattern).expr;
+            let declared_value_type = evaluate_type(&Ast::<Type>::from_pattern(pattern), env)?;
             let actual_value_type = typecheck_ast(value, &body_env)?;
 
             if !actual_value_type.is_sub_type(&declared_value_type, env) {
@@ -725,9 +770,11 @@ mod typecheck_ast {
 
     #[test]
     fn doesnt_like_unbound_type_names() {
-        assert_typecheck_err("let foo: Foo <== 5  foo");
+        assert_typecheck_err("let foo: [Foo..] <== []  foo");
         assert_typecheck_err("x: Foo -Int-> 5");
+        assert_typecheck_err("x: Int -[Foo..]-> []");
         assert_typecheck_err("T: Any -(Foo -> Int)-> x: Foo -Int-> 5");
+        assert_typecheck_err("T: Foo -(Int -> Int)-> x: Int -Int-> 5");
     }
 
     #[test]

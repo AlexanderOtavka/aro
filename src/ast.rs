@@ -70,6 +70,10 @@ impl<T> Ast<T> {
             expr: Box::new(expr),
         }
     }
+
+    pub fn replace_expr(&self, expr: T) -> Ast<T> {
+        Ast::new(self.left_loc, self.right_loc, expr)
+    }
 }
 
 impl Ast<Expression> {
