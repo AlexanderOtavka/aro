@@ -1,4 +1,4 @@
-let x: Int <== 5
-let y: Int <== 0
+let head: (T: Any -> [T..] -> T) <==
+    @hook("std.list.head" (T: Any -> [T..] -> T))
 
-x / y
+[] |> (head <| type Any)

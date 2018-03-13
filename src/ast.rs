@@ -33,7 +33,7 @@ pub enum BinOp {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Value {
     Int(i32),
-    Float(f64),
+    Num(f64),
     Bool(bool),
     Func(Ast<Pattern>, Ast<Type>, Ast<Expression>),
     GenericFunc(String, Ast<Type>, Ast<Type>, Ast<Expression>),
@@ -51,7 +51,7 @@ pub enum Pattern {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Type {
     Int,
-    Float,
+    Num,
     Bool,
     Any,
     Empty,
@@ -172,7 +172,7 @@ impl Display for Value {
             "{}",
             match self {
                 &Value::Int(value) => format!("{}", value),
-                &Value::Float(value) => {
+                &Value::Num(value) => {
                     if value.is_nan() {
                         String::from("nan")
                     } else if value == f64::INFINITY {
@@ -219,7 +219,7 @@ impl Display for Type {
             "{}",
             match self {
                 &Type::Int => String::from("Int"),
-                &Type::Float => String::from("Float"),
+                &Type::Num => String::from("Num"),
                 &Type::Bool => String::from("Bool"),
                 &Type::Any => String::from("Any"),
                 &Type::Empty => String::from("Empty"),

@@ -19,14 +19,14 @@ where
                 Ok(Value::Int(evaluate(left_value as f64, right_value as f64)
                     as i32))
             }
-            (&Value::Float(left_value), &Value::Float(right_value)) => {
-                Ok(Value::Float(evaluate(left_value, right_value)))
+            (&Value::Num(left_value), &Value::Num(right_value)) => {
+                Ok(Value::Num(evaluate(left_value, right_value)))
             }
-            (&Value::Int(left_value), &Value::Float(right_value)) => {
-                Ok(Value::Float(evaluate(left_value as f64, right_value)))
+            (&Value::Int(left_value), &Value::Num(right_value)) => {
+                Ok(Value::Num(evaluate(left_value as f64, right_value)))
             }
-            (&Value::Float(left_value), &Value::Int(right_value)) => {
-                Ok(Value::Float(evaluate(left_value, right_value as f64)))
+            (&Value::Num(left_value), &Value::Int(right_value)) => {
+                Ok(Value::Num(evaluate(left_value, right_value as f64)))
             }
             _ => Err(Error::LRLocated {
                 message: String::from("Fuck off with your non-number bullshit."),
@@ -65,26 +65,26 @@ mod evaluate_number_operator {
     #[test]
     fn operates_on_two_floats() {
         assert_eq!(
-            *evaluate_number_operator(&ast(), &Value::Float(2.1), &Value::Float(4.3), |a, b| a + b)
+            *evaluate_number_operator(&ast(), &Value::Num(2.1), &Value::Num(4.3), |a, b| a + b)
                 .unwrap()
                 .expr,
-            Expression::Value(Value::Float(6.4)),
+            Expression::Value(Value::Num(6.4)),
         );
     }
 
     #[test]
     fn operates_on_mixed_ints_and_floats() {
         assert_eq!(
-            *evaluate_number_operator(&ast(), &Value::Int(2), &Value::Float(4.3), |a, b| a + b)
+            *evaluate_number_operator(&ast(), &Value::Int(2), &Value::Num(4.3), |a, b| a + b)
                 .unwrap()
                 .expr,
-            Expression::Value(Value::Float(6.3)),
+            Expression::Value(Value::Num(6.3)),
         );
         assert_eq!(
-            *evaluate_number_operator(&ast(), &Value::Float(2.3), &Value::Int(4), |a, b| a + b)
+            *evaluate_number_operator(&ast(), &Value::Num(2.3), &Value::Int(4), |a, b| a + b)
                 .unwrap()
                 .expr,
-            Expression::Value(Value::Float(6.3)),
+            Expression::Value(Value::Num(6.3)),
         );
     }
 
@@ -111,23 +111,23 @@ mod evaluate_number_operator {
     #[test]
     fn turns_nan_add_inputs_to_nan_add_outputs() {
         assert_is_nan(
-            evaluate_number_operator(&ast(), &Value::Float(NAN), &Value::Int(4), |a, b| a + b)
+            evaluate_number_operator(&ast(), &Value::Num(NAN), &Value::Int(4), |a, b| a + b)
                 .unwrap(),
         );
         assert_is_nan(
-            evaluate_number_operator(&ast(), &Value::Int(4), &Value::Float(NAN), |a, b| a + b)
+            evaluate_number_operator(&ast(), &Value::Int(4), &Value::Num(NAN), |a, b| a + b)
                 .unwrap(),
         );
         assert_is_nan(
-            evaluate_number_operator(&ast(), &Value::Float(NAN), &Value::Float(4.2), |a, b| a + b)
+            evaluate_number_operator(&ast(), &Value::Num(NAN), &Value::Num(4.2), |a, b| a + b)
                 .unwrap(),
         );
         assert_is_nan(
-            evaluate_number_operator(&ast(), &Value::Float(4.2), &Value::Float(NAN), |a, b| a + b)
+            evaluate_number_operator(&ast(), &Value::Num(4.2), &Value::Num(NAN), |a, b| a + b)
                 .unwrap(),
         );
         assert_is_nan(
-            evaluate_number_operator(&ast(), &Value::Float(NAN), &Value::Float(NAN), |a, b| a + b)
+            evaluate_number_operator(&ast(), &Value::Num(NAN), &Value::Num(NAN), |a, b| a + b)
                 .unwrap(),
         );
     }
@@ -276,7 +276,7 @@ fn handle_hook_call(
                 if vec.is_empty() {
                     Err(Error::LRLocated {
                         message: String::from(
-                            "As always, you can't get head.\n\
+                            "As usual, you can't get head.\n\
                              Especially not from an empty list.",
                         ),
                         left_loc: param_ast.left_loc,
@@ -306,6 +306,51 @@ fn handle_hook_call(
                 }
             } else {
                 panic!("list.tail arg should be list.")
+            }
+        }
+        "std.math.floordiv" => {
+            if let &Value::Tuple(ref vec) = param_value {
+                if let (&Expression::Value(ref left), &Expression::Value(ref right)) =
+                    (&*vec[0].expr, &*vec[1].expr)
+                {
+                    let div_by_zero_error = Err(Error::LRLocated {
+                        message: String::from("Can't divide by your future (which is zero)."),
+                        left_loc: vec[1].left_loc,
+                        right_loc: vec[1].right_loc,
+                    });
+                    match (left, right) {
+                        (&Value::Int(_), &Value::Int(0)) | (&Value::Num(_), &Value::Int(0)) => {
+                            div_by_zero_error
+                        }
+                        (&Value::Int(_), &Value::Num(val)) | (&Value::Num(_), &Value::Num(val))
+                            if val as i32 == 0 =>
+                        {
+                            div_by_zero_error
+                        }
+                        _ => Ok(param_ast.replace_expr(Expression::Value(Value::Int(match (
+                            left,
+                            right,
+                        ) {
+                            (&Value::Int(left_value), &Value::Int(right_value)) => {
+                                left_value / right_value
+                            }
+                            (&Value::Int(left_value), &Value::Num(right_value)) => {
+                                left_value / right_value as i32
+                            }
+                            (&Value::Num(left_value), &Value::Int(right_value)) => {
+                                left_value as i32 / right_value
+                            }
+                            (&Value::Num(left_value), &Value::Num(right_value)) => {
+                                left_value as i32 / right_value as i32
+                            }
+                            _ => panic!("int.floordiv can only be called on numbers"),
+                        })))),
+                    }
+                } else {
+                    panic!("int.floordiv must be called with values")
+                }
+            } else {
+                panic!("int.floordiv arg should be a tuple")
             }
         }
         _ => {
@@ -394,11 +439,11 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
                     &BinOp::Sub => evaluate_number_operator(ast, &left, &right, |a, b| a - b),
                     &BinOp::Mul => evaluate_number_operator(ast, &left, &right, |a, b| a * b),
                     &BinOp::Div => match (left, right) {
-                        (&Value::Int(_), &Value::Int(0)) => Err(Error::LRLocated {
-                            message: String::from("Fuck off with your divide-by-zero bullshit."),
-                            left_loc,
-                            right_loc,
-                        }),
+                        (&Value::Int(left_value), &Value::Int(right_value)) => {
+                            Ok(ast.replace_expr(Expression::Value(Value::Num(
+                                (left_value as f64) / (right_value as f64),
+                            ))))
+                        }
                         (left_value, right_value) => {
                             evaluate_number_operator(ast, left_value, right_value, |a, b| a / b)
                         }
@@ -408,13 +453,13 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
                             (&Value::Int(left_value), &Value::Int(right_value)) => {
                                 Ok(left_value <= right_value)
                             }
-                            (&Value::Float(left_value), &Value::Int(right_value)) => {
+                            (&Value::Num(left_value), &Value::Int(right_value)) => {
                                 Ok(left_value <= right_value as f64)
                             }
-                            (&Value::Int(left_value), &Value::Float(right_value)) => {
+                            (&Value::Int(left_value), &Value::Num(right_value)) => {
                                 Ok(left_value as f64 <= right_value)
                             }
-                            (&Value::Float(left_value), &Value::Float(right_value)) => {
+                            (&Value::Num(left_value), &Value::Num(right_value)) => {
                                 Ok(left_value <= right_value)
                             }
                             _ => Err(Error::LRLocated {
@@ -634,8 +679,36 @@ mod evaluate_ast {
     }
 
     #[test]
-    fn divides_integers() {
-        assert_eval_eq("3 / 2", "1");
+    fn divides_integers_as_floats() {
+        assert_eval_eq("3 / 2", "1.5");
+    }
+
+    #[test]
+    fn can_floor_divide_with_a_hook() {
+        assert_eval_eq(
+            r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (7 4)"#,
+            "1",
+        );
+        assert_eval_eq(
+            r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (7.0 4)"#,
+            "1",
+        );
+        assert_eval_eq(
+            r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (7 4.0)"#,
+            "1",
+        );
+        assert_eval_eq(
+            r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (7.0 4.0)"#,
+            "1",
+        );
+        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (7 0)"#);
+        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (7 0.0)"#);
+        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (7.0 0)"#);
+        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (7.0 0.0)"#);
+        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (0 0)"#);
+        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (0 0.0)"#);
+        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (0.0 0)"#);
+        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (0.0 0.0)"#);
     }
 
     #[test]
@@ -644,15 +717,11 @@ mod evaluate_ast {
     }
 
     #[test]
-    fn does_not_divide_ints_by_zero() {
-        assert_eval_err("3 / 0");
-        assert_eval_err("0 / 0");
-    }
-
-    #[test]
-    fn divides_floats_by_zero() {
+    fn divides_numbers_by_zero() {
         assert_eval_eq("3.0 / 0", "inf");
         assert_eval_eq("0.0 / 0", "nan");
+        assert_eval_eq("3 / 0", "inf");
+        assert_eval_eq("0 / 0", "nan");
     }
 
     #[test]
@@ -718,7 +787,7 @@ mod evaluate_ast {
         assert_eval_eq(
             "
             let x: Int <== 5
-            let tup: (Int Float) <== (x 2.3)
+            let tup: (Int Num) <== (x 2.3)
             tup
             ",
             "(5 2.3)",
@@ -730,14 +799,14 @@ mod evaluate_ast {
         assert_eval_eq(
             "
             let x: Int <== 5
-            let (a: Int  b: Float) <== (x 2.3)
+            let (a: Int  b: Num) <== (x 2.3)
             a + b
             ",
             "7.3",
         );
         assert_eval_eq(
             "
-            (2  5.3  #true ()) |> (fn (a: Int  b: Float  bool: Bool) -Float-> a + b)
+            (2  5.3  #true ()) |> (fn (a: Int  b: Num  bool: Bool) -Num-> a + b)
             ",
             "7.3",
         );
@@ -753,8 +822,8 @@ mod evaluate_ast {
     fn substitutes_in_lists() {
         assert_eval_eq(
             "
-            let x: Float <== 5.0
-            let list: [Float..] <== [x 2.3 x]
+            let x: Num <== 5.0
+            let list: [Num..] <== [x 2.3 x]
             list
             ",
             "[5 2.3 5]",
@@ -801,7 +870,7 @@ mod evaluate_ast {
         );
         assert_eval_eq(
             r#"
-            (1.6 [2.1 3.7]) |> @hook("std.list.push"  ((Float  [Float..]) -> [Float..]))
+            (1.6 [2.1 3.7]) |> @hook("std.list.push"  ((Num  [Num..]) -> [Num..]))
             "#,
             "[1.6 2.1 3.7]",
         );
@@ -829,7 +898,7 @@ mod evaluate_ast {
         );
         assert_eval_eq(
             r#"
-            [] |> @hook("std.list.is_empty"  ([Float..] -> Bool))
+            [] |> @hook("std.list.is_empty"  ([Num..] -> Bool))
             "#,
             "#true ()",
         );

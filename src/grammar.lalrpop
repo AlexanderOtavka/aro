@@ -48,7 +48,7 @@ Factor = {
 
 Value = {
     <l:@L> <v:Int> <r:@R> => Ast::<Expression>::new(l, r, Expression::Value(Value::Int(v))),
-    <l:@L> <v:Float> <r:@R> => Ast::<Expression>::new(l, r, Expression::Value(Value::Float(v))),
+    <l:@L> <v:Num> <r:@R> => Ast::<Expression>::new(l, r, Expression::Value(Value::Num(v))),
     <l:@L> <v:Bool> <r:@R> => Ast::<Expression>::new(l, r, Expression::Value(Value::Bool(v))),
     <l:@L> <v:Ident> <r:@R> => Ast::<Expression>::new(l, r, Expression::Ident(v)),
 
@@ -77,7 +77,7 @@ ValueType = {
     <l:@L> <n:TypeIdent> <r:@R> => Ast::<Type>::new(l, r, Type::Ident(n)),
 
     <l:@L> "Int" <r:@R> => Ast::<Type>::new(l, r, Type::Int),
-    <l:@L> "Float" <r:@R> => Ast::<Type>::new(l, r, Type::Float),
+    <l:@L> "Num" <r:@R> => Ast::<Type>::new(l, r, Type::Num),
     <l:@L> "Bool" <r:@R> => Ast::<Type>::new(l, r, Type::Bool),
     <l:@L> "Any" <r:@R> => Ast::<Type>::new(l, r, Type::Any),
     <l:@L> "Empty" <r:@R> => Ast::<Type>::new(l, r, Type::Empty),
@@ -111,7 +111,7 @@ IdentPattern: Ast<Pattern> = {
     <l:@L> <n:Ident> ":" <t:ValueType> <r:@R> => Ast::<Pattern>::new(l, r, Pattern::Ident(n, t)),
 };
 
-Float: f64 = {
+Num: f64 = {
     r"-?[0-9]+\.[0-9]+" => f64::from_str(<>).unwrap(),
 };
 

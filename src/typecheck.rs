@@ -82,13 +82,24 @@ fn rename_type(ast: &Ast<Type>, name: &str, new_name: &str) -> Ast<Type> {
 }
 
 impl Type {
+    pub fn union(&self, other: &Type, env: &HashMap<String, Type>) -> Type {
+        if self.is_sub_type(other, env) {
+            other.clone()
+        } else if other.is_sub_type(self, env) {
+            self.clone()
+        } else {
+            Type::Any
+        }
+    }
+
     pub fn is_sub_type(&self, other: &Type, env: &HashMap<String, Type>) -> bool {
         match (self, other) {
             (&Type::Empty, _)
             | (_, &Type::Any)
             | (&Type::Bool, &Type::Bool)
             | (&Type::Int, &Type::Int)
-            | (&Type::Float, &Type::Float) => true,
+            | (&Type::Int, &Type::Num)
+            | (&Type::Num, &Type::Num) => true,
             (&Type::Ident(ref self_name), &Type::Ident(ref other_name)) => self_name == other_name,
             (&Type::Ident(ref self_name), _) => {
                 if let Some(self_supertype) = env.get(self_name) {
@@ -156,7 +167,7 @@ mod is_sub_type {
 
         assert!(ast(Type::Int).is_sub_type(&ast(Type::Int), &HashMap::new()));
         assert!(ast(Type::Bool).is_sub_type(&ast(Type::Bool), &HashMap::new()));
-        assert!(ast(Type::Float).is_sub_type(&ast(Type::Float), &HashMap::new()));
+        assert!(ast(Type::Num).is_sub_type(&ast(Type::Num), &HashMap::new()));
         assert!(ast(Type::Any).is_sub_type(&ast(Type::Any), &HashMap::new()));
 
         assert!(Type::Int.is_sub_type(&Type::Int, &HashMap::new()));
@@ -327,7 +338,7 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
         &Expression::Value(ref value) => match value {
             &Value::Hook(_, ref hook_type) => Ok(*hook_type.expr.clone()),
             &Value::Int(_) => Ok(Type::Int),
-            &Value::Float(_) => Ok(Type::Float),
+            &Value::Num(_) => Ok(Type::Num),
             &Value::Bool(_) => Ok(Type::Bool),
             &Value::Tuple(ref vec) => Ok(Type::Tuple({
                 let mut type_vec = Vec::new();
@@ -460,16 +471,7 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
                 let consequent_type = typecheck_ast(consequent, env)?;
                 let alternate_type = typecheck_ast(alternate, env)?;
 
-                if consequent_type != alternate_type {
-                    Err(Error::type_error(
-                        alternate.left_loc,
-                        alternate.right_loc,
-                        &consequent_type,
-                        &alternate_type,
-                    ))
-                } else {
-                    Ok(consequent_type)
-                }
+                Ok(consequent_type.union(&alternate_type, env))
             }
         }
         &Expression::Let(ref pattern, ref value, ref body) => {
@@ -522,7 +524,7 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
                 let right_type = typecheck_ast(right, env)?;
 
                 if !left_type.is_sub_type(&Type::Int, env)
-                    && !left_type.is_sub_type(&Type::Float, env)
+                    && !left_type.is_sub_type(&Type::Num, env)
                 {
                     Err(Error::LRLocated {
                         message: format!(
@@ -533,7 +535,7 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
                         right_loc: left.right_loc,
                     })
                 } else if !right_type.is_sub_type(&Type::Int, env)
-                    && !right_type.is_sub_type(&Type::Float, env)
+                    && !right_type.is_sub_type(&Type::Num, env)
                 {
                     Err(Error::LRLocated {
                         message: format!(
@@ -546,11 +548,12 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
                 } else {
                     match operation {
                         &BinOp::LEq => Ok(Type::Bool),
-                        &BinOp::Add | &BinOp::Sub | &BinOp::Mul | &BinOp::Div => {
+                        &BinOp::Div => Ok(Type::Num),
+                        &BinOp::Add | &BinOp::Sub | &BinOp::Mul => {
                             if (left_type, right_type) == (Type::Int, Type::Int) {
                                 Ok(Type::Int)
                             } else {
-                                Ok(Type::Float)
+                                Ok(Type::Num)
                             }
                         }
                         _ => panic!("Cannot typecheck operation"),
@@ -613,8 +616,13 @@ mod typecheck_ast {
     #[test]
     fn checks_arithmatic() {
         assert_typecheck_eq("1 + 2", "Int");
-        assert_typecheck_eq("-1.0 / -2", "Float");
-        assert_typecheck_eq("1.0 * 2.0", "Float");
+        assert_typecheck_eq("1 - 2", "Int");
+        assert_typecheck_eq("1 * 2", "Int");
+        assert_typecheck_eq("1 / 2", "Num");
+        assert_typecheck_eq("1.0 + 2.0", "Num");
+        assert_typecheck_eq("-1.0 - -2", "Num");
+        assert_typecheck_eq("1.0 * 2.0", "Num");
+        assert_typecheck_eq("-1.0 / -2", "Num");
         assert_typecheck_err("1.0 + #true()");
         assert_typecheck_err("#true() + #true()");
     }
@@ -639,9 +647,11 @@ mod typecheck_ast {
     #[test]
     fn checks_an_if() {
         assert_typecheck_eq("if 1 <= 1 then 1 else 2", "Int");
-        assert_typecheck_eq("if #false() then 1.1 else 2.0", "Float");
+        assert_typecheck_eq("if #false() then 1.1 else 2.0", "Num");
+        assert_typecheck_eq("if #false() then 1.1 else 2", "Num");
+        assert_typecheck_eq("if #false() then 1 else 2.0", "Num");
+        assert_typecheck_eq("if #false() then 2.1 else []", "Any");
         assert_typecheck_err("if 1 then 2 else 3");
-        assert_typecheck_err("if #false() then 2.1 else 3");
     }
 
     #[test]
@@ -651,16 +661,17 @@ mod typecheck_ast {
             "Int",
         );
         assert_typecheck_eq(
-            "(inc: (Int -> Float) -Float-> inc <| 5) <| (x: Int -Float-> x + 1.0)",
-            "Float",
+            "(inc: (Int -> Num) -Num-> inc <| 5) <| (x: Int -Num-> x + 1.0)",
+            "Num",
         );
-        assert_typecheck_err("(inc: (Int -> Float) -Int-> inc <| 5) <| (x: Int -Int-> x + 1)");
-        assert_typecheck_err("(inc: (Int -> Float) -Float-> inc <| 5) <| (x: Int -Int-> x + 1)");
-        assert_typecheck_err(
-            "(inc: (Float -> Float) -Float-> inc <| 5) <| (x: Float -Float-> x + 1)",
+        assert_typecheck_eq(
+            "(func: (Bool -> Bool) -Bool-> func <| #true()) <| (x: Bool -Bool-> x)",
+            "Bool",
         );
+        assert_typecheck_err("(func: (Int -> Bool) -Int-> func <| 5) <| (x: Int -Int-> x)");
+        assert_typecheck_err("(func: (Int -> Bool) -Bool-> func <| 5) <| (x: Int -Int-> x)");
         assert_typecheck_err(
-            "(inc: (Float -> Float) -Int-> inc <| 5) <| (x: Float -Float-> x + 1)",
+            "(func: (Bool -> Bool) -Int-> func <| #true()) <| (x: Bool -Bool-> x)",
         );
     }
 
@@ -711,10 +722,10 @@ mod typecheck_ast {
         assert_typecheck_eq(
             "
             let x: Int <== 5
-            let tup: (Int Float) <== (x 2.3)
+            let tup: (Int Num) <== (x 2.3)
             tup
             ",
-            "(Int Float)",
+            "(Int Num)",
         );
     }
 
@@ -722,26 +733,26 @@ mod typecheck_ast {
     fn checks_destructured_tuples() {
         assert_typecheck_eq(
             "
-            let (x: Int y: Float) <== (2 2.3)
+            let (x: Int y: Num) <== (2 2.3)
             x + y
             ",
-            "Float",
+            "Num",
         );
         assert_typecheck_eq(
             "
-            fn (x: Int  y: Bool  z: Float) -Float->
+            fn (x: Int  y: Bool  z: Num) -Num->
                 if y then
                     x * 1.0
                 else
                     z
             ",
-            "((Int Bool Float) -> Float)",
+            "((Int Bool Num) -> Num)",
         );
         assert_typecheck_eq(
             "
-            fn () -Float-> 5.0 + 1
+            fn () -Num-> 5.0 + 1
             ",
-            "(() -> Float)",
+            "(() -> Num)",
         );
     }
 
@@ -835,7 +846,7 @@ mod typecheck_ast {
         );
         assert_typecheck_err(
             "
-            type Float |> (
+            type Num |> (
                 T: Int -(T -> T -> [T..])->
                 x: T -(T -> [T..])->
                 y: T -[T..]->
@@ -899,36 +910,36 @@ mod typecheck_ast {
     fn checks_generic_subtyping() {
         assert_typecheck_eq(
             "
-            let add: (T: Float -> T -> T -> Float) <==
-                T: Float -(T -> T -> Float)->
-                x: T -(T -> Float)->
-                y: T -Float->
+            let add: (T: Num -> T -> T -> Num) <==
+                T: Num -(T -> T -> Num)->
+                x: T -(T -> Num)->
+                y: T -Num->
                     x + y
 
-            add <| type Float
+            add <| type Num
             ",
-            "(Float -> (Float -> Float))",
+            "(Num -> (Num -> Num))",
         );
         assert_typecheck_err(
             "
-            let add: (T: Any -> T -> T -> Float) <==
-                T: Any -(T -> T -> Float)->
-                x: T -(T -> Float)->
-                y: T -Float->
+            let add: (T: Any -> T -> T -> Num) <==
+                T: Any -(T -> T -> Num)->
+                x: T -(T -> Num)->
+                y: T -Num->
                     x + y
 
-            add <| type Float
+            add <| type Num
             ",
         );
         assert_typecheck_err(
             "
-            let add: (T: Float -> T -> T -> T) <==
-                T: Float -(T -> T -> T)->
+            let add: (T: Num -> T -> T -> T) <==
+                T: Num -(T -> T -> T)->
                 x: T -(T -> T)->
                 y: T -T->
                     x + y
 
-            add <| type Float
+            add <| type Num
             ",
         );
     }

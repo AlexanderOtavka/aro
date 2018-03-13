@@ -26,11 +26,8 @@ fn evaluate_source(input: &str, small_step: bool) -> Result<String, Error> {
     let ast = parse::source_to_ast(input)?;
 
     let mut globals = HashMap::new();
-    globals.insert(
-        String::from("inf"),
-        (Value::Float(f64::INFINITY), Type::Float),
-    );
-    globals.insert(String::from("nan"), (Value::Float(f64::NAN), Type::Float));
+    globals.insert(String::from("inf"), (Value::Num(f64::INFINITY), Type::Num));
+    globals.insert(String::from("nan"), (Value::Num(f64::NAN), Type::Num));
 
     typecheck::typecheck_ast(
         &ast,
@@ -148,10 +145,11 @@ mod evaluate_file {
     fn eval_error() {
         assert_eq!(
             evaluate_file("examples/eval_error.aro", false).unwrap_err(),
-            "Fuck off with your divide-by-zero bullshit.\
+            "As usual, you can\'t get head.\
+             \nEspecially not from an empty list.\
              \n      |\
-             \n    4 | x / y\
-             \n      | ^^^^^"
+             \n    4 | [] |> (head <| type Any)\
+             \n      | ^^"
         )
     }
 

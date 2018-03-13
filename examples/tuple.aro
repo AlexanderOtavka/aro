@@ -1,6 +1,6 @@
-let x: Float <== 2.3
-let tup: (Int Float Bool) <== (1 + (3 * 2)  x * x  #true ())
-let (a: Int  b: Float  c: Bool) <== tup
+let x: Num <== 2.3
+let tup: (Int Num Bool) <== (1 + (3 * 2)  x * x  #true ())
+let (a: Int  b: Num  c: Bool) <== tup
 
 if c then
     a + b
