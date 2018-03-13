@@ -14,20 +14,17 @@ mod util;
 mod parse;
 mod typecheck;
 mod eval;
+mod globals;
 
 use std::io::prelude::*;
 use std::process::exit;
-use std::collections::HashMap;
 use util::Error;
-use ast::{Type, Value};
-use std::f64;
+use globals::get_globals;
 
 fn evaluate_source(input: &str, small_step: bool) -> Result<String, Error> {
     let ast = parse::source_to_ast(input)?;
 
-    let mut globals = HashMap::new();
-    globals.insert(String::from("inf"), (Value::Num(f64::INFINITY), Type::Num));
-    globals.insert(String::from("nan"), (Value::Num(f64::NAN), Type::Num));
+    let globals = get_globals();
 
     typecheck::typecheck_ast(
         &ast,
@@ -52,69 +49,6 @@ fn evaluate_source(input: &str, small_step: bool) -> Result<String, Error> {
         let value = eval::evaluate_ast(&ast, &globals)?;
 
         Ok(format!("{}", value))
-    }
-}
-
-#[cfg(test)]
-mod evaluate_source {
-    use super::*;
-
-    #[test]
-    fn spits_out_a_result() {
-        assert_eq!(evaluate_source("5", false).unwrap(), "5");
-        assert_eq!(evaluate_source("-51", false).unwrap(), "-51");
-        assert_eq!(evaluate_source("#false ()", false).unwrap(), "#false ()");
-        assert_eq!(evaluate_source("#true ()", false).unwrap(), "#true ()");
-    }
-
-    #[test]
-    fn spits_out_inf_and_nan() {
-        assert_eq!(evaluate_source("inf", false).unwrap(), "inf");
-        assert_eq!(evaluate_source("nan", false).unwrap(), "nan");
-    }
-
-    #[test]
-    fn evaluates_an_ast() {
-        assert_eq!(
-            evaluate_source(
-                "
-                -20.2 +
-                (5 + 10 + 15)
-                ",
-                false
-            ).unwrap(),
-            "9.8"
-        );
-        assert_eq!(
-            evaluate_source(
-                "
-                -20.2 +
-                (5 + 10 + 15)
-                ",
-                true
-            ).unwrap(),
-            "--> (-20.2 + ((5 + 10) + 15))\
-             \n--> (-20.2 + (15 + 15))\
-             \n--> (-20.2 + 30)\
-             \n--> 9.8"
-        );
-    }
-
-    #[test]
-    fn reports_an_error() {
-        assert!(
-            evaluate_source(
-                "
-                20 + (5 + 10
-                ",
-                false
-            ).is_err()
-        );
-    }
-
-    #[test]
-    fn complains_about_extra_tokens_in_file() {
-        assert!(evaluate_source("5 7", false).is_err());
     }
 }
 
