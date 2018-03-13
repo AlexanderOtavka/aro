@@ -264,7 +264,11 @@ fn substitute_type(ast: &Ast<Type>, name: &str, value: &Ast<Type>) -> Ast<Type> 
             Type::GenericFunc(
                 param_name.clone(),
                 substitute_type(param_supertype, name, value),
-                substitute_type(output, name, value),
+                if param_name == name {
+                    output.clone()
+                } else {
+                    substitute_type(output, name, value)
+                },
             ),
         ),
         &Type::Ident(ref ident_name) => if ident_name == name {
@@ -826,6 +830,17 @@ mod typecheck_ast {
         assert_typecheck_eq(
             "
             type Int |> (
+                T: Num -(T -> T -> [T..])->
+                x: T -(T -> [T..])->
+                y: T -[T..]->
+                    [x  y]
+            )
+            ",
+            "(Int -> (Int -> [Int..]))",
+        );
+        assert_typecheck_eq(
+            "
+            type Int |> (
                 T: Any -(T -> T -> [T..])->
                 x: T -(T -> [T..])->
                 y: T -[T..]->
@@ -853,6 +868,22 @@ mod typecheck_ast {
                     [x  y]
             )
             ",
+        );
+    }
+
+    #[test]
+    fn supports_generic_function_shadowing() {
+        assert_typecheck_eq(
+            "
+            type Int |> (
+                T: Any -(T: Any -> T -> T -> [T..])->
+                T: Any -(T -> T -> [T..])->
+                x: T -(T -> [T..])->
+                y: T -[T..]->
+                    [x  y]
+            )
+            ",
+            "(T: Any -> ((T) -> ((T) -> [(T)..])))",
         );
     }
 
