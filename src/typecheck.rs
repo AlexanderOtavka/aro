@@ -82,7 +82,7 @@ fn rename_type(ast: &Ast<Type>, name: &str, new_name: &str) -> Ast<Type> {
 }
 
 impl Type {
-    pub fn is_sub_type(&self, other: &Type) -> bool {
+    pub fn is_sub_type(&self, other: &Type, env: &HashMap<String, Type>) -> bool {
         match (self, other) {
             (&Type::Empty, _)
             | (_, &Type::Any)
@@ -90,22 +90,33 @@ impl Type {
             | (&Type::Int, &Type::Int)
             | (&Type::Float, &Type::Float) => true,
             (&Type::Ident(ref self_name), &Type::Ident(ref other_name)) => self_name == other_name,
+            (&Type::Ident(ref self_name), _) => {
+                if let Some(self_supertype) = env.get(self_name) {
+                    self_supertype.is_sub_type(other, env)
+                } else {
+                    false
+                }
+            }
+            // Nothing is a subtype of a generic, because any generic could be empty
+            (_, &Type::Ident(_)) => false,
             (&Type::Func(ref self_in, ref self_out), &Type::Func(ref other_in, ref other_out)) => {
-                self_out.is_sub_type(other_out) && other_in.is_sub_type(self_in)
+                self_out.is_sub_type(other_out, env) && other_in.is_sub_type(self_in, env)
             }
             (
                 &Type::GenericFunc(ref self_name, ref self_super, ref self_out),
                 &Type::GenericFunc(ref other_name, ref other_super, ref other_out),
             ) => {
                 let other_out = &rename_type(other_out, other_name, self_name);
-                self_out.is_sub_type(other_out) && other_super.is_sub_type(self_super)
+                self_out.is_sub_type(other_out, env) && other_super.is_sub_type(self_super, env)
             }
             (&Type::Tuple(ref self_vec), &Type::Tuple(ref other_vec)) => {
                 self_vec.len() == other_vec.len()
                     && Iterator::zip(self_vec.into_iter(), other_vec.into_iter())
-                        .all(|(self_el, other_el)| self_el.is_sub_type(other_el))
+                        .all(|(self_el, other_el)| self_el.is_sub_type(other_el, env))
             }
-            (&Type::List(ref self_el), &Type::List(ref other_el)) => self_el.is_sub_type(other_el),
+            (&Type::List(ref self_el), &Type::List(ref other_el)) => {
+                self_el.is_sub_type(other_el, env)
+            }
             _ => false,
         }
     }
@@ -123,8 +134,8 @@ impl Ast<Type> {
         }
     }
 
-    pub fn is_sub_type(&self, other: &Ast<Type>) -> bool {
-        self.expr.is_sub_type(&other.expr)
+    pub fn is_sub_type(&self, other: &Ast<Type>, env: &HashMap<String, Type>) -> bool {
+        self.expr.is_sub_type(&other.expr, env)
     }
 }
 
@@ -141,14 +152,14 @@ mod is_sub_type {
         // let x: [] <== []
         //   same ^^     ^^ same
         // Empty.is_sub_type(Empty) = true  -- so this typechecks (if [] were allowed)
-        assert!(ast(Type::Empty).is_sub_type(&ast(Type::Empty)));
+        assert!(ast(Type::Empty).is_sub_type(&ast(Type::Empty), &HashMap::new()));
 
-        assert!(ast(Type::Int).is_sub_type(&ast(Type::Int)));
-        assert!(ast(Type::Bool).is_sub_type(&ast(Type::Bool)));
-        assert!(ast(Type::Float).is_sub_type(&ast(Type::Float)));
-        assert!(ast(Type::Any).is_sub_type(&ast(Type::Any)));
+        assert!(ast(Type::Int).is_sub_type(&ast(Type::Int), &HashMap::new()));
+        assert!(ast(Type::Bool).is_sub_type(&ast(Type::Bool), &HashMap::new()));
+        assert!(ast(Type::Float).is_sub_type(&ast(Type::Float), &HashMap::new()));
+        assert!(ast(Type::Any).is_sub_type(&ast(Type::Any), &HashMap::new()));
 
-        assert!(Type::Int.is_sub_type(&Type::Int));
+        assert!(Type::Int.is_sub_type(&Type::Int, &HashMap::new()));
     }
 
     #[test]
@@ -157,21 +168,21 @@ mod is_sub_type {
         // let x: [Int..] <== []
         //  super ^^^^^^^     ^^ subtype
         // Empty.is_sub_type(Int) = true  -- so this typechecks
-        assert!(ast(Type::Empty).is_sub_type(&ast(Type::Int)));
+        assert!(ast(Type::Empty).is_sub_type(&ast(Type::Int), &HashMap::new()));
 
         // let x: [] <== [5]
         //    sub ^^     ^^^ supertype
         // Int.is_sub_type(Empty) = false  -- so this does not typecheck
-        assert!(!ast(Type::Int).is_sub_type(&ast(Type::Empty)));
+        assert!(!ast(Type::Int).is_sub_type(&ast(Type::Empty), &HashMap::new()));
     }
 
     #[test]
     fn any() {
         // Any behaves opposite to empty
-        assert!(ast(Type::Int).is_sub_type(&ast(Type::Any)));
-        assert!(ast(Type::Empty).is_sub_type(&ast(Type::Any)));
-        assert!(!ast(Type::Any).is_sub_type(&ast(Type::Int)));
-        assert!(!ast(Type::Any).is_sub_type(&ast(Type::Empty)));
+        assert!(ast(Type::Int).is_sub_type(&ast(Type::Any), &HashMap::new()));
+        assert!(ast(Type::Empty).is_sub_type(&ast(Type::Any), &HashMap::new()));
+        assert!(!ast(Type::Any).is_sub_type(&ast(Type::Int), &HashMap::new()));
+        assert!(!ast(Type::Any).is_sub_type(&ast(Type::Empty), &HashMap::new()));
     }
 
     //
@@ -190,13 +201,19 @@ mod is_sub_type {
         //   <=> [].is_sub_type([Int..])
         //   <=> Empty.is_sub_type(Int)
         assert!(
-            ast(Type::Func(ast(Type::Int), ast(Type::Empty)))
-                .is_sub_type(&ast(Type::Func(ast(Type::Int), ast(Type::Int))))
+            ast(Type::Func(ast(Type::Int), ast(Type::Empty))).is_sub_type(
+                &ast(Type::Func(ast(Type::Int), ast(Type::Int))),
+                &HashMap::new()
+            )
         );
 
         // Reverse them, and it's false
-        assert!(!ast(Type::Func(ast(Type::Int), ast(Type::Int)))
-            .is_sub_type(&ast(Type::Func(ast(Type::Int), ast(Type::Empty)))));
+        assert!(
+            !ast(Type::Func(ast(Type::Int), ast(Type::Int))).is_sub_type(
+                &ast(Type::Func(ast(Type::Int), ast(Type::Empty))),
+                &HashMap::new()
+            )
+        );
 
         // let x: ([] -> Int) <== x: [Int..] -Int-> 1
         //  super ^^^^^^^^^^^     ^^^^^^^^^^^^^^^^^^^ subtype
@@ -205,14 +222,18 @@ mod is_sub_type {
         //   declared_in.is_sub_type(value_in)
         //   <=> [].is_sub_type([Int..])
         //   <=> Empty.is_sub_type(Int)
-        assert!(
-            ast(Type::Func(ast(Type::Int), ast(Type::Int)))
-                .is_sub_type(&ast(Type::Func(ast(Type::Empty), ast(Type::Int))))
-        );
+        assert!(ast(Type::Func(ast(Type::Int), ast(Type::Int))).is_sub_type(
+            &ast(Type::Func(ast(Type::Empty), ast(Type::Int)),),
+            &HashMap::new()
+        ));
 
         // Again, reverse them, and it's false
-        assert!(!ast(Type::Func(ast(Type::Empty), ast(Type::Int)))
-            .is_sub_type(&ast(Type::Func(ast(Type::Int), ast(Type::Int)))));
+        assert!(
+            !ast(Type::Func(ast(Type::Empty), ast(Type::Int))).is_sub_type(
+                &ast(Type::Func(ast(Type::Int), ast(Type::Int))),
+                &HashMap::new()
+            )
+        );
     }
 }
 
@@ -310,7 +331,7 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
                 build_env(&mut body_env, pattern);
 
                 let actual_body_type = typecheck_ast(body, &body_env)?;
-                if !body_type.expr.is_sub_type(&actual_body_type) {
+                if !actual_body_type.is_sub_type(&body_type.expr, env) {
                     Err(Error::type_error(
                         body.left_loc,
                         body.right_loc,
@@ -325,15 +346,11 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
                 }
             }
             &Value::GenericFunc(ref type_name, ref supertype, ref body_type, ref body) => {
-                // let generic_replacement = Ast::<Type>::new(
-                //     left_loc,
-                //     right_loc,
-                //     Type::Generic(type_name.clone(), supertype.clone()),
-                // );
-                // let body_type = &substitute_type(body_type, type_name, &generic_replacement);
-                // let body = &substitute_expr(body, type_name, &generic_replacement);
+                let env = &mut env.clone();
+                env.insert(type_name.clone(), *supertype.expr.clone());
+
                 let actual_body_type = typecheck_ast(body, env)?;
-                if !body_type.expr.is_sub_type(&actual_body_type) {
+                if !actual_body_type.is_sub_type(&body_type.expr, env) {
                     Err(Error::type_error(
                         body.left_loc,
                         body.right_loc,
@@ -353,7 +370,7 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
             if let Type::GenericFunc(ref param, ref supertype, ref body) =
                 typecheck_ast(generic_func, env)?
             {
-                if arg.is_sub_type(supertype) {
+                if arg.is_sub_type(supertype, env) {
                     Ok(*substitute_type(body, param, arg).expr)
                 } else {
                     Err(Error::type_error(
@@ -417,7 +434,7 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
             let declared_value_type = *Ast::<Type>::from_pattern(pattern).expr;
             let actual_value_type = typecheck_ast(value, &body_env)?;
 
-            if !actual_value_type.is_sub_type(&declared_value_type) {
+            if !actual_value_type.is_sub_type(&declared_value_type, env) {
                 Err(Error::type_error(
                     value.left_loc,
                     value.right_loc,
@@ -434,7 +451,7 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
                 let right_type = typecheck_ast(right, env)?;
 
                 if let Type::Func(ref param_type, ref output_type) = left_type {
-                    if !right_type.is_sub_type(&param_type.expr) {
+                    if !right_type.is_sub_type(&param_type.expr, env) {
                         Err(Error::type_error(
                             right.left_loc,
                             right.right_loc,
@@ -459,7 +476,9 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
                 let left_type = typecheck_ast(left, env)?;
                 let right_type = typecheck_ast(right, env)?;
 
-                if left_type != Type::Int && left_type != Type::Float {
+                if !left_type.is_sub_type(&Type::Int, env)
+                    && !left_type.is_sub_type(&Type::Float, env)
+                {
                     Err(Error::LRLocated {
                         message: format!(
                             "Did you think this was python?  You can't do math with `{}`s.",
@@ -468,7 +487,9 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
                         left_loc: left.left_loc,
                         right_loc: left.right_loc,
                     })
-                } else if right_type != Type::Int && right_type != Type::Float {
+                } else if !right_type.is_sub_type(&Type::Int, env)
+                    && !right_type.is_sub_type(&Type::Float, env)
+                {
                     Err(Error::LRLocated {
                         message: format!(
                             "Did you think this was python?  You can't do math with `{}`s.",
@@ -634,6 +655,13 @@ mod typecheck_ast {
     }
 
     #[test]
+    fn checks_function_body_subtyping() {
+        assert_typecheck_eq("x: Int -[Int..]-> []", "(Int -> [Int..])");
+        assert_typecheck_eq("x: Int -[Int..]-> [x]", "(Int -> [Int..])");
+        assert_typecheck_err("x: Int -[Empty..]-> [x]");
+    }
+
+    #[test]
     fn checks_tuples_with_identifiers() {
         assert_typecheck_eq(
             "
@@ -696,7 +724,6 @@ mod typecheck_ast {
     }
 
     #[test]
-    #[ignore]
     fn doesnt_like_unbound_type_names() {
         assert_typecheck_err("let foo: Foo <== 5  foo");
         assert_typecheck_err("x: Foo -Int-> 5");
@@ -822,19 +849,40 @@ mod typecheck_ast {
     }
 
     #[test]
-    #[ignore]
     fn checks_generic_subtyping() {
         assert_typecheck_eq(
             "
-            let add: (T: Float -> T -> T -> T) <==
-                T: Float -(T -> T -> T)->
-                x: T -(T -> [T..])->
-                y: T -[T..]->
+            let add: (T: Float -> T -> T -> Float) <==
+                T: Float -(T -> T -> Float)->
+                x: T -(T -> Float)->
+                y: T -Float->
                     x + y
 
             add <| type Float
             ",
             "(Float -> (Float -> Float))",
+        );
+        assert_typecheck_err(
+            "
+            let add: (T: Any -> T -> T -> Float) <==
+                T: Any -(T -> T -> Float)->
+                x: T -(T -> Float)->
+                y: T -Float->
+                    x + y
+
+            add <| type Float
+            ",
+        );
+        assert_typecheck_err(
+            "
+            let add: (T: Float -> T -> T -> T) <==
+                T: Float -(T -> T -> T)->
+                x: T -(T -> T)->
+                y: T -T->
+                    x + y
+
+            add <| type Float
+            ",
         );
     }
 }
