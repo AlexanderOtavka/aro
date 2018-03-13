@@ -116,11 +116,11 @@ Num: f64 = {
 };
 
 Ident: String = {
-    r"[a-z](_?[a-z])*" => String::from(<>),
+    r"[a-z]+((_[0-9]+)|(_[a-z]+))*" => String::from(<>),
 };
 
 TypeIdent: String = {
-    r"[A-Z][a-z]*(_?[A-Z][a-z]*)*" => String::from(<>),
+    r"[A-Z][a-z]*((_[0-9]+)|(_[A-Z][a-z]*))*" => String::from(<>),
 };
 
 Int: i32 = {
