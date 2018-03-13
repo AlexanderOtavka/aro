@@ -82,7 +82,7 @@ mod evaluate_file {
             "As usual, you can\'t get head.\
              \nEspecially not from an empty list.\
              \n      |\
-             \n    4 | [] |> (head <| type Any)\
+             \n    1 | [] |> (head <| type Any)\
              \n      | ^^"
         )
     }

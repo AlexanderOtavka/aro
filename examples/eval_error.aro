@@ -1,4 +1,1 @@
-let head: (T: Any -> [T..] -> T) <==
-    @hook("std.list.head" (T: Any -> [T..] -> T))
-
 [] |> (head <| type Any)
