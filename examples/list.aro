@@ -1,13 +1,3 @@
-let push: (T: Any -> T -> [T..] -> [T..]) <==
-    T: Any -(T -> [T..] -> [T..])-> el: T -([T..] -> [T..])-> list: [T..] -[T..]->
-        (el list) |> @hook("std.list.push"  ((T  [T..]) -> [T..]))
-let is_empty: (T: Any -> [T..] -> Bool) <==
-    @hook("std.list.is_empty" (T: Any -> [T..] -> Bool))
-let head: (T: Any -> [T..] -> T) <==
-    @hook("std.list.head" (T: Any -> [T..] -> T))
-let tail: (T: Any -> [T..] -> [T..]) <==
-    @hook("std.list.tail" (T: Any -> [T..] -> [T..]))
-
 let concat: (T: Any -> [T..] -> [T..] -> [T..]) <==
     T: Any -([T..] -> [T..] -> [T..])->
     first: [T..] -([T..] -> [T..])->
