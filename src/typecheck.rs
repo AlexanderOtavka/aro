@@ -18,15 +18,18 @@ impl Error {
     }
 }
 
-fn build_env(env: &mut HashMap<String, Type>, pattern: &Ast<Pattern>) {
+fn build_env(env: &mut HashMap<String, Type>, pattern: &Ast<Pattern>) -> Result<(), Error> {
     match &*pattern.expr {
         &Pattern::Ident(ref name, ref ident_type) => {
-            env.insert(name.clone(), *ident_type.expr.clone());
+            let ident_type = evaluate_type(ident_type, env)?;
+            env.insert(name.clone(), ident_type);
         }
         &Pattern::Tuple(ref vec) => for el in vec {
-            build_env(env, el);
+            build_env(env, el)?;
         },
     };
+
+    Ok(())
 }
 
 fn rename_type(ast: &Ast<Type>, name: &str, new_name: &str) -> Ast<Type> {
@@ -340,7 +343,7 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
 
     match &*ast.expr {
         &Expression::Value(ref value) => match value {
-            &Value::Hook(_, ref hook_type) => Ok(*hook_type.expr.clone()),
+            &Value::Hook(_, ref hook_type) => evaluate_type(hook_type, env),
             &Value::Int(_) => Ok(Type::Int),
             &Value::Num(_) => Ok(Type::Num),
             &Value::Bool(_) => Ok(Type::Bool),
@@ -383,7 +386,7 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
             }))),
             &Value::Func(ref pattern, ref body_type_ast, ref body) => {
                 let mut body_env = env.clone();
-                build_env(&mut body_env, pattern);
+                build_env(&mut body_env, pattern)?;
 
                 let param_type_ast = Ast::<Type>::from_pattern(pattern);
                 let declared_param_type = evaluate_type(&param_type_ast, env)?;
@@ -430,14 +433,19 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
             if let Type::GenericFunc(ref param, ref supertype, ref body) =
                 typecheck_ast(generic_func, env)?
             {
-                if arg.is_sub_type(supertype, env) {
-                    Ok(*substitute_type(body, param, arg).expr)
+                let arg_type = evaluate_type(arg, env)?;
+                let supertype = evaluate_type(supertype, env)?;
+                if arg_type.is_sub_type(&supertype, env) {
+                    Ok(evaluate_type(
+                        &substitute_type(body, param, &arg.replace_expr(arg_type)),
+                        env,
+                    )?)
                 } else {
                     Err(Error::type_error(
                         generic_func.left_loc,
                         generic_func.right_loc,
-                        &*supertype.expr,
-                        &*arg.expr,
+                        &supertype,
+                        &arg_type,
                     ))
                 }
             } else {
@@ -480,7 +488,7 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
         }
         &Expression::Let(ref pattern, ref value, ref body) => {
             let mut body_env = env.clone();
-            build_env(&mut body_env, &pattern);
+            build_env(&mut body_env, &pattern)?;
 
             let declared_value_type = evaluate_type(&Ast::<Type>::from_pattern(pattern), env)?;
             let actual_value_type = typecheck_ast(value, &body_env)?;
@@ -502,15 +510,17 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
                 let right_type = typecheck_ast(right, env)?;
 
                 if let Type::Func(ref param_type, ref output_type) = left_type {
-                    if !right_type.is_sub_type(&param_type.expr, env) {
+                    let param_type = evaluate_type(param_type, env)?;
+                    let output_type = evaluate_type(output_type, env)?;
+                    if !right_type.is_sub_type(&param_type, env) {
                         Err(Error::type_error(
                             right.left_loc,
                             right.right_loc,
-                            &*param_type.expr,
+                            &param_type,
                             &right_type,
                         ))
                     } else {
-                        Ok(*output_type.expr.clone())
+                        Ok(output_type)
                     }
                 } else {
                     Err(Error::LRLocated {
