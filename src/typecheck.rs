@@ -299,6 +299,91 @@ fn substitute_type(ast: &Ast<Type>, name: &str, value: &Ast<Type>) -> Ast<Type> 
     }
 }
 
+fn substitute_pattern(ast: &Ast<Pattern>, name: &str, value: &Ast<Type>) -> Ast<Pattern> {
+    match &*ast.expr {
+        &Pattern::Ident(ref ident_name, ref ident_type) => ast.replace_expr(Pattern::Ident(
+            ident_name.clone(),
+            substitute_type(ident_type, name, value),
+        )),
+        &Pattern::Tuple(ref vec) => ast.replace_expr(Pattern::Tuple(
+            vec.into_iter()
+                .map(|element| substitute_pattern(element, name, value))
+                .collect(),
+        )),
+    }
+}
+
+fn substitute_expr(ast: &Ast<Expression>, name: &str, value: &Ast<Type>) -> Ast<Expression> {
+    match &*ast.expr {
+        &Expression::GenericCall(ref expr, ref arg) => ast.replace_expr(Expression::GenericCall(
+            substitute_expr(expr, name, value),
+            substitute_type(arg, name, value),
+        )),
+        &Expression::BinOp(ref op, ref left, ref right) => ast.replace_expr(Expression::BinOp(
+            op.clone(),
+            substitute_expr(left, name, value),
+            substitute_expr(right, name, value),
+        )),
+        &Expression::If(ref c, ref t, ref e) => ast.replace_expr(Expression::If(
+            substitute_expr(c, name, value),
+            substitute_expr(t, name, value),
+            substitute_expr(e, name, value),
+        )),
+        &Expression::Let(ref bind_pattern, ref bind_value, ref body) => {
+            ast.replace_expr(Expression::Let(
+                substitute_pattern(bind_pattern, name, value),
+                substitute_expr(bind_value, name, value),
+                substitute_expr(body, name, value),
+            ))
+        }
+        &Expression::TypeLet(ref bind_name, ref bind_value, ref body) => {
+            if bind_name == name {
+                ast.clone()
+            } else {
+                ast.replace_expr(Expression::TypeLet(
+                    bind_name.clone(),
+                    substitute_type(bind_value, name, value),
+                    substitute_expr(body, name, value),
+                ))
+            }
+        }
+        &Expression::Value(Value::Func(ref param_pattern, ref body_type, ref body)) => {
+            ast.replace_expr(Expression::Value(Value::Func(
+                substitute_pattern(param_pattern, name, value),
+                substitute_type(body_type, name, value),
+                substitute_expr(body, name, value),
+            )))
+        }
+        &Expression::Value(Value::GenericFunc(
+            ref param_name,
+            ref param_supertype,
+            ref body_type,
+            ref body,
+        )) => ast.replace_expr(Expression::Value(Value::GenericFunc(
+            param_name.clone(),
+            substitute_type(param_supertype, name, value),
+            substitute_type(body_type, name, value),
+            substitute_expr(body, name, value),
+        ))),
+        &Expression::Value(Value::Tuple(ref vec)) => {
+            ast.replace_expr(Expression::Value(Value::Tuple(
+                vec.into_iter()
+                    .map(|element| substitute_expr(element, name, value))
+                    .collect(),
+            )))
+        }
+        &Expression::Value(Value::List(ref vec)) => {
+            ast.replace_expr(Expression::Value(Value::List(
+                vec.into_iter()
+                    .map(|element| substitute_expr(element, name, value))
+                    .collect(),
+            )))
+        }
+        &Expression::Value(_) => ast.clone(),
+        &Expression::Ident(_) => ast.clone(),
+    }
+}
+
 fn evaluate_type(ast: &Ast<Type>, env: &HashMap<String, Type>) -> Result<Type, Error> {
     match &*ast.expr {
         &Type::Func(ref input, ref output) => Ok(Type::Func(
@@ -505,6 +590,10 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
             } else {
                 typecheck_ast(body, &body_env)
             }
+        }
+        &Expression::TypeLet(ref name, ref value, ref body) => {
+            let replaced_value = value.replace_expr(evaluate_type(value, env)?);
+            typecheck_ast(&substitute_expr(body, name, &replaced_value), &env)
         }
         &Expression::BinOp(ref operation, ref left, ref right) => match operation {
             &BinOp::Call => {
@@ -802,6 +891,44 @@ mod typecheck_ast {
         assert_typecheck_err("x: Int -[Foo..]-> []");
         assert_typecheck_err("T: Any -(Foo -> Int)-> x: Foo -Int-> 5");
         assert_typecheck_err("T: Foo -(Int -> Int)-> x: Int -Int-> 5");
+    }
+
+    #[test]
+    fn checks_type_let() {
+        assert_typecheck_eq(
+            "
+            let I <== Int
+            let i: I <== 5
+            i
+            ",
+            "Int",
+        );
+        assert_typecheck_eq(
+            "
+            let F <== Int -> Int
+            let f: F <== x: Int -Int-> x + 1
+            f
+            ",
+            "(Int -> Int)",
+        );
+        assert_typecheck_eq(
+            "
+            let I <== Int
+            let F <== I -> I
+            let f: F <== x: I -I-> x + 1
+            f
+            ",
+            "(Int -> Int)",
+        );
+        assert_typecheck_eq(
+            "
+            let I <== Int
+            let F <== T: I -> T -> T
+            let f: F <== T: I -(T -> T)-> x: T -T-> x
+            f
+            ",
+            "(T: Int -> ((T) -> (T)))",
+        );
     }
 
     #[test]

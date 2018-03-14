@@ -11,10 +11,11 @@ let concat: (T: Any -> [T..] -> [T..] -> [T..]) <==
                 <| (first |> (head <| type T))
                 <| (first |> (tail <| type T) |> (concat <| type T) <| second)
 
-let numbers_123: [Int..] <== [1 2 3]
-let empty: [Int..] <== []
+let List_Element <== Int
+let numbers_123: [List_Element..] <== [1 2 3]
+let empty: [List_Element..] <== []
 
 numbers_123
-    |> (concat <| type Int) <| empty
-    |> (concat <| type Int) <| []
-    |> (concat <| type Int) <| [4]
+    |> (concat <| type List_Element) <| empty
+    |> (concat <| type List_Element) <| []
+    |> (concat <| type List_Element) <| [4]

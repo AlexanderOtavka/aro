@@ -18,6 +18,7 @@ pub enum Expression {
     Ident(String),
     Let(Ast<Pattern>, Ast<Expression>, Ast<Expression>),
     GenericCall(Ast<Expression>, Ast<Type>),
+    TypeLet(String, Ast<Type>, Ast<Expression>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -161,6 +162,7 @@ impl Display for Expression {
             &Expression::If(ref c, ref t, ref e) => write!(f, "(if {} then {} else {})", c, t, e),
             &Expression::Ident(ref n) => write!(f, "({})", n),
             &Expression::Let(ref p, ref v, ref e) => write!(f, "(let {} <== {} {})", p, v, e),
+            &Expression::TypeLet(ref n, ref v, ref e) => write!(f, "(let {} <== {} {})", n, v, e),
         }
     }
 }

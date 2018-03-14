@@ -9,6 +9,8 @@ pub Expr: Ast<Expression> = {
 
     <l:@L> "let" <p:Pattern> "<==" <v:Expr> <e:Expr> <r:@R> =>
         Ast::<Expression>::new(l, r, Expression::Let(p, v, e)),
+    <l:@L> "let" <n:TypeIdent> "<==" <v:Type> <e:Expr> <r:@R> =>
+        Ast::<Expression>::new(l, r, Expression::TypeLet(n, v, e)),
 
     <l:@L> <p:IdentPattern> "-" <et:ValueType> "->" <e:Expr> <r:@R> =>
         Ast::<Expression>::new(l, r, Expression::Value(Value::Func(p, et, e))),

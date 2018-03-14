@@ -192,6 +192,13 @@ fn substitute(
                     }
                 }
             }
+            &Expression::TypeLet(ref bind_name, ref bind_value, ref body) => {
+                ast.replace_expr(Expression::TypeLet(
+                    bind_name.clone(),
+                    bind_value.clone(),
+                    substitute(body, pattern, value),
+                ))
+            }
             &Expression::Value(Value::Func(ref param_pattern, ref body_type, ref body)) => Ast {
                 expr: Box::new(Expression::Value(Value::Func(
                     param_pattern.clone(),
@@ -545,6 +552,7 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
                 right_loc,
             })
         },
+        &Expression::TypeLet(_, _, ref body) => Ok(body.clone()),
     }
 }
 
