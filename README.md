@@ -15,6 +15,98 @@ will run all unit tests inside the docker container.
 
 ## Changelog
 
+### Assignment 5 (3/14/18)
+
+I don't think I missed anything, but I did a lot here. Generics are meant to
+count towards the final project. Also, I implemented this all without a single
+thought to efficiency. I can optimize later if needed.
+
+#### New Features
+
+* **Type system** with subtyping relationships. `Any` is the universal
+  supertype, `Empty` is the universal subtype.
+
+* **Tuples** of up to `n` elements, along with tuple destructing in functions
+  and let expressions using patterns.
+
+* **Heterogenous lists**. Elements of the empty list have the `Empty` type
+  (that's why we need it).
+
+* **Generics**, which are expressed as functions that take a type parameter
+  with a subtyping restriction. Also, tuples can be destructed in functions and
+  let expressions using patterns. "unit" is just an empty tuple.
+
+* **Type aliases**, which are basically just let bindings for types.
+
+* The updated grammar is as follows:
+
+  ```
+  // Expression
+  e ::= n                       // integer
+      | f                       // float
+      | #true() | #false()      // boolean
+      | x                       // identifier
+      | e1 + e1 | e1 - e2 | e1 * e2 | e1 / e2   // arithmetic
+      | e1 <= e2                // comparison
+      | if e1 then e2 else e3   // if
+      | let p <== e1 e2         // recursive let binding with pattern
+      | let X <== t e           // type alias
+      | x: t1 -t2-> e           // function declaration shorthand
+      | fn p -t2-> e            // function declaration with pattern
+      | X: t1 -t2-> e           // generic function
+      | e1 <| e2 | e1 |> e2     // function call
+      | e <| type t | type t |> e   // generic call
+      | (e1 e2 ... en)          // tuple
+      | [e1 e2 ... en]          // list
+      | (e)                     // parenthesis
+
+  // Pattern
+  p ::= x: t            // identifier
+      | (p1 p2 ... pn)  // destructed tuple
+
+  // Type
+  t ::= Int             // integer
+      | Num             // float (is a supertype of Int)
+      | Bool            // boolean
+      | Any             // universal supertype
+      | Empty           // universal subtype
+      | X               // type identifier
+      | t -> t          // function
+      | X: t1 -> t2     // generic function (t1 is a subtyping restriction on X)
+      | (t1 t2 ... tn)  // tuple
+      | [t..]           // list (homogenous, the `..` is part of the syntax)
+  ```
+
+* The typing of `if`s is a little bit special. Instead of forcing them to be the
+  same, it tries to find a common supertype, defaulting to `Any` if neither
+  branch is a subtype of the other. This solves annoying issues where you
+  might return an `Int` in one branch and a `Float` in another and have the
+  expression not typecheck.
+
+* Added an ugly "hook" syntax. This is only meant to be used internally, but it
+  is technically exposed to the user. Hooks allow us to call into the runtime.
+  Hooks aren't automatically typesafe, so they need to be annotated inline.
+  I use hooks to implement the following globally bound functions:
+  ```
+  push: T: Any -> T -> [T..] -> [T..]   // cons by a different name
+  is_empty: T: Any -> [T..] -> Bool
+  head: T: Any -> [T..] -> T
+  tail: T: Any -> [T..] -> [T..]
+  floordiv: Num -> Num -> Int   // perform division and floor the result
+  ```
+
+#### Changed Features
+
+* `a / b` for integers `a` and `b` now returns a float. Integer division is now
+  done with `floordiv`. I did this because I wanted `Int` and `Num` aka.
+  Float to have a subtyping relationship, and I didn't want people to have to
+  worry about the possibility that dividing two `Num`s might sometimes floor
+  the result. Python 3 works this way too.
+
+#### Known Bugs
+
+None.
+
 ### Assignment 4 (2/25/18)
 
 #### New Features
