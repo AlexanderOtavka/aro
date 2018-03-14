@@ -1,7 +1,9 @@
-let Element <== Num
-let list_3_elements: (El: Any -> El -> [El..]) <==
-    T: Any -(T -> [T..])->
-    el: T -[T..]->
+let T_Bool <== T: Any -> (T Bool)
+let T_Bool_List <== T: Any -> [T_Bool <| T..]
+
+let list_3_elements: (Int -> (T_Bool_List <| Num)) <==
+    num: Int -(T_Bool_List <| Num)->
+        let el: (T_Bool <| Int) <== (num #true())
         [el el el]
 
-list_3_elements <| type Element <| 5
+list_3_elements <| 5

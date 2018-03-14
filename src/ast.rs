@@ -59,6 +59,7 @@ pub enum Type {
     Ident(String),
     Func(Ast<Type>, Ast<Type>),
     GenericFunc(String, Ast<Type>, Ast<Type>),
+    GenericCall(Ast<Type>, Ast<Type>),
     Tuple(Vec<Ast<Type>>),
     List(Ast<Type>),
 }
@@ -230,6 +231,7 @@ impl Display for Type {
                 &Type::GenericFunc(ref name, ref supertype, ref output) => {
                     format!("({}: {} -> {})", name, supertype, output)
                 }
+                &Type::GenericCall(ref func, ref arg) => format!("({} <| {})", func, arg),
                 &Type::Tuple(ref vec) => sequence_to_str("(", vec, ")"),
                 &Type::List(ref element_type) => format!("[{}..]", element_type),
             }

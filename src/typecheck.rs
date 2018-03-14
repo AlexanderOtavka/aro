@@ -295,6 +295,10 @@ fn substitute_type(ast: &Ast<Type>, name: &str, value: &Ast<Type>) -> Ast<Type> 
                     .collect(),
             ),
         ),
+        &Type::GenericCall(ref func, ref arg) => ast.replace_expr(Type::GenericCall(
+            substitute_type(func, name, value),
+            substitute_type(arg, name, value),
+        )),
         _ => ast.clone(),
     }
 }
@@ -386,6 +390,35 @@ fn substitute_expr(ast: &Ast<Expression>, name: &str, value: &Ast<Type>) -> Ast<
 
 fn evaluate_type(ast: &Ast<Type>, env: &HashMap<String, Type>) -> Result<Type, Error> {
     match &*ast.expr {
+        &Type::GenericCall(ref func, ref arg) => {
+            let func_type = evaluate_type(func, env)?;
+            let arg_type = evaluate_type(arg, env)?;
+            if let Type::GenericFunc(param_name, param_supertype, body) = func_type {
+                let param_supertype = evaluate_type(&param_supertype, env)?;
+                if arg_type.is_sub_type(&param_supertype, env) {
+                    evaluate_type(
+                        &substitute_type(&body, &param_name, &arg.replace_expr(arg_type)),
+                        env,
+                    )
+                } else {
+                    Err(Error::type_error(
+                        arg.left_loc,
+                        arg.right_loc,
+                        &param_supertype,
+                        &arg_type,
+                    ))
+                }
+            } else {
+                Err(Error::LRLocated {
+                    message: format!(
+                        "What did you expect would happen when you called `{}` with a generic argument?",
+                        func_type
+                    ),
+                    left_loc: func.left_loc,
+                    right_loc: func.right_loc
+                })
+            }
+        }
         &Type::Func(ref input, ref output) => Ok(Type::Func(
             input.replace_expr(evaluate_type(input, env)?),
             output.replace_expr(evaluate_type(output, env)?),
@@ -517,9 +550,8 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
             }
         },
         &Expression::GenericCall(ref generic_func, ref arg) => {
-            if let Type::GenericFunc(ref param, ref supertype, ref body) =
-                typecheck_ast(generic_func, env)?
-            {
+            let func_type = typecheck_ast(generic_func, env)?;
+            if let Type::GenericFunc(ref param, ref supertype, ref body) = func_type {
                 let arg_type = evaluate_type(arg, env)?;
                 let supertype = evaluate_type(supertype, env)?;
                 if arg_type.is_sub_type(&supertype, env) {
@@ -537,8 +569,9 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
                 }
             } else {
                 Err(Error::LRLocated {
-                    message: String::from(
-                        "That has to be a generic function if you wanna call it with a type.",
+                    message: format!(
+                        "This `{}` has to be a generic function if you wanna call it with a type.",
+                        func_type
                     ),
                     left_loc: generic_func.left_loc,
                     right_loc: generic_func.right_loc,

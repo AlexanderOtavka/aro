@@ -72,6 +72,12 @@ Value = {
 pub Type: Ast<Type> = {
     <l:@L> <p:ValueType> "->" <e:Type> <r:@R> => Ast::<Type>::new(l, r, Type::Func(p, e)),
     <l:@L> <n:TypeIdent> ":" <s:ValueType> "->" <e:Type> <r:@R> => Ast::<Type>::new(l, r, Type::GenericFunc(n, s, e)),
+    TypeCall,
+};
+
+TypeCall = {
+    <l:@L> <f:TypeCall> "<|" <a:ValueType> <r:@R> => Ast::<Type>::new(l, r, Type::GenericCall(f, a)),
+    <l:@L> <a:TypeCall> "|>" <f:ValueType> <r:@R> => Ast::<Type>::new(l, r, Type::GenericCall(f, a)),
     ValueType,
 };
 
