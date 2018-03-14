@@ -85,6 +85,8 @@ fn rename_type(ast: &Ast<Type>, name: &str, new_name: &str) -> Ast<Type> {
 }
 
 impl Type {
+    // This version isn't terribly smart, but it is guranteed that both input
+    // types will be suptypes of the result.
     pub fn union(&self, other: &Type, env: &HashMap<String, Type>) -> Type {
         if self.is_sub_type(other, env) {
             other.clone()
