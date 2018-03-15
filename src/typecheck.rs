@@ -80,6 +80,9 @@ fn rename_type(ast: &Ast<Type>, name: &str, new_name: &str) -> Ast<Type> {
                     .collect(),
             ),
         ),
+        &Type::Ref(ref value_type) => {
+            ast.replace_expr(Type::Ref(rename_type(value_type, name, new_name)))
+        }
         _ => ast.clone(),
     }
 }
@@ -115,6 +118,9 @@ impl Type {
             }
             // Nothing is a subtype of a generic, because any generic could be empty
             (_, &Type::Ident(_)) => false,
+            (&Type::Ref(ref self_type), &Type::Ref(ref other_type)) => {
+                self_type.is_sub_type(other_type, env)
+            }
             (&Type::Func(ref self_in, ref self_out), &Type::Func(ref other_in, ref other_out)) => {
                 self_out.is_sub_type(other_out, env) && other_in.is_sub_type(self_in, env)
             }
@@ -295,6 +301,9 @@ fn substitute_type(ast: &Ast<Type>, name: &str, value: &Ast<Type>) -> Ast<Type> 
                     .collect(),
             ),
         ),
+        &Type::Ref(ref value_type) => {
+            ast.replace_expr(Type::Ref(substitute_type(value_type, name, value)))
+        }
         _ => ast.clone(),
     }
 }
@@ -379,8 +388,7 @@ fn substitute_expr(ast: &Ast<Expression>, name: &str, value: &Ast<Type>) -> Ast<
                     .collect(),
             )))
         }
-        &Expression::Value(_) => ast.clone(),
-        &Expression::Ident(_) => ast.clone(),
+        &Expression::Value(_) | &Expression::Ident(_) => ast.clone(),
     }
 }
 
@@ -420,6 +428,9 @@ fn evaluate_type(ast: &Ast<Type>, env: &HashMap<String, Type>) -> Result<Type, E
 
             new_vec
         })),
+        &Type::Ref(ref value_type) => Ok(Type::Ref(
+            value_type.replace_expr(evaluate_type(value_type, env)?),
+        )),
         expr => Ok(expr.clone()),
     }
 }
@@ -434,6 +445,7 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
             &Value::Int(_) => Ok(Type::Int),
             &Value::Num(_) => Ok(Type::Num),
             &Value::Bool(_) => Ok(Type::Bool),
+            &Value::Ref(_) => panic!("Cannot typecheck raw pointer"),
             &Value::Tuple(ref vec) => Ok(Type::Tuple({
                 let mut type_vec = Vec::new();
 

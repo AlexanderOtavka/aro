@@ -63,7 +63,7 @@ Value = {
 
     <l:@L> "[" <e: Expr* > "]" <r:@R> => Ast::<Expression>::new(l, r, Expression::Value(Value::List(e))),
 
-    <l:@L> "@hook" "(" <n:r#""([a-z](_?[a-z])*\.)+[a-z](_?[a-z])*""#> <t:Type> ")" <r:@R> =>
+    <l:@L> "@hook" "(" <n:r#""([a-z](_?[a-z])*\.)+[a-z](_?[a-z])*!?""#> <t:Type> ")" <r:@R> =>
         Ast::<Expression>::new_hook(l, r, n, t),
 
     "(" <Expr> ")",
@@ -83,6 +83,9 @@ ValueType = {
     <l:@L> "Bool" <r:@R> => Ast::<Type>::new(l, r, Type::Bool),
     <l:@L> "Any" <r:@R> => Ast::<Type>::new(l, r, Type::Any),
     <l:@L> "Empty" <r:@R> => Ast::<Type>::new(l, r, Type::Empty),
+
+    <l:@L> "(" "Ref" "<|" <t:Type> ")" <r:@R> => Ast::<Type>::new(l, r, Type::Ref(t)),
+    <l:@L> "(" <t:Type> "|>" "Ref" ")" <r:@R> => Ast::<Type>::new(l, r, Type::Ref(t)),
 
     <l:@L> "(" ")" <r:@R> => Ast::<Type>::new(l, r, Type::Tuple(vec![])),
     <l:@L> "(" <h:Type> <t: Type+ > ")" <r:@R> => Ast::<Type>::new(l, r, Type::Tuple({
@@ -118,7 +121,7 @@ Num: f64 = {
 };
 
 Ident: String = {
-    r"[a-z]+((_[0-9]+)|(_[a-z]+))*" => String::from(<>),
+    r"[a-z]+((_[0-9]+)|(_[a-z]+))*!?" => String::from(<>),
 };
 
 TypeIdent: String = {

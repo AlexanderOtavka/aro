@@ -2,6 +2,8 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::f64;
 use std::iter::Iterator;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 #[derive(Debug, Clone)]
 pub struct Ast<T> {
@@ -41,6 +43,7 @@ pub enum Value {
     Tuple(Vec<Ast<Expression>>),
     List(Vec<Ast<Expression>>),
     Hook(Vec<String>, Ast<Type>),
+    Ref(Rc<RefCell<Value>>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -61,6 +64,7 @@ pub enum Type {
     GenericFunc(String, Ast<Type>, Ast<Type>),
     Tuple(Vec<Ast<Type>>),
     List(Ast<Type>),
+    Ref(Ast<Type>),
 }
 
 impl<T> Ast<T> {
@@ -192,8 +196,9 @@ impl Display for Value {
                 &Value::Tuple(ref vec) => sequence_to_str("(", vec, ")"),
                 &Value::List(ref vec) => sequence_to_str("[", vec, "]"),
                 &Value::Hook(ref name, ref hook_type) => {
-                    format!("@hook({} {})", name.join("."), hook_type)
+                    format!("@hook (\"{}\" {})", name.join("."), hook_type)
                 }
+                &Value::Ref(ref rc) => format!("(ref <| {})", rc.borrow()),
             }
         )
     }
@@ -232,6 +237,7 @@ impl Display for Type {
                 }
                 &Type::Tuple(ref vec) => sequence_to_str("(", vec, ")"),
                 &Type::List(ref element_type) => format!("[{}..]", element_type),
+                &Type::Ref(ref value_type) => format!("(Ref <| {})", value_type),
             }
         )
     }

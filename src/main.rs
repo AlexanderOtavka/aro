@@ -117,6 +117,14 @@ mod evaluate_file {
     }
 
     #[test]
+    fn mutability() {
+        assert_eq!(
+            evaluate_file("examples/mutability.aro", false).unwrap(),
+            "(7 7 (ref <| 7))"
+        )
+    }
+
+    #[test]
     fn parse_error() {
         assert_eq!(
             evaluate_file("examples/parse_error.aro", false).unwrap_err(),

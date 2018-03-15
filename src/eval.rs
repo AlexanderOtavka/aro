@@ -3,6 +3,8 @@ use util::Error;
 use std::collections::HashMap;
 use std::f64;
 use std::iter::Iterator;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 fn evaluate_number_operator<F>(
     ast: &Ast<Expression>,
@@ -360,6 +362,35 @@ fn handle_hook_call(
                 panic!("int.floordiv arg should be a tuple")
             }
         }
+        "std.ref.new" => Ok(Ast::<Expression>::new(
+            left_loc,
+            right_loc,
+            Expression::Value(Value::Ref(Rc::new(RefCell::new(param_value.clone())))),
+        )),
+        "std.ref.get!" => if let &Value::Ref(ref ptr) = param_value {
+            Ok(Ast::<Expression>::new(
+                left_loc,
+                right_loc,
+                Expression::Value(ptr.borrow().clone()),
+            ))
+        } else {
+            panic!("ref.get! must be called with a ref")
+        },
+        "std.ref.set!" => if let &Value::Tuple(ref vec) = param_value {
+            if let &Expression::Value(Value::Ref(ref ptr)) = &*vec[0].expr {
+                let new_value_ast = &vec[1];
+                if let &Expression::Value(ref new_value) = &*new_value_ast.expr {
+                    *ptr.borrow_mut() = new_value.clone();
+                    Ok(new_value_ast.clone())
+                } else {
+                    panic!("ref.get! second tuple arg must be a value")
+                }
+            } else {
+                panic!("ref.get! first tuple arg must be a ref")
+            }
+        } else {
+            panic!("ref.get! must be called with a tuple")
+        },
         _ => {
             return None;
         }
@@ -371,8 +402,8 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
     let right_loc = ast.right_loc;
 
     match &*ast.expr {
-        &Expression::Value(Value::GenericFunc(_, _, _, ref body)) => Ok(body.clone()),
         &Expression::GenericCall(ref expr, _) => Ok(expr.clone()),
+        &Expression::Value(Value::GenericFunc(_, _, _, ref body)) => Ok(body.clone()),
         &Expression::Value(Value::Tuple(ref vec)) => {
             let mut stepped_tup = Vec::new();
 
