@@ -59,11 +59,11 @@ pub fn get_globals() -> HashMap<String, (Value, Type)> {
     sources.insert(
         "set!",
         r#"
-            T: Any -(T -> (Ref <| T) -> T)->
-            new_value: T -((Ref <| T) -> T)->
-            reference: (Ref <| T) -T->
+            T: Any -(T -> (Ref <| T) -> (Ref <| T))->
+            new_value: T -((Ref <| T) -> (Ref <| T))->
+            reference: (Ref <| T) -(Ref <| T)->
                 (reference new_value)
-                    |> @hook("std.ref.set!"  (((Ref <| T)  T) -> T))
+                    |> @hook("std.ref.set!"  (((Ref <| T)  T) -> (Ref <| T)))
         "#,
     );
 

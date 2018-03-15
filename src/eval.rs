@@ -377,11 +377,12 @@ fn handle_hook_call(
             panic!("ref.get! must be called with a ref")
         },
         "std.ref.set!" => if let &Value::Tuple(ref vec) = param_value {
-            if let &Expression::Value(Value::Ref(ref ptr)) = &*vec[0].expr {
-                let new_value_ast = &vec[1];
+            let ref_ast = &vec[0];
+            let new_value_ast = &vec[1];
+            if let &Expression::Value(Value::Ref(ref ptr)) = &*ref_ast.expr {
                 if let &Expression::Value(ref new_value) = &*new_value_ast.expr {
                     *ptr.borrow_mut() = new_value.clone();
-                    Ok(new_value_ast.clone())
+                    Ok(ref_ast.clone())
                 } else {
                     panic!("ref.get! second tuple arg must be a value")
                 }
