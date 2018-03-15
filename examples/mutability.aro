@@ -3,7 +3,7 @@ let mutable_ref: (Ref <| Int) <== ref <| type Int <| 5
 let modified: Int <== mutable_ref |> (set! <| type Int <| 7)
 
 (
-    (get! <| type Int) <| mutable_ref
+    get! <| type Int <| mutable_ref
     modified
     mutable_ref
 )
