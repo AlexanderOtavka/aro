@@ -1,9 +1,10 @@
 let mutable_ref: (Ref <| Int) <== ref <| type Int <| 5
 
+let initial: Int <== mutable_ref |> (get! <| type Int)
 let modified: Int <== mutable_ref |> (set! <| type Int <| 7)
 
 (
-    get! <| type Int <| mutable_ref
+    initial
     modified
     mutable_ref
 )
