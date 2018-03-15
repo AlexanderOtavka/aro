@@ -1,9 +1,9 @@
-use ast::Ast;
+use ast::{Ast, Expression};
 use grammar::parse_Expr;
 use lalrpop_util::ParseError;
 use util::Error;
 
-pub fn source_to_ast<'input>(source: &'input str) -> Result<Ast, Error> {
+pub fn source_to_ast<'input>(source: &'input str) -> Result<Ast<Expression>, Error> {
     parse_Expr(source).map_err(|err| match err {
         ParseError::InvalidToken { location } => Error::Located {
             message: String::from("Bitch, do I look like I speak perl?"),
@@ -72,7 +72,7 @@ pub fn source_to_ast<'input>(source: &'input str) -> Result<Ast, Error> {
 mod source_to_ast {
     use super::*;
 
-    fn assert_parse_eq(actual: Result<Ast, Error>, expected: &str) {
+    fn assert_parse_eq(actual: Result<Ast<Expression>, Error>, expected: &str) {
         assert_eq!(format!("{}", actual.unwrap()), expected);
     }
 
@@ -118,6 +118,14 @@ mod source_to_ast {
     }
 
     #[test]
+    fn makes_a_tuple_tree() {
+        assert_parse_eq(source_to_ast("()"), "()");
+        assert_parse_eq(source_to_ast("(1)"), "1");
+        assert_parse_eq(source_to_ast("(1  #false())"), "(1 #false ())");
+        assert_parse_eq(source_to_ast("(1  #false()  3.1)"), "(1 #false () 3.1)");
+    }
+
+    #[test]
     fn makes_a_simple_plus_tree() {
         assert_parse_eq(source_to_ast("2 + 5.1"), "(2 + 5.1)");
     }
@@ -144,7 +152,12 @@ mod source_to_ast {
 
     #[test]
     fn makes_a_simple_function_tree() {
-        assert_parse_eq(source_to_ast("a -> 5"), "(a -> 5)");
+        assert_parse_eq(source_to_ast("a: Int -Int-> 5"), "(fn a: Int -Int-> 5)");
+    }
+
+    #[test]
+    fn spits_out_type_identifiers() {
+        assert_parse_eq(source_to_ast("a: Foo -Int-> 5"), "(fn a: (Foo) -Int-> 5)");
     }
 
     #[test]
@@ -167,12 +180,18 @@ mod source_to_ast {
 
     #[test]
     fn makes_a_nested_function_tree() {
-        assert_parse_eq(source_to_ast("a -> a <| 5 + 1"), "(a -> ((a) <| (5 + 1)))");
+        assert_parse_eq(
+            source_to_ast("a: (Int -> Bool) -Bool-> a <| 5 + 1"),
+            "(fn a: (Int -> Bool) -Bool-> ((a) <| (5 + 1)))",
+        );
     }
 
     #[test]
     fn makes_a_let_tree() {
-        assert_parse_eq(source_to_ast("let a <== 5 a"), "(let a <== 5 (a))");
+        assert_parse_eq(
+            source_to_ast("let a: Int <== 5 a"),
+            "(let a: Int <== 5 (a))",
+        );
     }
 
     #[test]
@@ -183,10 +202,5 @@ mod source_to_ast {
     #[test]
     fn complains_about_empty_input() {
         assert!(source_to_ast("").is_err());
-    }
-
-    #[test]
-    fn doesnt_like_empty_parens() {
-        assert!(source_to_ast("()").is_err());
     }
 }

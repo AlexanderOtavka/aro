@@ -1,4 +1,1 @@
-if #false() then
-    2 * 1 / 0
-else
-    -10 <| -5
+[] |> (head <| type Any)

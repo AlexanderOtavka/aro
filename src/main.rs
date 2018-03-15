@@ -8,21 +8,34 @@
 
 extern crate clap;
 extern crate lalrpop_util;
-mod parse;
-mod eval;
 mod ast;
 mod grammar;
 mod util;
+mod parse;
+mod typecheck;
+mod eval;
+mod globals;
 
 use std::io::prelude::*;
 use std::process::exit;
 use util::Error;
+use globals::get_globals;
 
 fn evaluate_source(input: &str, small_step: bool) -> Result<String, Error> {
     let ast = parse::source_to_ast(input)?;
 
+    let globals = get_globals();
+
+    typecheck::typecheck_ast(
+        &ast,
+        &globals
+            .iter()
+            .map(|(name, &(_, ref value_type))| (name.clone(), value_type.clone()))
+            .collect(),
+    )?;
+
     if small_step {
-        let steps = eval::get_eval_steps(&ast)?;
+        let steps = eval::get_eval_steps(&ast, &globals)?;
 
         let mut output = String::new();
         for step in &steps[0..(steps.len() - 1)] {
@@ -33,96 +46,9 @@ fn evaluate_source(input: &str, small_step: bool) -> Result<String, Error> {
 
         Ok(output)
     } else {
-        let value = eval::evaluate_expression(&ast)?;
+        let value = eval::evaluate_ast(&ast, &globals)?;
 
         Ok(format!("{}", value))
-    }
-}
-
-#[cfg(test)]
-mod evaluate_source {
-    use super::*;
-
-    #[test]
-    fn spits_out_a_result() {
-        assert_eq!(evaluate_source("5", false).unwrap(), "5");
-        assert_eq!(evaluate_source("-51", false).unwrap(), "-51");
-        assert_eq!(evaluate_source("#false ()", false).unwrap(), "#false ()");
-        assert_eq!(evaluate_source("#true ()", false).unwrap(), "#true ()");
-    }
-
-    #[test]
-    fn evaluates_an_ast() {
-        assert_eq!(
-            evaluate_source(
-                "
-                -20.2 +
-                (5 + 10 + 15)
-                ",
-                false
-            ).unwrap(),
-            "9.8"
-        );
-        assert_eq!(
-            evaluate_source(
-                "
-                -20.2 +
-                (5 + 10 + 15)
-                ",
-                true
-            ).unwrap(),
-            "--> (-20.2 + ((5 + 10) + 15))\
-             \n--> (-20.2 + (15 + 15))\
-             \n--> (-20.2 + 30)\
-             \n--> 9.8"
-        );
-    }
-
-    #[test]
-    fn evaluates_an_if_expression() {
-        assert_eq!(
-            evaluate_source(
-                "
-                if 20 <= 10 then
-                    2 * (0 / 0)
-                else
-                    -10 - -5
-                ",
-                false
-            ).unwrap(),
-            "-5"
-        );
-    }
-
-    #[test]
-    fn does_zero_division_with_floats() {
-        assert_eq!(
-            evaluate_source(
-                "
-                1 / 0.0 -
-                    100000000000000000000000000000000000000000000000000000.0
-                ",
-                false
-            ).unwrap(),
-            "inf"
-        );
-    }
-
-    #[test]
-    fn reports_an_error() {
-        assert!(
-            evaluate_source(
-                "
-                20 + (5 + 10
-                ",
-                false
-            ).is_err()
-        );
-    }
-
-    #[test]
-    fn complains_about_extra_tokens_in_file() {
-        assert!(evaluate_source("5 7", false).is_err());
     }
 }
 
@@ -135,6 +61,92 @@ fn evaluate_file(file_name: &str, small_step: bool) -> Result<String, String> {
         .map_err(|_| "Couldn't read input.")?;
 
     evaluate_source(&input_string, small_step).map_err(|err| err.as_string(&input_string))
+}
+
+#[cfg(test)]
+mod evaluate_file {
+    use super::*;
+
+    #[test]
+    fn basic_expressions() {
+        assert_eq!(
+            evaluate_file("examples/basic_expressions.aro", false).unwrap(),
+            "-5"
+        )
+    }
+
+    #[test]
+    fn eval_error() {
+        assert_eq!(
+            evaluate_file("examples/eval_error.aro", false).unwrap_err(),
+            "As usual, you can\'t get head.\
+             \nEspecially not from an empty list.\
+             \n      |\
+             \n    1 | [] |> (head <| type Any)\
+             \n      | ^^"
+        )
+    }
+
+    #[test]
+    fn function_calls() {
+        assert_eq!(
+            evaluate_file("examples/function_calls.aro", false).unwrap(),
+            "2.5"
+        )
+    }
+
+    #[test]
+    fn generics_expressions() {
+        assert_eq!(
+            evaluate_file("examples/generics.aro", false).unwrap(),
+            "[5 5 5]"
+        )
+    }
+
+    #[test]
+    fn let_expressions() {
+        assert_eq!(evaluate_file("examples/let.aro", false).unwrap(), "2.5")
+    }
+
+    #[test]
+    fn list() {
+        assert_eq!(
+            evaluate_file("examples/list.aro", false).unwrap(),
+            "[1 2 3 4]"
+        )
+    }
+
+    #[test]
+    fn parse_error() {
+        assert_eq!(
+            evaluate_file("examples/parse_error.aro", false).unwrap_err(),
+            "Bitch, do I look like I speak perl?\
+             \n      |\
+             \n    4 |     -10 & -5\
+             \n      |         ^"
+        )
+    }
+
+    #[test]
+    fn recursion() {
+        assert_eq!(
+            evaluate_file("examples/recursion.aro", false).unwrap(),
+            "120"
+        )
+    }
+
+    #[test]
+    fn right_pipe() {
+        assert_eq!(
+            evaluate_file("examples/right_pipe.aro", false).unwrap(),
+            "7"
+        )
+    }
+
+    #[test]
+    fn tuple() {
+        assert_eq!(evaluate_file("examples/tuple.aro", false).unwrap(), "12.29")
+    }
 }
 
 fn main() {
