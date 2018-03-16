@@ -66,6 +66,20 @@ pub fn get_globals() -> HashMap<String, (Value, Type)> {
                     |> @hook("std.ref.set!"  (((Ref <| T)  T) -> (Ref <| T)))
         "#,
     );
+    sources.insert(
+        "while",
+        r#"
+            let while_internal: ((() -> Bool) -> (() -> Any) -> ()) <==
+                condition: (() -> Bool) -((() -> Any) -> ())->
+                body: (() -> Any) -()->
+                    if condition <| () then
+                        body <| ();
+                        while_internal <| condition <| body
+                    else
+                        ()
+            while_internal
+        "#,
+    );
 
     let mut globals = HashMap::new();
     for (name, source) in sources {

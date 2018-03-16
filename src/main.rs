@@ -120,7 +120,7 @@ mod evaluate_file {
     fn mutability() {
         assert_eq!(
             evaluate_file("examples/mutability.aro", false).unwrap(),
-            "(5 7 (ref <| 7))"
+            "(2 16 7 (ref <| 7))"
         )
     }
 
