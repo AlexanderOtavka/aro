@@ -161,6 +161,12 @@ fn substitute(
                     ast.clone()
                 }
             }
+            &Expression::Sequence(ref side_effect, ref result) => {
+                ast.replace_expr(Expression::Sequence(
+                    substitute(side_effect, pattern, value),
+                    substitute(result, pattern, value),
+                ))
+            }
             &Expression::BinOp(ref op, ref left, ref right) => Ast {
                 expr: Box::new(Expression::BinOp(
                     op.clone(),
@@ -430,6 +436,11 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
             ),
             left_loc,
             right_loc,
+        }),
+        &Expression::Sequence(ref side_effect, ref result) => Ok(if side_effect.is_term() {
+            result.clone()
+        } else {
+            ast.replace_expr(Expression::Sequence(step_ast(side_effect)?, result.clone()))
         }),
         &Expression::BinOp(ref operation, ref left_ast, ref right_ast) => match (
             &*left_ast.expr,

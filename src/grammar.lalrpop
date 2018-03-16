@@ -20,6 +20,9 @@ pub Expr: Ast<Expression> = {
     <l:@L> <p:TypeIdent> ":" <s:ValueType> "-" <et:ValueType> "->" <e:Expr> <r:@R> =>
         Ast::<Expression>::new(l, r, Expression::Value(Value::GenericFunc(p, s, et, e))),
 
+    <l:@L> <s:Call> ";" <e:Expr> <r:@R> =>
+        Ast::<Expression>::new(l, r, Expression::Sequence(s, e)),
+
     Call,
 };
 

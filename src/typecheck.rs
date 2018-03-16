@@ -333,6 +333,12 @@ fn substitute_expr(ast: &Ast<Expression>, name: &str, value: &Ast<Type>) -> Ast<
             substitute_expr(left, name, value),
             substitute_expr(right, name, value),
         )),
+        &Expression::Sequence(ref side_effect, ref result) => {
+            ast.replace_expr(Expression::Sequence(
+                substitute_expr(side_effect, name, value),
+                substitute_expr(result, name, value),
+            ))
+        }
         &Expression::If(ref c, ref t, ref e) => ast.replace_expr(Expression::If(
             substitute_expr(c, name, value),
             substitute_expr(t, name, value),
@@ -528,6 +534,10 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
                 }
             }
         },
+        &Expression::Sequence(ref side_effect, ref result) => {
+            typecheck_ast(side_effect, env)?;
+            typecheck_ast(result, env)
+        }
         &Expression::GenericCall(ref generic_func, ref arg) => {
             if let Type::GenericFunc(ref param, ref supertype, ref body) =
                 typecheck_ast(generic_func, env)?
