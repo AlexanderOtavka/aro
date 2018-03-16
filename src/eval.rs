@@ -846,6 +846,22 @@ mod evaluate_ast {
     }
 
     #[test]
+    fn sequences_execute_side_effects() {
+        assert_eval_eq(
+            r#"
+            let x: Any <== @hook("std.ref.new" Any) <| 5
+            @hook("std.ref.set!" Any) <| (x  7);
+            @hook("std.ref.set!" Any) <| (
+                x
+                (@hook("std.ref.get!" Any) <| x) + 1
+            );
+            @hook("std.ref.get!" Any) <| x
+            "#,
+            "8",
+        );
+    }
+
+    #[test]
     fn destructures_tuples() {
         assert_eval_eq(
             "

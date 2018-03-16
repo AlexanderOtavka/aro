@@ -782,6 +782,14 @@ mod typecheck_ast {
     }
 
     #[test]
+    fn checks_sequenced_operations() {
+        assert_typecheck_eq("5; 3", "Int");
+        assert_typecheck_eq("#true(); 3", "Int");
+        assert_typecheck_eq("(); #true()", "Bool");
+        assert_typecheck_err("1 + #true(); 5");
+    }
+
+    #[test]
     fn checks_a_nested_function_call() {
         assert_typecheck_eq(
             "(inc: (Int -> Int) -Int-> inc <| 5) <| (x: Int -Int-> x + 1)",
