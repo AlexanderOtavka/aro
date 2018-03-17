@@ -29,19 +29,55 @@ pub fn get_globals() -> HashMap<String, (Value, Type)> {
     sources.insert(
         "is_empty",
         r#"
-            @hook("std.list.is_empty" (T: Any -> [T..] -> Bool))
+            @hook("std.list.is_empty"  (T: Any -> [T..] -> Bool))
         "#,
     );
     sources.insert(
         "head",
         r#"
-            @hook("std.list.head" (T: Any -> [T..] -> T))
+            @hook("std.list.head"  (T: Any -> [T..] -> T))
         "#,
     );
     sources.insert(
         "tail",
         r#"
-            @hook("std.list.tail" (T: Any -> [T..] -> [T..]))
+            @hook("std.list.tail"  (T: Any -> [T..] -> [T..]))
+        "#,
+    );
+    sources.insert(
+        "ref",
+        r#"
+            @hook("std.ref.new"  (T: Any -> T -> (Ref <| T)))
+        "#,
+    );
+    sources.insert(
+        "get!",
+        r#"
+            @hook("std.ref.get!"  (T: Any -> (Ref <| T) -> T))
+        "#,
+    );
+    sources.insert(
+        "set!",
+        r#"
+            T: Any -(T -> (Ref <| T) -> (Ref <| T))->
+            new_value: T -((Ref <| T) -> (Ref <| T))->
+            reference: (Ref <| T) -(Ref <| T)->
+                (reference new_value)
+                    |> @hook("std.ref.set!"  (((Ref <| T)  T) -> (Ref <| T)))
+        "#,
+    );
+    sources.insert(
+        "while",
+        r#"
+            let while_internal: ((() -> Bool) -> (() -> Any) -> ()) <==
+                condition: (() -> Bool) -((() -> Any) -> ())->
+                body: (() -> Any) -()->
+                    if condition <| () then
+                        body <| ();
+                        while_internal <| condition <| body
+                    else
+                        ()
+            while_internal
         "#,
     );
 
