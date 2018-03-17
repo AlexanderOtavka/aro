@@ -922,6 +922,36 @@ mod typecheck_ast {
     }
 
     #[test]
+    fn checks_record_subtype_assignments() {
+        assert_typecheck_eq(
+            "
+            let x: {a: Num} <== {a <== 5}
+            x
+            ",
+            "{a: Num}",
+        );
+        assert_typecheck_eq(
+            "
+            let x: {a: Int} <== {a <== 5  b <== #false()}
+            x
+            ",
+            "{a: Int}",
+        );
+        assert_typecheck_err(
+            "
+            let x: {a: Int} <== {a <== 5.1}
+            x
+            ",
+        );
+        assert_typecheck_err(
+            "
+            let x: {a: Int  b: Bool} <== {a <== 5}
+            x
+            ",
+        );
+    }
+
+    #[test]
     fn checks_function_body_subtyping() {
         assert_typecheck_eq("x: Int -[Int..]-> []", "(Int -> [Int..])");
         assert_typecheck_eq("x: Int -[Int..]-> [x]", "(Int -> [Int..])");
