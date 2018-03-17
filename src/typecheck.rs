@@ -118,6 +118,15 @@ impl Type {
             }
             // Nothing is a subtype of a generic, because any generic could be empty
             (_, &Type::Ident(_)) => false,
+            (&Type::Record(ref self_map), &Type::Record(ref other_map)) => {
+                other_map.iter().all(|(name, other_entry_type)| {
+                    if let Some(self_entry_type) = self_map.get(name) {
+                        self_entry_type.is_sub_type(other_entry_type, env)
+                    } else {
+                        false
+                    }
+                })
+            }
             (&Type::Ref(ref self_type), &Type::Ref(ref other_type)) => {
                 self_type.is_sub_type(other_type, env)
             }
@@ -301,6 +310,16 @@ fn substitute_type(ast: &Ast<Type>, name: &str, value: &Ast<Type>) -> Ast<Type> 
                     .collect(),
             ),
         ),
+        &Type::Record(ref map) => ast.replace_expr(Type::Record(
+            map.iter()
+                .map(|(entry_name, entry_value)| {
+                    (
+                        entry_name.clone(),
+                        substitute_type(entry_value, name, value),
+                    )
+                })
+                .collect(),
+        )),
         &Type::Ref(ref value_type) => {
             ast.replace_expr(Type::Ref(substitute_type(value_type, name, value)))
         }
@@ -339,6 +358,9 @@ fn substitute_expr(ast: &Ast<Expression>, name: &str, value: &Ast<Type>) -> Ast<
                 substitute_expr(result, name, value),
             ))
         }
+        &Expression::RecordAccess(ref record, ref field) => ast.replace_expr(
+            Expression::RecordAccess(substitute_expr(record, name, value), field.clone()),
+        ),
         &Expression::If(ref c, ref t, ref e) => ast.replace_expr(Expression::If(
             substitute_expr(c, name, value),
             substitute_expr(t, name, value),
@@ -384,6 +406,18 @@ fn substitute_expr(ast: &Ast<Expression>, name: &str, value: &Ast<Type>) -> Ast<
             ast.replace_expr(Expression::Value(Value::Tuple(
                 vec.into_iter()
                     .map(|element| substitute_expr(element, name, value))
+                    .collect(),
+            )))
+        }
+        &Expression::Value(Value::Record(ref map)) => {
+            ast.replace_expr(Expression::Value(Value::Record(
+                map.iter()
+                    .map(|(entry_name, entry_value)| {
+                        (
+                            entry_name.clone(),
+                            substitute_expr(entry_value, name, value),
+                        )
+                    })
                     .collect(),
             )))
         }
@@ -434,6 +468,17 @@ fn evaluate_type(ast: &Ast<Type>, env: &HashMap<String, Type>) -> Result<Type, E
 
             new_vec
         })),
+        &Type::Record(ref map) => Ok(Type::Record({
+            let mut new_map = HashMap::new();
+            for (name, value_type) in map {
+                new_map.insert(
+                    name.clone(),
+                    value_type.replace_expr(evaluate_type(value_type, env)?),
+                );
+            }
+
+            new_map
+        })),
         &Type::Ref(ref value_type) => Ok(Type::Ref(
             value_type.replace_expr(evaluate_type(value_type, env)?),
         )),
@@ -465,28 +510,33 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
 
                 type_vec
             })),
+            &Value::Record(ref map) => Ok(Type::Record({
+                let mut type_map = HashMap::new();
+
+                for (name, value) in map {
+                    type_map.insert(
+                        name.clone(),
+                        Ast::<Type>::new(
+                            value.left_loc,
+                            value.right_loc,
+                            typecheck_ast(value, env)?,
+                        ),
+                    );
+                }
+
+                type_map
+            })),
             &Value::List(ref vec) => Ok(Type::List(Ast::<Type>::new(left_loc, right_loc, {
                 if vec.is_empty() {
                     Type::Empty
                 } else {
-                    let mut inferred_type = typecheck_ast(&vec[0], env)?;
+                    let mut union_type = typecheck_ast(&vec[0], env)?;
 
                     for item in &vec[1..] {
-                        let next_type = typecheck_ast(item, env)?;
-
-                        if next_type != inferred_type {
-                            return Err(Error::type_error(
-                                item.left_loc,
-                                item.right_loc,
-                                &inferred_type,
-                                &next_type,
-                            ));
-                        }
-
-                        inferred_type = next_type;
+                        union_type = union_type.union(&typecheck_ast(item, env)?, env);
                     }
 
-                    inferred_type
+                    union_type
                 }
             }))),
             &Value::Func(ref pattern, ref body_type_ast, ref body) => {
@@ -537,6 +587,32 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
         &Expression::Sequence(ref side_effect, ref result) => {
             typecheck_ast(side_effect, env)?;
             typecheck_ast(result, env)
+        }
+        &Expression::RecordAccess(ref record, ref field) => {
+            let record_type = typecheck_ast(record, env)?;
+            if let &Type::Record(ref map) = &record_type {
+                if let Some(field_type) = map.get(field) {
+                    evaluate_type(field_type, env)
+                } else {
+                    Err(Error::LRLocated {
+                        message: format!(
+                            "Why would you even try to access a `{}` field of a `{}`?",
+                            field, record_type
+                        ),
+                        left_loc: record.left_loc,
+                        right_loc: record.right_loc,
+                    })
+                }
+            } else {
+                Err(Error::LRLocated {
+                    message: format!(
+                        "Why would you even try to access a field of a `{}`?",
+                        record_type
+                    ),
+                    left_loc: record.left_loc,
+                    right_loc: record.right_loc,
+                })
+            }
         }
         &Expression::GenericCall(ref generic_func, ref arg) => {
             if let Type::GenericFunc(ref param, ref supertype, ref body) =
@@ -846,6 +922,36 @@ mod typecheck_ast {
     }
 
     #[test]
+    fn checks_record_subtype_assignments() {
+        assert_typecheck_eq(
+            "
+            let x: {a: Num} <== {a <== 5}
+            x
+            ",
+            "{a: Num}",
+        );
+        assert_typecheck_eq(
+            "
+            let x: {a: Int} <== {a <== 5  b <== #false()}
+            x
+            ",
+            "{a: Int}",
+        );
+        assert_typecheck_err(
+            "
+            let x: {a: Int} <== {a <== 5.1}
+            x
+            ",
+        );
+        assert_typecheck_err(
+            "
+            let x: {a: Int  b: Bool} <== {a <== 5}
+            x
+            ",
+        );
+    }
+
+    #[test]
     fn checks_function_body_subtyping() {
         assert_typecheck_eq("x: Int -[Int..]-> []", "(Int -> [Int..])");
         assert_typecheck_eq("x: Int -[Int..]-> [x]", "(Int -> [Int..])");
@@ -857,8 +963,7 @@ mod typecheck_ast {
         assert_typecheck_eq(
             "
             let x: Int <== 5
-            let tup: (Int Num) <== (x 2.3)
-            tup
+            (x 2.3)
             ",
             "(Int Num)",
         );
@@ -888,6 +993,35 @@ mod typecheck_ast {
             fn () -Num-> 5.0 + 1
             ",
             "(() -> Num)",
+        );
+    }
+
+    #[test]
+    fn unions_list_element_types() {
+        assert_typecheck_eq("[1 1.2]", "[Num..]");
+        assert_typecheck_eq("[1.2 1]", "[Num..]");
+        assert_typecheck_eq("[#true() 1]", "[Any..]");
+    }
+
+    #[test]
+    fn checks_lists_with_identifiers() {
+        assert_typecheck_eq(
+            "
+            let x: Int <== 5
+            [x 2]
+            ",
+            "[Int..]",
+        );
+    }
+
+    #[test]
+    fn checks_records_with_identifiers() {
+        assert_typecheck_eq(
+            "
+            let x: Int <== 5
+            {foo <== x}
+            ",
+            "{foo: Int}",
         );
     }
 

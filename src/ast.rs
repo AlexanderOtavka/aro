@@ -4,6 +4,7 @@ use std::f64;
 use std::iter::Iterator;
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct Ast<T> {
@@ -22,6 +23,7 @@ pub enum Expression {
     GenericCall(Ast<Expression>, Ast<Type>),
     TypeLet(String, Ast<Type>, Ast<Expression>),
     Sequence(Ast<Expression>, Ast<Expression>),
+    RecordAccess(Ast<Expression>, String),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -45,6 +47,7 @@ pub enum Value {
     List(Vec<Ast<Expression>>),
     Hook(Vec<String>, Ast<Type>),
     Ref(Rc<RefCell<Value>>),
+    Record(HashMap<String, Ast<Expression>>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -66,6 +69,7 @@ pub enum Type {
     Tuple(Vec<Ast<Type>>),
     List(Ast<Type>),
     Ref(Ast<Type>),
+    Record(HashMap<String, Ast<Type>>),
 }
 
 impl<T> Ast<T> {
@@ -104,6 +108,10 @@ impl Ast<Expression> {
     pub fn is_term(&self) -> bool {
         match &*self.expr {
             &Expression::Value(Value::Tuple(ref vec)) => vec.into_iter().all(|ast| ast.is_term()),
+            &Expression::Value(Value::List(ref vec)) => vec.into_iter().all(|ast| ast.is_term()),
+            &Expression::Value(Value::Record(ref map)) => {
+                map.into_iter().all(|(_, ast)| ast.is_term())
+            }
             &Expression::Value(_) => true,
             _ => false,
         }
@@ -169,6 +177,7 @@ impl Display for Expression {
             &Expression::Let(ref p, ref v, ref e) => write!(f, "(let {} <== {} {})", p, v, e),
             &Expression::TypeLet(ref n, ref v, ref e) => write!(f, "(let {} <== {} {})", n, v, e),
             &Expression::Sequence(ref s, ref r) => write!(f, "({}; {})", s, r),
+            &Expression::RecordAccess(ref r, ref n) => write!(f, "({}.{})", r, n),
         }
     }
 }
@@ -201,6 +210,17 @@ impl Display for Value {
                     format!("@hook (\"{}\" {})", name.join("."), hook_type)
                 }
                 &Value::Ref(ref rc) => format!("(ref <| {})", rc.borrow()),
+                &Value::Record(ref map) => sequence_to_str(
+                    "{",
+                    &{
+                        let mut vec = map.iter()
+                            .map(|(name, value)| format!("{} <== {}", name, value))
+                            .collect::<Vec<String>>();
+                        vec.sort();
+                        vec
+                    },
+                    "}"
+                ),
             }
         )
     }
@@ -240,6 +260,17 @@ impl Display for Type {
                 &Type::Tuple(ref vec) => sequence_to_str("(", vec, ")"),
                 &Type::List(ref element_type) => format!("[{}..]", element_type),
                 &Type::Ref(ref value_type) => format!("(Ref <| {})", value_type),
+                &Type::Record(ref map) => sequence_to_str(
+                    "{",
+                    &{
+                        let mut vec = map.iter()
+                            .map(|(name, value_type)| format!("{}: {}", name, value_type))
+                            .collect::<Vec<String>>();
+                        vec.sort();
+                        vec
+                    },
+                    "}"
+                ),
             }
         )
     }
