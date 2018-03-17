@@ -136,6 +136,14 @@ mod evaluate_file {
     }
 
     #[test]
+    fn records() {
+        assert_eq!(
+            evaluate_file("examples/records.aro", false).unwrap(),
+            "{is_forward <== #false () speed <== 25 with_sass <== #true ()}"
+        )
+    }
+
+    #[test]
     fn recursion() {
         assert_eq!(
             evaluate_file("examples/recursion.aro", false).unwrap(),

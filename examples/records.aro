@@ -1,0 +1,12 @@
+let Motion <== {
+    is_forward: Bool
+    speed: Num
+}
+
+let motion: Motion <== {
+    is_forward <== #false()
+    speed <== 25
+    with_sass <== #true()
+}
+
+motion

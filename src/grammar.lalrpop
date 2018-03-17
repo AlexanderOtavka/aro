@@ -58,13 +58,20 @@ Value = {
     <l:@L> <v:Ident> <r:@R> => Ast::<Expression>::new(l, r, Expression::Ident(v)),
 
     <l:@L> "(" ")" <r:@R> => Ast::<Expression>::new(l, r, Expression::Value(Value::Tuple(vec![]))),
-    <l:@L> "(" <h:Expr> <t: Expr+ > ")" <r:@R> => Ast::<Expression>::new(l, r, Expression::Value(Value::Tuple({
-        let mut vec = t;
-        vec.insert(0, h);
-        vec
-    }))),
+    <l:@L> "(" <h:Expr> <t: Expr+ > ")" <r:@R> =>
+        Ast::<Expression>::new(l, r, Expression::Value(Value::Tuple({
+            let mut vec = t;
+            vec.insert(0, h);
+            vec
+        }))),
 
-    <l:@L> "[" <e: Expr* > "]" <r:@R> => Ast::<Expression>::new(l, r, Expression::Value(Value::List(e))),
+    <l:@L> "[" <e: Expr* > "]" <r:@R> =>
+        Ast::<Expression>::new(l, r, Expression::Value(Value::List(e))),
+
+    <l:@L> "{" <e: RecordEntry* > "}" <r:@R> =>
+        Ast::<Expression>::new(l, r, Expression::Value(Value::Record(
+            e.into_iter().collect()
+        ))),
 
     <l:@L> "@hook" "(" <n:r#""([a-z](_?[a-z])*\.)+[a-z](_?[a-z])*!?""#> <t:Type> ")" <r:@R> =>
         Ast::<Expression>::new_hook(l, r, n, t),
@@ -99,6 +106,9 @@ ValueType = {
 
     <l:@L> "[" <t:Type> ".." "]" <r:@R> => Ast::<Type>::new(l, r, Type::List(t)),
 
+    <l:@L> "{" <e: RecordTypeEntry* > "}" <r:@R> =>
+        Ast::<Type>::new(l, r, Type::Record(e.into_iter().collect())),
+
     "(" <Type> ")",
 };
 
@@ -113,6 +123,14 @@ Pattern: Ast<Pattern> = {
     IdentPattern,
 
     "(" <Pattern> ")"
+};
+
+RecordEntry: (String, Ast<Expression>) = {
+    <n:Ident> "<==" <e:Expr> => (n, e),
+};
+
+RecordTypeEntry: (String, Ast<Type>) = {
+    <n:Ident> ":" <t:Type> => (n, t),
 };
 
 IdentPattern: Ast<Pattern> = {

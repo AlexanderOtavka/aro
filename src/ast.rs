@@ -4,6 +4,7 @@ use std::f64;
 use std::iter::Iterator;
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct Ast<T> {
@@ -45,6 +46,7 @@ pub enum Value {
     List(Vec<Ast<Expression>>),
     Hook(Vec<String>, Ast<Type>),
     Ref(Rc<RefCell<Value>>),
+    Record(HashMap<String, Ast<Expression>>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -66,6 +68,7 @@ pub enum Type {
     Tuple(Vec<Ast<Type>>),
     List(Ast<Type>),
     Ref(Ast<Type>),
+    Record(HashMap<String, Ast<Type>>),
 }
 
 impl<T> Ast<T> {
@@ -201,6 +204,17 @@ impl Display for Value {
                     format!("@hook (\"{}\" {})", name.join("."), hook_type)
                 }
                 &Value::Ref(ref rc) => format!("(ref <| {})", rc.borrow()),
+                &Value::Record(ref map) => sequence_to_str(
+                    "{",
+                    &{
+                        let mut vec = map.iter()
+                            .map(|(name, value)| format!("{} <== {}", name, value))
+                            .collect::<Vec<String>>();
+                        vec.sort();
+                        vec
+                    },
+                    "}"
+                ),
             }
         )
     }
@@ -240,6 +254,17 @@ impl Display for Type {
                 &Type::Tuple(ref vec) => sequence_to_str("(", vec, ")"),
                 &Type::List(ref element_type) => format!("[{}..]", element_type),
                 &Type::Ref(ref value_type) => format!("(Ref <| {})", value_type),
+                &Type::Record(ref map) => sequence_to_str(
+                    "{",
+                    &{
+                        let mut vec = map.iter()
+                            .map(|(name, value_type)| format!("{}: {}", name, value_type))
+                            .collect::<Vec<String>>();
+                        vec.sort();
+                        vec
+                    },
+                    "}"
+                ),
             }
         )
     }
