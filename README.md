@@ -15,6 +15,67 @@ will run all unit tests inside the docker container.
 
 ## Changelog
 
+### Assignment 6 (3/16/18)
+
+There aren't many new tests because I implemented most of this stuff using
+existing structures like functions and generics. The integration tests on the
+examples should suffice to test most of the changes.
+
+#### New Features
+
+* **Ref cells**, and global functions `ref`, `get!` and `set!` for creating and
+  interacting with then.
+* **While loops** as a global function, implemented with recursion.
+* The **sequencing operator**.
+* The updated grammar is as follows:
+
+  ```
+  // Expression
+  e ::= n                       // integer
+      | f                       // float
+      | #true() | #false()      // boolean
+      | x                       // identifier
+      | e1 + e1 | e1 - e2 | e1 * e2 | e1 / e2   // arithmetic
+      | e1 <= e2                // comparison
+      | if e1 then e2 else e3   // if
+      | let p <== e1 e2         // recursive let binding with pattern
+      | let X <== t e           // type alias
+      | x: t1 -t2-> e           // function declaration shorthand
+      | fn p -t2-> e            // function declaration with pattern
+      | X: t1 -t2-> e           // generic function
+      | e1 <| e2 | e1 |> e2     // function call
+      | e <| type t | type t |> e   // generic call
+      | (e1 e2 ... en)          // tuple
+      | [e1 e2 ... en]          // list
+      | e1; e2                  // sequencing
+      | (e)                     // parenthesis
+
+  // Pattern
+  p ::= x: t            // identifier
+      | (p1 p2 ... pn)  // destructed tuple
+
+  // Type
+  t ::= Int             // integer
+      | Num             // float (is a supertype of Int)
+      | Bool            // boolean
+      | Any             // universal supertype
+      | Empty           // universal subtype
+      | X               // type identifier
+      | t -> t          // function
+      | X: t1 -> t2     // generic function (t1 is a subtyping restriction on X)
+      | (t1 t2 ... tn)  // tuple
+      | [t..]           // list (homogenous, the `..` is part of the syntax)
+      | (Ref <| t)      // ref cell
+  ```
+
+#### Changed Features
+
+None.
+
+#### Known Bugs
+
+None.
+
 ### Assignment 5 (3/14/18)
 
 I don't think I missed anything, but I did a lot here. Generics are meant to
