@@ -892,22 +892,6 @@ mod evaluate_ast {
     }
 
     #[test]
-    fn sequences_execute_side_effects() {
-        assert_eval_eq(
-            r#"
-            let x: Any <== @hook("std.ref.new" Any) <| 5
-            @hook("std.ref.set!" Any) <| (x  7);
-            @hook("std.ref.set!" Any) <| (
-                x
-                (@hook("std.ref.get!" Any) <| x) + 1
-            );
-            @hook("std.ref.get!" Any) <| x
-            "#,
-            "8",
-        );
-    }
-
-    #[test]
     fn destructures_tuples() {
         assert_eval_eq(
             "
@@ -943,6 +927,63 @@ mod evaluate_ast {
         );
     }
 
+    #[test]
+    fn substitutes_in_records() {
+        assert_eval_eq(
+            "
+            let x: Int <== 5
+            let rec: Any <== {a <== x  bar <== 2.3}
+            rec
+            ",
+            "{a <== 5 bar <== 2.3}",
+        );
+    }
+
+    #[test]
+    fn evaluates_in_tuples() {
+        assert_eval_eq(
+            "
+            ((4 + 1 5) 2.3)
+            ",
+            "((5 5) 2.3)",
+        );
+    }
+
+    #[test]
+    fn evaluates_in_lists() {
+        assert_eval_eq(
+            "
+            [[4 + 1  5] []]
+            ",
+            "[[5 5] []]",
+        );
+    }
+
+    #[test]
+    fn evaluates_in_records() {
+        assert_eval_eq(
+            "
+            {a <== {x <== 4 + 1  y <== 5}  bar <== 2.3}
+            ",
+            "{a <== {x <== 5 y <== 5} bar <== 2.3}",
+        );
+    }
+
+    #[test]
+    fn sequences_execute_side_effects() {
+        assert_eval_eq(
+            r#"
+            let x: Any <== @hook("std.ref.new" Any) <| 5
+            @hook("std.ref.set!" Any) <| (x  7);
+            @hook("std.ref.set!" Any) <| (
+                x
+                (@hook("std.ref.get!" Any) <| x) + 1
+            );
+            @hook("std.ref.get!" Any) <| x
+            "#,
+            "8",
+        );
+    }
     #[test]
     fn supports_recursion_in_the_let_expression() {
         assert_eval_eq(

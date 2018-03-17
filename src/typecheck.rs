@@ -530,24 +530,13 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
                 if vec.is_empty() {
                     Type::Empty
                 } else {
-                    let mut inferred_type = typecheck_ast(&vec[0], env)?;
+                    let mut union_type = typecheck_ast(&vec[0], env)?;
 
                     for item in &vec[1..] {
-                        let next_type = typecheck_ast(item, env)?;
-
-                        if next_type != inferred_type {
-                            return Err(Error::type_error(
-                                item.left_loc,
-                                item.right_loc,
-                                &inferred_type,
-                                &next_type,
-                            ));
-                        }
-
-                        inferred_type = next_type;
+                        union_type = union_type.union(&typecheck_ast(item, env)?, env);
                     }
 
-                    inferred_type
+                    union_type
                 }
             }))),
             &Value::Func(ref pattern, ref body_type_ast, ref body) => {
@@ -944,8 +933,7 @@ mod typecheck_ast {
         assert_typecheck_eq(
             "
             let x: Int <== 5
-            let tup: (Int Num) <== (x 2.3)
-            tup
+            (x 2.3)
             ",
             "(Int Num)",
         );
@@ -975,6 +963,35 @@ mod typecheck_ast {
             fn () -Num-> 5.0 + 1
             ",
             "(() -> Num)",
+        );
+    }
+
+    #[test]
+    fn unions_list_element_types() {
+        assert_typecheck_eq("[1 1.2]", "[Num..]");
+        assert_typecheck_eq("[1.2 1]", "[Num..]");
+        assert_typecheck_eq("[#true() 1]", "[Any..]");
+    }
+
+    #[test]
+    fn checks_lists_with_identifiers() {
+        assert_typecheck_eq(
+            "
+            let x: Int <== 5
+            [x 2]
+            ",
+            "[Int..]",
+        );
+    }
+
+    #[test]
+    fn checks_records_with_identifiers() {
+        assert_typecheck_eq(
+            "
+            let x: Int <== 5
+            {foo <== x}
+            ",
+            "{foo: Int}",
         );
     }
 
