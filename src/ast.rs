@@ -23,6 +23,7 @@ pub enum Expression {
     GenericCall(Ast<Expression>, Ast<Type>),
     TypeLet(String, Ast<Type>, Ast<Expression>),
     Sequence(Ast<Expression>, Ast<Expression>),
+    RecordAccess(Ast<Expression>, String),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -107,6 +108,10 @@ impl Ast<Expression> {
     pub fn is_term(&self) -> bool {
         match &*self.expr {
             &Expression::Value(Value::Tuple(ref vec)) => vec.into_iter().all(|ast| ast.is_term()),
+            &Expression::Value(Value::List(ref vec)) => vec.into_iter().all(|ast| ast.is_term()),
+            &Expression::Value(Value::Record(ref map)) => {
+                map.into_iter().all(|(_, ast)| ast.is_term())
+            }
             &Expression::Value(_) => true,
             _ => false,
         }
@@ -172,6 +177,7 @@ impl Display for Expression {
             &Expression::Let(ref p, ref v, ref e) => write!(f, "(let {} <== {} {})", p, v, e),
             &Expression::TypeLet(ref n, ref v, ref e) => write!(f, "(let {} <== {} {})", n, v, e),
             &Expression::Sequence(ref s, ref r) => write!(f, "({}; {})", s, r),
+            &Expression::RecordAccess(ref r, ref n) => write!(f, "({}.{})", r, n),
         }
     }
 }

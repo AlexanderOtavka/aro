@@ -167,6 +167,9 @@ fn substitute(
                     substitute(result, pattern, value),
                 ))
             }
+            &Expression::RecordAccess(ref record, ref field) => ast.replace_expr(
+                Expression::RecordAccess(substitute(record, pattern, value), field.clone()),
+            ),
             &Expression::BinOp(ref op, ref left, ref right) => Ast {
                 expr: Box::new(Expression::BinOp(
                     op.clone(),
@@ -241,6 +244,15 @@ fn substitute(
                         .collect(),
                 )),
             ),
+            &Expression::Value(Value::Record(ref map)) => {
+                ast.replace_expr(Expression::Value(Value::Record(
+                    map.iter()
+                        .map(|(field, element)| {
+                            (field.clone(), substitute(element, pattern, value))
+                        })
+                        .collect(),
+                )))
+            }
             &Expression::Value(_) => ast.clone(),
         },
     }
@@ -415,28 +427,62 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
             let mut stepped_tup = Vec::new();
 
             for value in vec {
-                if let &Expression::Value(_) = &*value.expr {
+                if value.is_term() {
                     stepped_tup.push(value.clone());
                 } else {
                     stepped_tup.push(step_ast(value)?);
                 }
             }
 
-            Ok(Ast::<Expression>::new(
-                left_loc,
-                right_loc,
-                Expression::Value(Value::Tuple(stepped_tup)),
-            ))
+            Ok(ast.replace_expr(Expression::Value(Value::Tuple(stepped_tup))))
+        }
+        &Expression::Value(Value::List(ref vec)) => {
+            let mut stepped_list = Vec::new();
+
+            for value in vec {
+                if value.is_term() {
+                    stepped_list.push(value.clone());
+                } else {
+                    stepped_list.push(step_ast(value)?);
+                }
+            }
+
+            Ok(ast.replace_expr(Expression::Value(Value::List(stepped_list))))
+        }
+        &Expression::Value(Value::Record(ref map)) => {
+            let mut stepped_record = HashMap::new();
+
+            for (field, value) in map {
+                if value.is_term() {
+                    stepped_record.insert(field.clone(), value.clone());
+                } else {
+                    stepped_record.insert(field.clone(), step_ast(value)?);
+                }
+            }
+
+            Ok(ast.replace_expr(Expression::Value(Value::Record(stepped_record))))
         }
         &Expression::Value(_) => Ok(ast.clone()),
         &Expression::Ident(ref name) => Err(Error::LRLocated {
-            message: format!(
-                "Am I supposed to read your god damn mind?  What's a `{}`?",
-                name
-            ),
+            message: format!("How do you expect me to evaluate a `{}`?", name),
             left_loc,
             right_loc,
         }),
+        &Expression::RecordAccess(ref record, ref field) => {
+            if record.is_term() {
+                if let &Expression::Value(Value::Record(ref map)) = &*record.expr {
+                    if let Some(field_value) = map.get(field) {
+                        Ok(field_value.clone())
+                    } else {
+                        panic!()
+                    }
+                } else {
+                    panic!()
+                }
+            } else {
+                Ok(ast.replace_expr(Expression::RecordAccess(step_ast(record)?, field.clone())))
+            }
+        }
         &Expression::Sequence(ref side_effect, ref result) => Ok(if side_effect.is_term() {
             result.clone()
         } else {

@@ -358,6 +358,9 @@ fn substitute_expr(ast: &Ast<Expression>, name: &str, value: &Ast<Type>) -> Ast<
                 substitute_expr(result, name, value),
             ))
         }
+        &Expression::RecordAccess(ref record, ref field) => ast.replace_expr(
+            Expression::RecordAccess(substitute_expr(record, name, value), field.clone()),
+        ),
         &Expression::If(ref c, ref t, ref e) => ast.replace_expr(Expression::If(
             substitute_expr(c, name, value),
             substitute_expr(t, name, value),
@@ -595,6 +598,32 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
         &Expression::Sequence(ref side_effect, ref result) => {
             typecheck_ast(side_effect, env)?;
             typecheck_ast(result, env)
+        }
+        &Expression::RecordAccess(ref record, ref field) => {
+            let record_type = typecheck_ast(record, env)?;
+            if let &Type::Record(ref map) = &record_type {
+                if let Some(field_type) = map.get(field) {
+                    evaluate_type(field_type, env)
+                } else {
+                    Err(Error::LRLocated {
+                        message: format!(
+                            "Why would you even try to access a `{}` field of a `{}`?",
+                            field, record_type
+                        ),
+                        left_loc: record.left_loc,
+                        right_loc: record.right_loc,
+                    })
+                }
+            } else {
+                Err(Error::LRLocated {
+                    message: format!(
+                        "Why would you even try to access a field of a `{}`?",
+                        record_type
+                    ),
+                    left_loc: record.left_loc,
+                    right_loc: record.right_loc,
+                })
+            }
         }
         &Expression::GenericCall(ref generic_func, ref arg) => {
             if let Type::GenericFunc(ref param, ref supertype, ref body) =

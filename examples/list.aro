@@ -18,4 +18,4 @@ let empty: [List_Element..] <== []
 numbers_123
     |> (concat <| type List_Element) <| empty
     |> (concat <| type List_Element) <| []
-    |> (concat <| type List_Element) <| [4]
+    |> (concat <| type List_Element) <| [5 - 1]
