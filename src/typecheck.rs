@@ -34,52 +34,34 @@ fn build_env(env: &mut HashMap<String, Type>, pattern: &Ast<Pattern>) -> Result<
 
 fn rename_type(ast: &Ast<Type>, name: &str, new_name: &str) -> Ast<Type> {
     match &*ast.expr {
-        &Type::Func(ref input, ref output) => Ast::<Type>::new(
-            ast.left_loc,
-            ast.right_loc,
-            Type::Func(
-                rename_type(input, name, new_name),
-                rename_type(output, name, new_name),
-            ),
-        ),
+        &Type::Func(ref input, ref output) => ast.replace_expr(Type::Func(
+            rename_type(input, name, new_name),
+            rename_type(output, name, new_name),
+        )),
         &Type::GenericFunc(ref param_name, ref param_supertype, ref output) => {
             if param_name == name {
                 ast.clone()
             } else {
-                Ast::<Type>::new(
-                    ast.left_loc,
-                    ast.right_loc,
-                    Type::GenericFunc(
-                        param_name.clone(),
-                        rename_type(param_supertype, name, new_name),
-                        rename_type(output, name, new_name),
-                    ),
-                )
+                ast.replace_expr(Type::GenericFunc(
+                    param_name.clone(),
+                    rename_type(param_supertype, name, new_name),
+                    rename_type(output, name, new_name),
+                ))
             }
         }
         &Type::Ident(ref ident_name) => if ident_name == name {
-            Ast::<Type>::new(
-                ast.left_loc,
-                ast.right_loc,
-                Type::Ident(String::from(new_name)),
-            )
+            ast.replace_expr(Type::Ident(String::from(new_name)))
         } else {
             ast.clone()
         },
-        &Type::List(ref el_type) => Ast::<Type>::new(
-            ast.left_loc,
-            ast.right_loc,
-            Type::List(rename_type(el_type, name, new_name)),
-        ),
-        &Type::Tuple(ref vec) => Ast::<Type>::new(
-            ast.left_loc,
-            ast.right_loc,
-            Type::Tuple(
-                vec.into_iter()
-                    .map(|element| rename_type(element, name, new_name))
-                    .collect(),
-            ),
-        ),
+        &Type::List(ref el_type) => {
+            ast.replace_expr(Type::List(rename_type(el_type, name, new_name)))
+        }
+        &Type::Tuple(ref vec) => ast.replace_expr(Type::Tuple(
+            vec.into_iter()
+                .map(|element| rename_type(element, name, new_name))
+                .collect(),
+        )),
         &Type::Ref(ref value_type) => {
             ast.replace_expr(Type::Ref(rename_type(value_type, name, new_name)))
         }
@@ -270,18 +252,12 @@ mod is_sub_type {
 
 fn substitute_type(ast: &Ast<Type>, name: &str, value: &Ast<Type>) -> Ast<Type> {
     match &*ast.expr {
-        &Type::Func(ref input, ref output) => Ast::<Type>::new(
-            ast.left_loc,
-            ast.right_loc,
-            Type::Func(
-                substitute_type(input, name, value),
-                substitute_type(output, name, value),
-            ),
-        ),
-        &Type::GenericFunc(ref param_name, ref param_supertype, ref output) => Ast::<Type>::new(
-            ast.left_loc,
-            ast.right_loc,
-            Type::GenericFunc(
+        &Type::Func(ref input, ref output) => ast.replace_expr(Type::Func(
+            substitute_type(input, name, value),
+            substitute_type(output, name, value),
+        )),
+        &Type::GenericFunc(ref param_name, ref param_supertype, ref output) => {
+            ast.replace_expr(Type::GenericFunc(
                 param_name.clone(),
                 substitute_type(param_supertype, name, value),
                 if param_name == name {
@@ -289,27 +265,21 @@ fn substitute_type(ast: &Ast<Type>, name: &str, value: &Ast<Type>) -> Ast<Type> 
                 } else {
                     substitute_type(output, name, value)
                 },
-            ),
-        ),
+            ))
+        }
         &Type::Ident(ref ident_name) => if ident_name == name {
             value.clone()
         } else {
             ast.clone()
         },
-        &Type::List(ref el_type) => Ast::<Type>::new(
-            ast.left_loc,
-            ast.right_loc,
-            Type::List(substitute_type(el_type, name, value)),
-        ),
-        &Type::Tuple(ref vec) => Ast::<Type>::new(
-            ast.left_loc,
-            ast.right_loc,
-            Type::Tuple(
-                vec.into_iter()
-                    .map(|element| substitute_type(element, name, value))
-                    .collect(),
-            ),
-        ),
+        &Type::List(ref el_type) => {
+            ast.replace_expr(Type::List(substitute_type(el_type, name, value)))
+        }
+        &Type::Tuple(ref vec) => ast.replace_expr(Type::Tuple(
+            vec.into_iter()
+                .map(|element| substitute_type(element, name, value))
+                .collect(),
+        )),
         &Type::Record(ref map) => ast.replace_expr(Type::Record(
             map.iter()
                 .map(|(entry_name, entry_value)| {

@@ -15,30 +15,27 @@ fn evaluate_number_operator<F>(
 where
     F: Fn(f64, f64) -> f64,
 {
-    Ok(Ast {
-        expr: Box::new(Expression::Value(match (left, right) {
-            (&Value::Int(left_value), &Value::Int(right_value)) => {
-                Ok(Value::Int(evaluate(left_value as f64, right_value as f64)
-                    as i32))
-            }
-            (&Value::Num(left_value), &Value::Num(right_value)) => {
-                Ok(Value::Num(evaluate(left_value, right_value)))
-            }
-            (&Value::Int(left_value), &Value::Num(right_value)) => {
-                Ok(Value::Num(evaluate(left_value as f64, right_value)))
-            }
-            (&Value::Num(left_value), &Value::Int(right_value)) => {
-                Ok(Value::Num(evaluate(left_value, right_value as f64)))
-            }
-            _ => Err(Error::LRLocated {
+    Ok(ast.replace_expr(Expression::Value(match (left, right) {
+        (&Value::Int(left_value), &Value::Int(right_value)) => {
+            Value::Int(evaluate(left_value as f64, right_value as f64) as i32)
+        }
+        (&Value::Num(left_value), &Value::Num(right_value)) => {
+            Value::Num(evaluate(left_value, right_value))
+        }
+        (&Value::Int(left_value), &Value::Num(right_value)) => {
+            Value::Num(evaluate(left_value as f64, right_value))
+        }
+        (&Value::Num(left_value), &Value::Int(right_value)) => {
+            Value::Num(evaluate(left_value, right_value as f64))
+        }
+        _ => {
+            return Err(Error::LRLocated {
                 message: String::from("Fuck off with your non-number bullshit."),
                 left_loc: ast.left_loc,
                 right_loc: ast.right_loc,
-            }),
-        }?)),
-        left_loc: ast.left_loc,
-        right_loc: ast.right_loc,
-    })
+            })
+        }
+    })))
 }
 
 #[cfg(test)]
@@ -47,11 +44,7 @@ mod evaluate_number_operator {
     use std::f64::NAN;
 
     fn ast() -> Ast<Expression> {
-        Ast {
-            expr: Box::new(Expression::Value(Value::Int(1))),
-            left_loc: 0,
-            right_loc: 0,
-        }
+        Ast::<Expression>::new(0, 0, Expression::Value(Value::Int(1)))
     }
 
     #[test]
@@ -170,37 +163,27 @@ fn substitute(
             &Expression::RecordAccess(ref record, ref field) => ast.replace_expr(
                 Expression::RecordAccess(substitute(record, pattern, value), field.clone()),
             ),
-            &Expression::BinOp(ref op, ref left, ref right) => Ast {
-                expr: Box::new(Expression::BinOp(
+            &Expression::BinOp(ref op, ref left, ref right) => {
+                ast.replace_expr(Expression::BinOp(
                     op.clone(),
                     substitute(left, pattern, value),
                     substitute(right, pattern, value),
-                )),
-                left_loc: ast.left_loc,
-                right_loc: ast.right_loc,
-            },
-            &Expression::If(ref c, ref t, ref e) => Ast {
-                expr: Box::new(Expression::If(
-                    substitute(c, pattern, value),
-                    substitute(t, pattern, value),
-                    substitute(e, pattern, value),
-                )),
-                left_loc: ast.left_loc,
-                right_loc: ast.right_loc,
-            },
+                ))
+            }
+            &Expression::If(ref c, ref t, ref e) => ast.replace_expr(Expression::If(
+                substitute(c, pattern, value),
+                substitute(t, pattern, value),
+                substitute(e, pattern, value),
+            )),
             &Expression::Let(ref bind_pattern, ref bind_value, ref body) => {
                 if bind_pattern.contains_name(name) {
                     ast.clone()
                 } else {
-                    Ast {
-                        expr: Box::new(Expression::Let(
-                            bind_pattern.clone(),
-                            substitute(bind_value, pattern, value),
-                            substitute(body, pattern, value),
-                        )),
-                        left_loc: ast.left_loc,
-                        right_loc: ast.right_loc,
-                    }
+                    ast.replace_expr(Expression::Let(
+                        bind_pattern.clone(),
+                        substitute(bind_value, pattern, value),
+                        substitute(body, pattern, value),
+                    ))
                 }
             }
             &Expression::TypeLet(ref bind_name, ref bind_value, ref body) => {
@@ -210,8 +193,8 @@ fn substitute(
                     substitute(body, pattern, value),
                 ))
             }
-            &Expression::Value(Value::Func(ref param_pattern, ref body_type, ref body)) => Ast {
-                expr: Box::new(Expression::Value(Value::Func(
+            &Expression::Value(Value::Func(ref param_pattern, ref body_type, ref body)) => {
+                ast.replace_expr(Expression::Value(Value::Func(
                     param_pattern.clone(),
                     body_type.clone(),
                     if param_pattern.contains_name(name) {
@@ -219,31 +202,25 @@ fn substitute(
                     } else {
                         substitute(body, pattern, value)
                     },
-                ))),
-                left_loc: ast.left_loc,
-                right_loc: ast.right_loc,
-            },
+                )))
+            }
             &Expression::Value(Value::GenericFunc(_, _, _, ref body)) => {
                 substitute(body, pattern, value)
             }
-            &Expression::Value(Value::Tuple(ref vec)) => Ast::<Expression>::new(
-                ast.left_loc,
-                ast.right_loc,
-                Expression::Value(Value::Tuple(
+            &Expression::Value(Value::Tuple(ref vec)) => {
+                ast.replace_expr(Expression::Value(Value::Tuple(
                     vec.into_iter()
                         .map(|element| substitute(element, pattern, value))
                         .collect(),
-                )),
-            ),
-            &Expression::Value(Value::List(ref vec)) => Ast::<Expression>::new(
-                ast.left_loc,
-                ast.right_loc,
-                Expression::Value(Value::List(
+                )))
+            }
+            &Expression::Value(Value::List(ref vec)) => {
+                ast.replace_expr(Expression::Value(Value::List(
                     vec.into_iter()
                         .map(|element| substitute(element, pattern, value))
                         .collect(),
-                )),
-            ),
+                )))
+            }
             &Expression::Value(Value::Record(ref map)) => {
                 ast.replace_expr(Expression::Value(Value::Record(
                     map.iter()
@@ -514,11 +491,7 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
                             Ok(substitute(
                                 body,
                                 pattern,
-                                &Ast {
-                                    expr: Box::new(Expression::Value(right.clone())),
-                                    left_loc: right_ast.left_loc,
-                                    right_loc: right_ast.right_loc,
-                                },
+                                &right_ast.replace_expr(Expression::Value(right.clone())),
                             ))
                         } else {
                             Err(Error::LRLocated {
@@ -544,49 +517,38 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
                             evaluate_number_operator(ast, left_value, right_value, |a, b| a / b)
                         }
                     },
-                    &BinOp::LEq => Ok(Ast {
-                        expr: Box::new(Expression::Value(Value::Bool(match (left, right) {
-                            (&Value::Int(left_value), &Value::Int(right_value)) => {
-                                Ok(left_value <= right_value)
-                            }
-                            (&Value::Num(left_value), &Value::Int(right_value)) => {
-                                Ok(left_value <= right_value as f64)
-                            }
-                            (&Value::Int(left_value), &Value::Num(right_value)) => {
-                                Ok(left_value as f64 <= right_value)
-                            }
-                            (&Value::Num(left_value), &Value::Num(right_value)) => {
-                                Ok(left_value <= right_value)
-                            }
-                            _ => Err(Error::LRLocated {
-                                message: String::from("Fuck off with your non-number bullshit."),
-                                left_loc,
-                                right_loc,
-                            }),
-                        }?))),
-                        left_loc,
-                        right_loc,
-                    }),
+                    &BinOp::LEq => Ok(ast.replace_expr(Expression::Value(Value::Bool(match (
+                        left,
+                        right,
+                    ) {
+                        (&Value::Int(left_value), &Value::Int(right_value)) => {
+                            Ok(left_value <= right_value)
+                        }
+                        (&Value::Num(left_value), &Value::Int(right_value)) => {
+                            Ok(left_value <= right_value as f64)
+                        }
+                        (&Value::Int(left_value), &Value::Num(right_value)) => {
+                            Ok(left_value as f64 <= right_value)
+                        }
+                        (&Value::Num(left_value), &Value::Num(right_value)) => {
+                            Ok(left_value <= right_value)
+                        }
+                        _ => Err(Error::LRLocated {
+                            message: String::from("Fuck off with your non-number bullshit."),
+                            left_loc,
+                            right_loc,
+                        }),
+                    }?)))),
                 }
             }
-            (&Expression::Value(_), _) if left_ast.is_term() => Ok(Ast {
-                expr: Box::new(Expression::BinOp(
-                    operation.clone(),
-                    left_ast.clone(),
-                    step_ast(right_ast)?,
-                )),
-                left_loc,
-                right_loc,
-            }),
-            _ => Ok(Ast {
-                expr: Box::new(Expression::BinOp(
-                    operation.clone(),
-                    step_ast(left_ast)?,
-                    right_ast.clone(),
-                )),
-                left_loc,
-                right_loc,
-            }),
+            (&Expression::Value(_), _) if left_ast.is_term() => Ok(ast.replace_expr(
+                Expression::BinOp(operation.clone(), left_ast.clone(), step_ast(right_ast)?),
+            )),
+            _ => Ok(ast.replace_expr(Expression::BinOp(
+                operation.clone(),
+                step_ast(left_ast)?,
+                right_ast.clone(),
+            ))),
         },
         &Expression::If(ref guard, ref consequent, ref alternate) => match &*guard.expr {
             &Expression::Value(Value::Bool(guard_value)) => {
@@ -601,15 +563,11 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
                 left_loc: ast.left_loc,
                 right_loc: ast.right_loc,
             }),
-            _ => Ok(Ast {
-                expr: Box::new(Expression::If(
-                    step_ast(guard)?,
-                    consequent.clone(),
-                    alternate.clone(),
-                )),
-                left_loc,
-                right_loc,
-            }),
+            _ => Ok(ast.replace_expr(Expression::If(
+                step_ast(guard)?,
+                consequent.clone(),
+                alternate.clone(),
+            ))),
         },
         &Expression::Let(ref bind_pattern, ref bind_value, ref body) => if bind_value.is_term() {
             // TODO: improve error message when doing non-function recursion
@@ -619,27 +577,19 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
                 &substitute(
                     bind_value,
                     bind_pattern,
-                    &Ast::<Expression>::new(
-                        bind_value.left_loc,
-                        bind_value.right_loc,
-                        Expression::Let(
-                            bind_pattern.clone(),
-                            bind_value.clone(),
-                            bind_value.clone(),
-                        ),
-                    ),
+                    &bind_value.replace_expr(Expression::Let(
+                        bind_pattern.clone(),
+                        bind_value.clone(),
+                        bind_value.clone(),
+                    )),
                 ),
             ))
         } else {
-            Ok(Ast {
-                expr: Box::new(Expression::Let(
-                    bind_pattern.clone(),
-                    step_ast(bind_value)?,
-                    body.clone(),
-                )),
-                left_loc,
-                right_loc,
-            })
+            Ok(ast.replace_expr(Expression::Let(
+                bind_pattern.clone(),
+                step_ast(bind_value)?,
+                body.clone(),
+            )))
         },
         &Expression::TypeLet(_, _, ref body) => Ok(body.clone()),
     }
