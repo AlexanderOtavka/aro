@@ -733,29 +733,29 @@ mod evaluate_ast {
     #[test]
     fn can_floor_divide_with_a_hook() {
         assert_eval_eq(
-            r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (7 4)"#,
+            r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (7 4)"#,
             "1",
         );
         assert_eval_eq(
-            r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (7.0 4)"#,
+            r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (7.0 4)"#,
             "1",
         );
         assert_eval_eq(
-            r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (7 4.0)"#,
+            r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (7 4.0)"#,
             "1",
         );
         assert_eval_eq(
-            r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (7.0 4.0)"#,
+            r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (7.0 4.0)"#,
             "1",
         );
-        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (7 0)"#);
-        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (7 0.0)"#);
-        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (7.0 0)"#);
-        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (7.0 0.0)"#);
-        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (0 0)"#);
-        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (0 0.0)"#);
-        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (0.0 0)"#);
-        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) -> Int) <| (0.0 0.0)"#);
+        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (7 0)"#);
+        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (7 0.0)"#);
+        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (7.0 0)"#);
+        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (7.0 0.0)"#);
+        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (0 0)"#);
+        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (0 0.0)"#);
+        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (0.0 0)"#);
+        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (0.0 0.0)"#);
     }
 
     #[test]
@@ -801,7 +801,7 @@ mod evaluate_ast {
     #[test]
     fn substitutes_in_a_nested_function_call() {
         assert_eval_eq(
-            "(inc: (Int -> Int) -Int-> inc <| 5) <| (x: Int -Int-> x + 1)",
+            "(inc: (Int => Int) =Int=> inc <| 5) <| (x: Int =Int=> x + 1)",
             "6",
         );
     }
@@ -810,8 +810,8 @@ mod evaluate_ast {
     fn substitutes_with_a_let_expression() {
         assert_eval_eq(
             "
-            let added_val: Int <== 5
-            ((inc: (Int -> Int) -Int-> inc <| added_val) <| (x: Int -Int-> x + 1))
+            let added_val: Int <- 5
+            ((inc: (Int => Int) =Int=> inc <| added_val) <| (x: Int =Int=> x + 1))
             ",
             "6",
         );
@@ -821,8 +821,8 @@ mod evaluate_ast {
     fn substitutes_nested_let_expression() {
         assert_eval_eq(
             "
-            let x: Int <== 5
-            let y: Int <== x + 1
+            let x: Int <- 5
+            let y: Int <- x + 1
             y
             ",
             "6",
@@ -833,8 +833,8 @@ mod evaluate_ast {
     fn substitutes_in_tuples() {
         assert_eval_eq(
             "
-            let x: Int <== 5
-            let tup: (Int Num) <== (x 2.3)
+            let x: Int <- 5
+            let tup: (Int Num) <- (x 2.3)
             tup
             ",
             "(5 2.3)",
@@ -845,21 +845,21 @@ mod evaluate_ast {
     fn destructures_tuples() {
         assert_eval_eq(
             "
-            let x: Int <== 5
-            let (a: Int  b: Num) <== (x 2.3)
+            let x: Int <- 5
+            let (a: Int  b: Num) <- (x 2.3)
             a + b
             ",
             "7.3",
         );
         assert_eval_eq(
             "
-            (2  5.3  #true ()) |> (fn (a: Int  b: Num  bool: Bool) -Num-> a + b)
+            (2  5.3  #true ()) |> (fn (a: Int  b: Num  bool: Bool) =Num=> a + b)
             ",
             "7.3",
         );
         assert_eval_eq(
             "
-            () |> (fn () -Int-> 2 + 3)
+            () |> (fn () =Int=> 2 + 3)
             ",
             "5",
         );
@@ -869,8 +869,8 @@ mod evaluate_ast {
     fn substitutes_in_lists() {
         assert_eval_eq(
             "
-            let x: Num <== 5.0
-            let list: [Num..] <== [x 2.3 x]
+            let x: Num <- 5.0
+            let list: [Num..] <- [x 2.3 x]
             list
             ",
             "[5 2.3 5]",
@@ -881,11 +881,11 @@ mod evaluate_ast {
     fn substitutes_in_records() {
         assert_eval_eq(
             "
-            let x: Int <== 5
-            let rec: Any <== {a <== x  bar <== 2.3}
+            let x: Int <- 5
+            let rec: Any <- {a <- x  bar <- 2.3}
             rec
             ",
-            "{a <== 5 bar <== 2.3}",
+            "{a <- 5 bar <- 2.3}",
         );
     }
 
@@ -913,9 +913,9 @@ mod evaluate_ast {
     fn evaluates_in_records() {
         assert_eval_eq(
             "
-            {a <== {x <== 4 + 1  y <== 5}  bar <== 2.3}
+            {a <- {x <- 4 + 1  y <- 5}  bar <- 2.3}
             ",
-            "{a <== {x <== 5 y <== 5} bar <== 2.3}",
+            "{a <- {x <- 5 y <- 5} bar <- 2.3}",
         );
     }
 
@@ -923,7 +923,7 @@ mod evaluate_ast {
     fn sequences_execute_side_effects() {
         assert_eval_eq(
             r#"
-            let x: Any <== @hook("std.ref.new" Any) <| 5
+            let x: Any <- @hook("std.ref.new" Any) <| 5
             @hook("std.ref.set!" Any) <| (x  7);
             @hook("std.ref.set!" Any) <| (
                 x
@@ -938,7 +938,7 @@ mod evaluate_ast {
     fn supports_recursion_in_the_let_expression() {
         assert_eval_eq(
             "
-            let factorial: (Int -> Int) <== n: Int -Int->
+            let factorial: (Int => Int) <- n: Int =Int=>
                 if n <= 0 then
                     1
                 else
@@ -953,8 +953,8 @@ mod evaluate_ast {
     #[test]
     fn doesnt_substitute_shadowed_variables() {
         assert_eval_eq(
-            "(x: Int -(Int -> Int)-> x: Int -Int-> x + 1) <| 5",
-            "(fn x: Int -Int-> ((x) + 1))",
+            "(x: Int =(Int => Int)=> x: Int =Int=> x + 1) <| 5",
+            "(fn x: Int =Int=> ((x) + 1))",
         );
     }
 
@@ -962,19 +962,19 @@ mod evaluate_ast {
     fn list_push_hook() {
         assert_eval_eq(
             r#"
-            (1 [2 3]) |> @hook("std.list.push"  ((Int  [Int..]) -> [Int..]))
+            (1 [2 3]) |> @hook("std.list.push"  ((Int  [Int..]) => [Int..]))
             "#,
             "[1 2 3]",
         );
         assert_eval_eq(
             r#"
-            (1 []) |> @hook("std.list.push"  ((Int  [Int..]) -> [Int..]))
+            (1 []) |> @hook("std.list.push"  ((Int  [Int..]) => [Int..]))
             "#,
             "[1]",
         );
         assert_eval_eq(
             r#"
-            (1.6 [2.1 3.7]) |> @hook("std.list.push"  ((Num  [Num..]) -> [Num..]))
+            (1.6 [2.1 3.7]) |> @hook("std.list.push"  ((Num  [Num..]) => [Num..]))
             "#,
             "[1.6 2.1 3.7]",
         );
@@ -984,25 +984,25 @@ mod evaluate_ast {
     fn list_is_empty_hook() {
         assert_eval_eq(
             r#"
-            [1 2 3] |> @hook("std.list.is_empty"  ([Int..] -> Bool))
+            [1 2 3] |> @hook("std.list.is_empty"  ([Int..] => Bool))
             "#,
             "#false ()",
         );
         assert_eval_eq(
             r#"
-            [] |> @hook("std.list.is_empty"  ([Int..] -> Bool))
+            [] |> @hook("std.list.is_empty"  ([Int..] => Bool))
             "#,
             "#true ()",
         );
         assert_eval_eq(
             r#"
-            [#true() #false()] |> @hook("std.list.is_empty"  ([Bool..] -> Bool))
+            [#true() #false()] |> @hook("std.list.is_empty"  ([Bool..] => Bool))
             "#,
             "#false ()",
         );
         assert_eval_eq(
             r#"
-            [] |> @hook("std.list.is_empty"  ([Num..] -> Bool))
+            [] |> @hook("std.list.is_empty"  ([Num..] => Bool))
             "#,
             "#true ()",
         );
@@ -1012,18 +1012,18 @@ mod evaluate_ast {
     fn list_head_hook() {
         assert_eval_eq(
             r#"
-            [1 2 3] |> @hook("std.list.head"  ([Int..] -> Int))
+            [1 2 3] |> @hook("std.list.head"  ([Int..] => Int))
             "#,
             "1",
         );
         assert_eval_err(
             r#"
-            [] |> @hook("std.list.head"  ([Int..] -> Int))
+            [] |> @hook("std.list.head"  ([Int..] => Int))
             "#,
         );
         assert_eval_eq(
             r#"
-            [#true() #false()] |> @hook("std.list.head"  ([Bool..] -> Bool))
+            [#true() #false()] |> @hook("std.list.head"  ([Bool..] => Bool))
             "#,
             "#true ()",
         );
@@ -1033,18 +1033,18 @@ mod evaluate_ast {
     fn list_tail_hook() {
         assert_eval_eq(
             r#"
-            [1 2 3] |> @hook("std.list.tail"  ([Int..] -> Int))
+            [1 2 3] |> @hook("std.list.tail"  ([Int..] => Int))
             "#,
             "[2 3]",
         );
         assert_eval_err(
             r#"
-            [] |> @hook("std.list.tail"  ([Int..] -> Int))
+            [] |> @hook("std.list.tail"  ([Int..] => Int))
             "#,
         );
         assert_eval_eq(
             r#"
-            [#true() #false()] |> @hook("std.list.tail"  ([Bool..] -> Bool))
+            [#true() #false()] |> @hook("std.list.tail"  ([Bool..] => Bool))
             "#,
             "[#false ()]",
         );

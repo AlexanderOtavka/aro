@@ -1,4 +1,4 @@
-(a: Int -(Num -> Num)-> b: Num -Num-> a / b)
-|> (divide: (Int -> Num -> Num) -Num->
+(a: Int =(Num => Num)=> b: Num =Num=> a / b)
+|> (divide: (Int => Num => Num) =Num=>
     5 |> divide <| 2.0
 )

@@ -1,7 +1,7 @@
-let divide_by: (Int -> Num -> Num) <==
-    a: Int -(Num -> Num)-> b: Num -Num-> a / b
+let divide_by: (Int => Num => Num) <-
+    a: Int =(Num => Num)=> b: Num =Num=> a / b
 
-let x: Int <== 5
-let y: Num <== x - 3.0
+let x: Int <- 5
+let y: Num <- x - 3.0
 
 x |> divide_by <| y

@@ -174,8 +174,8 @@ impl Display for Expression {
             &Expression::GenericCall(ref e, ref t) => write!(f, "({} <| type {})", e, t),
             &Expression::If(ref c, ref t, ref e) => write!(f, "(if {} then {} else {})", c, t, e),
             &Expression::Ident(ref n) => write!(f, "({})", n),
-            &Expression::Let(ref p, ref v, ref e) => write!(f, "(let {} <== {} {})", p, v, e),
-            &Expression::TypeLet(ref n, ref v, ref e) => write!(f, "(let {} <== {} {})", n, v, e),
+            &Expression::Let(ref p, ref v, ref e) => write!(f, "(let {} <- {} {})", p, v, e),
+            &Expression::TypeLet(ref n, ref v, ref e) => write!(f, "(let {} <- {} {})", n, v, e),
             &Expression::Sequence(ref s, ref r) => write!(f, "({}; {})", s, r),
             &Expression::RecordAccess(ref r, ref n) => write!(f, "({}.{})", r, n),
         }
@@ -200,9 +200,9 @@ impl Display for Value {
                 }
                 &Value::Bool(true) => String::from("#true ()"),
                 &Value::Bool(false) => String::from("#false ()"),
-                &Value::Func(ref p, ref te, ref e) => format!("(fn {} -{}-> {})", p, te, e),
+                &Value::Func(ref p, ref te, ref e) => format!("(fn {} ={}=> {})", p, te, e),
                 &Value::GenericFunc(ref n, ref t, ref te, ref e) => {
-                    format!("({}: {} -{}-> {})", n, t, te, e)
+                    format!("({}: {} ={}=> {})", n, t, te, e)
                 }
                 &Value::Tuple(ref vec) => sequence_to_str("(", vec, ")"),
                 &Value::List(ref vec) => sequence_to_str("[", vec, "]"),
@@ -214,7 +214,7 @@ impl Display for Value {
                     "{",
                     &{
                         let mut vec = map.iter()
-                            .map(|(name, value)| format!("{} <== {}", name, value))
+                            .map(|(name, value)| format!("{} <- {}", name, value))
                             .collect::<Vec<String>>();
                         vec.sort();
                         vec
@@ -253,9 +253,9 @@ impl Display for Type {
                 &Type::Any => String::from("Any"),
                 &Type::Empty => String::from("Empty"),
                 &Type::Ident(ref name) => format!("({})", name),
-                &Type::Func(ref input, ref output) => format!("({} -> {})", input, output),
+                &Type::Func(ref input, ref output) => format!("({} => {})", input, output),
                 &Type::GenericFunc(ref name, ref supertype, ref output) => {
-                    format!("({}: {} -> {})", name, supertype, output)
+                    format!("({}: {} => {})", name, supertype, output)
                 }
                 &Type::Tuple(ref vec) => sequence_to_str("(", vec, ")"),
                 &Type::List(ref element_type) => format!("[{}..]", element_type),

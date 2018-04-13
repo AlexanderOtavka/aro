@@ -1,7 +1,7 @@
-let Element <== Num
-let list_3_elements: (El: Any -> El -> [El..]) <==
-    T: Any -(T -> [T..])->
-    el: T -[T..]->
+let Element <- Num
+let list_3_elements: (El: Any => El => [El..]) <-
+    T: Any =(T => [T..])=>
+    el: T =[T..]=>
         [el el el]
 
 list_3_elements <| type Element <| 5

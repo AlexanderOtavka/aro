@@ -1,19 +1,19 @@
-let mutable_ref: (Ref <| Int) <== ref <| type Int <| 1
+let mutable_ref: (Ref <| Int) <- ref <| type Int <| 1
 
 mutable_ref |> (set! <| type Int <| 2);
 
-let before_loop: Int <== mutable_ref |> (get! <| type Int)
+let before_loop: Int <- mutable_ref |> (get! <| type Int)
 
 while
-    <| (fn () -Bool-> (mutable_ref |> (get! <| type Int)) <= 10)
-    <| (fn () -Any->
-        let new_val: Int <== (mutable_ref |> (get! <| type Int)) * 2
+    <| (fn () =Bool=> (mutable_ref |> (get! <| type Int)) <= 10)
+    <| (fn () =Any=>
+        let new_val: Int <- (mutable_ref |> (get! <| type Int)) * 2
         mutable_ref |> (set! <| type Int <| new_val)
     );
 
-let after_loop: Int <== mutable_ref |> (get! <| type Int)
+let after_loop: Int <- mutable_ref |> (get! <| type Int)
 
-let modified: Int <==
+let modified: Int <-
     mutable_ref
         |> (set! <| type Int <| 7)
         |> (get! <| type Int)

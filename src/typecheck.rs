@@ -162,7 +162,7 @@ mod is_sub_type {
 
     #[test]
     fn same_type() {
-        // let x: [] <== []
+        // let x: [] <- []
         //   same ^^     ^^ same
         // Empty.is_sub_type(Empty) = true  -- so this typechecks (if [] were allowed)
         assert!(ast(Type::Empty).is_sub_type(&ast(Type::Empty), &HashMap::new()));
@@ -178,12 +178,12 @@ mod is_sub_type {
     #[test]
     fn empty() {
         // An empty list IS A list of integers.  Thus, Empty is subtype of Int
-        // let x: [Int..] <== []
+        // let x: [Int..] <- []
         //  super ^^^^^^^     ^^ subtype
         // Empty.is_sub_type(Int) = true  -- so this typechecks
         assert!(ast(Type::Empty).is_sub_type(&ast(Type::Int), &HashMap::new()));
 
-        // let x: [] <== [5]
+        // let x: [] <- [5]
         //    sub ^^     ^^^ supertype
         // Int.is_sub_type(Empty) = false  -- so this does not typecheck
         assert!(!ast(Type::Int).is_sub_type(&ast(Type::Empty), &HashMap::new()));
@@ -206,7 +206,7 @@ mod is_sub_type {
     // It's wierder with functions:
     #[test]
     fn with_functions() {
-        // let x: (Int -> [Int..]) <== x: Int -[]-> []
+        // let x: (Int -> [Int..]) <- x: Int -[]-> []
         //  super ^^^^^^^^^^^^^^^^     ^^^^^^^^^^^^^^^ subtype
         // (Int -> []).is_sub_type(Int -> [Int..]) = true  -- so this typechecks
         // because:
@@ -228,7 +228,7 @@ mod is_sub_type {
             )
         );
 
-        // let x: ([] -> Int) <== x: [Int..] -Int-> 1
+        // let x: ([] -> Int) <- x: [Int..] -Int-> 1
         //  super ^^^^^^^^^^^     ^^^^^^^^^^^^^^^^^^^ subtype
         // ([Int..] -> Int).is_sub_type([] -> Int) = true  -- so this typechecks
         // because:
@@ -838,21 +838,21 @@ mod typecheck_ast {
     #[test]
     fn checks_a_nested_function_call() {
         assert_typecheck_eq(
-            "(inc: (Int -> Int) -Int-> inc <| 5) <| (x: Int -Int-> x + 1)",
+            "(inc: (Int => Int) =Int=> inc <| 5) <| (x: Int =Int=> x + 1)",
             "Int",
         );
         assert_typecheck_eq(
-            "(inc: (Int -> Num) -Num-> inc <| 5) <| (x: Int -Num-> x + 1.0)",
+            "(inc: (Int => Num) =Num=> inc <| 5) <| (x: Int =Num=> x + 1.0)",
             "Num",
         );
         assert_typecheck_eq(
-            "(func: (Bool -> Bool) -Bool-> func <| #true()) <| (x: Bool -Bool-> x)",
+            "(func: (Bool => Bool) =Bool=> func <| #true()) <| (x: Bool =Bool=> x)",
             "Bool",
         );
-        assert_typecheck_err("(func: (Int -> Bool) -Int-> func <| 5) <| (x: Int -Int-> x)");
-        assert_typecheck_err("(func: (Int -> Bool) -Bool-> func <| 5) <| (x: Int -Int-> x)");
+        assert_typecheck_err("(func: (Int => Bool) =Int=> func <| 5) <| (x: Int =Int=> x)");
+        assert_typecheck_err("(func: (Int => Bool) =Bool=> func <| 5) <| (x: Int =Int=> x)");
         assert_typecheck_err(
-            "(func: (Bool -> Bool) -Int-> func <| #true()) <| (x: Bool -Bool-> x)",
+            "(func: (Bool => Bool) =Int=> func <| #true()) <| (x: Bool =Bool=> x)",
         );
     }
 
@@ -860,8 +860,8 @@ mod typecheck_ast {
     fn checks_a_let_expression() {
         assert_typecheck_eq(
             "
-            let added_val: Int <== 5
-            ((inc: (Int -> Int) -Int-> inc <| added_val) <| (x: Int -Int-> x + 1))
+            let added_val: Int <- 5
+            ((inc: (Int => Int) =Int=> inc <| added_val) <| (x: Int =Int=> x + 1))
             ",
             "Int",
         );
@@ -871,8 +871,8 @@ mod typecheck_ast {
     fn checks_nested_let_expression() {
         assert_typecheck_eq(
             "
-            let x: Int <== 5
-            let y: Int <== x + 1
+            let x: Int <- 5
+            let y: Int <- x + 1
             y
             ",
             "Int",
@@ -883,39 +883,39 @@ mod typecheck_ast {
     fn checks_list_subtype_assignments() {
         assert_typecheck_eq(
             "
-            let x: [Int..] <== []
+            let x: [Int..] <- []
             x
             ",
             "[Int..]",
         );
-        assert_typecheck_eq("[] |> (x: [Int..] -[Int..]-> x)", "[Int..]");
+        assert_typecheck_eq("[] |> (x: [Int..] =[Int..]=> x)", "[Int..]");
     }
 
     #[test]
     fn checks_record_subtype_assignments() {
         assert_typecheck_eq(
             "
-            let x: {a: Num} <== {a <== 5}
+            let x: {a: Num} <- {a <- 5}
             x
             ",
             "{a: Num}",
         );
         assert_typecheck_eq(
             "
-            let x: {a: Int} <== {a <== 5  b <== #false()}
+            let x: {a: Int} <- {a <- 5  b <- #false()}
             x
             ",
             "{a: Int}",
         );
         assert_typecheck_err(
             "
-            let x: {a: Int} <== {a <== 5.1}
+            let x: {a: Int} <- {a <- 5.1}
             x
             ",
         );
         assert_typecheck_err(
             "
-            let x: {a: Int  b: Bool} <== {a <== 5}
+            let x: {a: Int  b: Bool} <- {a <- 5}
             x
             ",
         );
@@ -923,16 +923,16 @@ mod typecheck_ast {
 
     #[test]
     fn checks_function_body_subtyping() {
-        assert_typecheck_eq("x: Int -[Int..]-> []", "(Int -> [Int..])");
-        assert_typecheck_eq("x: Int -[Int..]-> [x]", "(Int -> [Int..])");
-        assert_typecheck_err("x: Int -[Empty..]-> [x]");
+        assert_typecheck_eq("x: Int =[Int..]=> []", "(Int => [Int..])");
+        assert_typecheck_eq("x: Int =[Int..]=> [x]", "(Int => [Int..])");
+        assert_typecheck_err("x: Int =[Empty..]=> [x]");
     }
 
     #[test]
     fn checks_tuples_with_identifiers() {
         assert_typecheck_eq(
             "
-            let x: Int <== 5
+            let x: Int <- 5
             (x 2.3)
             ",
             "(Int Num)",
@@ -943,26 +943,26 @@ mod typecheck_ast {
     fn checks_destructured_tuples() {
         assert_typecheck_eq(
             "
-            let (x: Int y: Num) <== (2 2.3)
+            let (x: Int y: Num) <- (2 2.3)
             x + y
             ",
             "Num",
         );
         assert_typecheck_eq(
             "
-            fn (x: Int  y: Bool  z: Num) -Num->
+            fn (x: Int  y: Bool  z: Num) =Num=>
                 if y then
                     x * 1.0
                 else
                     z
             ",
-            "((Int Bool Num) -> Num)",
+            "((Int Bool Num) => Num)",
         );
         assert_typecheck_eq(
             "
-            fn () -Num-> 5.0 + 1
+            fn () =Num=> 5.0 + 1
             ",
-            "(() -> Num)",
+            "(() => Num)",
         );
     }
 
@@ -977,7 +977,7 @@ mod typecheck_ast {
     fn checks_lists_with_identifiers() {
         assert_typecheck_eq(
             "
-            let x: Int <== 5
+            let x: Int <- 5
             [x 2]
             ",
             "[Int..]",
@@ -988,8 +988,8 @@ mod typecheck_ast {
     fn checks_records_with_identifiers() {
         assert_typecheck_eq(
             "
-            let x: Int <== 5
-            {foo <== x}
+            let x: Int <- 5
+            {foo <- x}
             ",
             "{foo: Int}",
         );
@@ -999,7 +999,7 @@ mod typecheck_ast {
     fn supports_recursion_in_the_let_expression() {
         assert_typecheck_eq(
             "
-            let factorial: (Int -> Int) <== n: Int -Int->
+            let factorial: (Int => Int) <- n: Int =Int=>
                 if n <= 0 then
                     1
                 else
@@ -1013,55 +1013,55 @@ mod typecheck_ast {
     #[test]
     fn checks_iifes() {
         assert_typecheck_eq(
-            "(x: Int -(Int -> Int)-> y: Int -Int-> x + y) <| 5",
-            "(Int -> Int)",
+            "(x: Int =(Int => Int)=> y: Int =Int=> x + y) <| 5",
+            "(Int => Int)",
         );
     }
 
     #[test]
     fn doesnt_like_unbound_type_names() {
-        assert_typecheck_err("let foo: [Foo..] <== []  foo");
-        assert_typecheck_err("x: Foo -Int-> 5");
-        assert_typecheck_err("x: Int -[Foo..]-> []");
-        assert_typecheck_err("T: Any -(Foo -> Int)-> x: Foo -Int-> 5");
-        assert_typecheck_err("T: Foo -(Int -> Int)-> x: Int -Int-> 5");
+        assert_typecheck_err("let foo: [Foo..] <- []  foo");
+        assert_typecheck_err("x: Foo =Int=> 5");
+        assert_typecheck_err("x: Int =[Foo..]=> []");
+        assert_typecheck_err("T: Any =(Foo => Int)=> x: Foo =Int=> 5");
+        assert_typecheck_err("T: Foo =(Int => Int)=> x: Int =Int=> 5");
     }
 
     #[test]
     fn checks_type_let() {
         assert_typecheck_eq(
             "
-            let I <== Int
-            let i: I <== 5
+            let I <- Int
+            let i: I <- 5
             i
             ",
             "Int",
         );
         assert_typecheck_eq(
             "
-            let F <== Int -> Int
-            let f: F <== x: Int -Int-> x + 1
+            let F <- Int => Int
+            let f: F <- x: Int =Int=> x + 1
             f
             ",
-            "(Int -> Int)",
+            "(Int => Int)",
         );
         assert_typecheck_eq(
             "
-            let I <== Int
-            let F <== I -> I
-            let f: F <== x: I -I-> x + 1
+            let I <- Int
+            let F <- I => I
+            let f: F <- x: I =I=> x + 1
             f
             ",
-            "(Int -> Int)",
+            "(Int => Int)",
         );
         assert_typecheck_eq(
             "
-            let I <== Int
-            let F <== T: I -> T -> T
-            let f: F <== T: I -(T -> T)-> x: T -T-> x
+            let I <- Int
+            let F <- T: I => T => T
+            let f: F <- T: I =(T => T)=> x: T =T=> x
             f
             ",
-            "(T: Int -> ((T) -> (T)))",
+            "(T: Int => ((T) => (T)))",
         );
     }
 
@@ -1069,21 +1069,21 @@ mod typecheck_ast {
     fn checks_generic_functions() {
         assert_typecheck_eq(
             "
-            T: Int -(T -> T -> [T..])->
-            x: T -(T -> [T..])->
-            y: T -[T..]->
+            T: Int =(T => T => [T..])=>
+            x: T =(T => [T..])=>
+            y: T =[T..]=>
                 [x  y]
             ",
-            "(T: Int -> ((T) -> ((T) -> [(T)..])))",
+            "(T: Int => ((T) => ((T) => [(T)..])))",
         );
         assert_typecheck_eq(
             "
-            T: Any -(T -> T -> [T..])->
-            x: T -(T -> [T..])->
-            y: T -[T..]->
+            T: Any =(T => T => [T..])=>
+            x: T =(T => [T..])=>
+            y: T =[T..]=>
                 [x  y]
             ",
-            "(T: Any -> ((T) -> ((T) -> [(T)..])))",
+            "(T: Any => ((T) => ((T) => [(T)..])))",
         );
     }
 
@@ -1092,42 +1092,42 @@ mod typecheck_ast {
         assert_typecheck_eq(
             "
             type Int |> (
-                T: Int -(T -> T -> [T..])->
-                x: T -(T -> [T..])->
-                y: T -[T..]->
+                T: Int =(T => T => [T..])=>
+                x: T =(T => [T..])=>
+                y: T =[T..]=>
                     [x  y]
             )
             ",
-            "(Int -> (Int -> [Int..]))",
+            "(Int => (Int => [Int..]))",
         );
         assert_typecheck_eq(
             "
             type Int |> (
-                T: Num -(T -> T -> [T..])->
-                x: T -(T -> [T..])->
-                y: T -[T..]->
+                T: Num =(T => T => [T..])=>
+                x: T =(T => [T..])=>
+                y: T =[T..]=>
                     [x  y]
             )
             ",
-            "(Int -> (Int -> [Int..]))",
+            "(Int => (Int => [Int..]))",
         );
         assert_typecheck_eq(
             "
             type Int |> (
-                T: Any -(T -> T -> [T..])->
-                x: T -(T -> [T..])->
-                y: T -[T..]->
+                T: Any =(T => T => [T..])=>
+                x: T =(T => [T..])=>
+                y: T =[T..]=>
                     [x  y]
             )
             ",
-            "(Int -> (Int -> [Int..]))",
+            "(Int => (Int => [Int..]))",
         );
         assert_typecheck_err(
             "
             type Bool |> (
-                T: Int -(T -> T -> [T..])->
-                x: T -(T -> [T..])->
-                y: T -[T..]->
+                T: Int =(T => T => [T..])=>
+                x: T =(T => [T..])=>
+                y: T =[T..]=>
                     [x  y]
             )
             ",
@@ -1135,9 +1135,9 @@ mod typecheck_ast {
         assert_typecheck_err(
             "
             type Num |> (
-                T: Int -(T -> T -> [T..])->
-                x: T -(T -> [T..])->
-                y: T -[T..]->
+                T: Int =(T => T => [T..])=>
+                x: T =(T => [T..])=>
+                y: T =[T..]=>
                     [x  y]
             )
             ",
@@ -1149,14 +1149,14 @@ mod typecheck_ast {
         assert_typecheck_eq(
             "
             type Int |> (
-                T: Any -(T: Any -> T -> T -> [T..])->
-                T: Any -(T -> T -> [T..])->
-                x: T -(T -> [T..])->
-                y: T -[T..]->
+                T: Any =(T: Any => T => T => [T..])=>
+                T: Any =(T => T => [T..])=>
+                x: T =(T => [T..])=>
+                y: T =[T..]=>
                     [x  y]
             )
             ",
-            "(T: Any -> ((T) -> ((T) -> [(T)..])))",
+            "(T: Any => ((T) => ((T) => [(T)..])))",
         );
     }
 
@@ -1164,34 +1164,34 @@ mod typecheck_ast {
     fn checks_generic_function_calls() {
         assert_typecheck_eq(
             "
-            let make_two_list: (El: Any -> El -> El-> [El..]) <==
-                T: Any -(T -> T -> [T..])->
-                x: T -(T -> [T..])->
-                y: T -[T..]->
+            let make_two_list: (El: Any => El => El=> [El..]) <-
+                T: Any =(T => T => [T..])=>
+                x: T =(T => [T..])=>
+                y: T =[T..]=>
                     [x  y]
 
             make_two_list <| type Bool
             ",
-            "(Bool -> (Bool -> [Bool..]))",
+            "(Bool => (Bool => [Bool..]))",
         );
         assert_typecheck_eq(
             "
-            let make_two_list: (El: Bool -> El -> El-> [El..]) <==
-                T: Any -(T -> T -> [T..])->
-                x: T -(T -> [T..])->
-                y: T -[T..]->
+            let make_two_list: (El: Bool => El => El=> [El..]) <-
+                T: Any =(T => T => [T..])=>
+                x: T =(T => [T..])=>
+                y: T =[T..]=>
                     [x  y]
 
             make_two_list <| type Bool
             ",
-            "(Bool -> (Bool -> [Bool..]))",
+            "(Bool => (Bool => [Bool..]))",
         );
         assert_typecheck_err(
             "
-            let make_two_list: (El: Bool -> El -> El-> [El..]) <==
-                T: Any -(T -> T -> [T..])->
-                x: T -(T -> [T..])->
-                y: T -[T..]->
+            let make_two_list: (El: Bool => El => El=> [El..]) <-
+                T: Any =(T => T => [T..])=>
+                x: T =(T => [T..])=>
+                y: T =[T..]=>
                     [x  y]
 
             make_two_list <| type Int
@@ -1199,10 +1199,10 @@ mod typecheck_ast {
         );
         assert_typecheck_err(
             "
-            let make_two_list: (El: Any -> El -> El-> [El..]) <==
-                T: Bool -(T -> T -> [T..])->
-                x: T -(T -> [T..])->
-                y: T -[T..]->
+            let make_two_list: (El: Any => El => El=> [El..]) <-
+                T: Bool =(T => T => [T..])=>
+                x: T =(T => [T..])=>
+                y: T =[T..]=>
                     [x  y]
 
             make_two_list <| type Bool
@@ -1214,22 +1214,22 @@ mod typecheck_ast {
     fn checks_generic_subtyping() {
         assert_typecheck_eq(
             "
-            let add: (T: Num -> T -> T -> Num) <==
-                T: Num -(T -> T -> Num)->
-                x: T -(T -> Num)->
-                y: T -Num->
+            let add: (T: Num => T => T => Num) <-
+                T: Num =(T => T => Num)=>
+                x: T =(T => Num)=>
+                y: T =Num=>
                     x + y
 
             add <| type Num
             ",
-            "(Num -> (Num -> Num))",
+            "(Num => (Num => Num))",
         );
         assert_typecheck_err(
             "
-            let add: (T: Any -> T -> T -> Num) <==
-                T: Any -(T -> T -> Num)->
-                x: T -(T -> Num)->
-                y: T -Num->
+            let add: (T: Any => T => T => Num) <-
+                T: Any =(T => T => Num)=>
+                x: T =(T => Num)=>
+                y: T =Num=>
                     x + y
 
             add <| type Num
@@ -1237,10 +1237,10 @@ mod typecheck_ast {
         );
         assert_typecheck_err(
             "
-            let add: (T: Num -> T -> T -> T) <==
-                T: Num -(T -> T -> T)->
-                x: T -(T -> T)->
-                y: T -T->
+            let add: (T: Num => T => T => T) <-
+                T: Num =(T => T => T)=>
+                x: T =(T => T)=>
+                y: T =T=>
                     x + y
 
             add <| type Num

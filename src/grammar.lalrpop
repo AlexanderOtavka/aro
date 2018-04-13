@@ -7,17 +7,17 @@ pub Expr: Ast<Expression> = {
     <l:@L> "if" <e1:Expr> "then" <e2:Expr> "else" <e3:Expr> <r:@R> =>
         Ast::<Expression>::new(l, r, Expression::If(e1, e2, e3)),
 
-    <l:@L> "let" <p:Pattern> "<==" <v:Expr> <e:Expr> <r:@R> =>
+    <l:@L> "let" <p:Pattern> "<-" <v:Expr> <e:Expr> <r:@R> =>
         Ast::<Expression>::new(l, r, Expression::Let(p, v, e)),
-    <l:@L> "let" <n:TypeIdent> "<==" <v:Type> <e:Expr> <r:@R> =>
+    <l:@L> "let" <n:TypeIdent> "<-" <v:Type> <e:Expr> <r:@R> =>
         Ast::<Expression>::new(l, r, Expression::TypeLet(n, v, e)),
 
-    <l:@L> <p:IdentPattern> "-" <et:ValueType> "->" <e:Expr> <r:@R> =>
+    <l:@L> <p:IdentPattern> "=" <et:ValueType> "=>" <e:Expr> <r:@R> =>
         Ast::<Expression>::new(l, r, Expression::Value(Value::Func(p, et, e))),
-    <l:@L> "fn" <p:Pattern> "-" <et:ValueType> "->" <e:Expr> <r:@R> =>
+    <l:@L> "fn" <p:Pattern> "=" <et:ValueType> "=>" <e:Expr> <r:@R> =>
         Ast::<Expression>::new(l, r, Expression::Value(Value::Func(p, et, e))),
 
-    <l:@L> <p:TypeIdent> ":" <s:ValueType> "-" <et:ValueType> "->" <e:Expr> <r:@R> =>
+    <l:@L> <p:TypeIdent> ":" <s:ValueType> "=" <et:ValueType> "=>" <e:Expr> <r:@R> =>
         Ast::<Expression>::new(l, r, Expression::Value(Value::GenericFunc(p, s, et, e))),
 
     <l:@L> <s:Call> ";" <e:Expr> <r:@R> =>
@@ -83,8 +83,8 @@ Value = {
 };
 
 pub Type: Ast<Type> = {
-    <l:@L> <p:ValueType> "->" <e:Type> <r:@R> => Ast::<Type>::new(l, r, Type::Func(p, e)),
-    <l:@L> <n:TypeIdent> ":" <s:ValueType> "->" <e:Type> <r:@R> => Ast::<Type>::new(l, r, Type::GenericFunc(n, s, e)),
+    <l:@L> <p:ValueType> "=>" <e:Type> <r:@R> => Ast::<Type>::new(l, r, Type::Func(p, e)),
+    <l:@L> <n:TypeIdent> ":" <s:ValueType> "=>" <e:Type> <r:@R> => Ast::<Type>::new(l, r, Type::GenericFunc(n, s, e)),
     ValueType,
 };
 
@@ -129,7 +129,7 @@ Pattern: Ast<Pattern> = {
 };
 
 RecordEntry: (String, Ast<Expression>) = {
-    <n:Ident> "<==" <e:Expr> => (n, e),
+    <n:Ident> "<-" <e:Expr> => (n, e),
 };
 
 RecordTypeEntry: (String, Ast<Type>) = {
