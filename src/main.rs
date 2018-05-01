@@ -14,6 +14,7 @@ mod util;
 mod parse;
 mod typecheck;
 mod eval;
+mod c_compile;
 mod globals;
 
 use std::io::prelude::*;
@@ -165,8 +166,76 @@ mod evaluate_file {
     }
 }
 
+fn c_compile_source(input: &str) -> Result<String, Error> {
+    let ast = parse::source_to_ast(input)?;
+
+    let globals = get_globals();
+
+    typecheck::typecheck_ast(
+        &ast,
+        &globals
+            .iter()
+            .map(|(name, &(_, ref value_type))| (name.clone(), value_type.clone()))
+            .collect(),
+    )?;
+
+    let mut scope = Vec::new();
+    let mut expr_index = 0;
+    let expr = c_compile::lift_expr(&ast, &mut scope, &mut expr_index);
+
+    let mut statements = String::new();
+    for statement in scope {
+        statements += &format!("  {}\n", statement);
+    }
+
+    Ok(format!(
+        "#include <stdio.h>\
+         \n#include <stdbool.h>\
+         \n\
+         \nint main(void) {{\
+         \n{}\
+         \n  printf(\"%f\\n\", {});\
+         \n  return 0;\
+         \n}}",
+        statements, expr
+    ))
+}
+
+fn c_compile_file(file_name: &str) -> Result<String, String> {
+    let mut input_file = std::fs::File::open(file_name).map_err(|_| "Couldn't open file.")?;
+
+    let mut input_string = String::new();
+    input_file
+        .read_to_string(&mut input_string)
+        .map_err(|_| "Couldn't read input.")?;
+
+    c_compile_source(&input_string).map_err(|err| err.as_string(&input_string))
+}
+
+#[cfg(test)]
+mod c_compile_file {
+    use super::*;
+
+    #[test]
+    fn add() {
+        assert_eq!(
+            c_compile_file("examples/add.aro").unwrap(),
+            "#include <stdio.h>\
+             \n#include <stdbool.h>\
+             \n\
+             \nint main(void) {\
+             \n  double _aro_expr_0;\
+             \n  _aro_expr_0 = (1 + 1);\
+             \n\
+             \n  printf(\"%f\\n\", _aro_expr_0);\
+             \n  return 0;\
+             \n}",
+        )
+    }
+}
+
 fn main() {
-    let options = clap::App::new("The aro-> Compiler")
+    let options = clap::App::new("The -aro-> Compiler")
         .version("0.4.0")
         .author("Zander Otavka <otavkaal@grinnell.edu>")
         .arg(
@@ -180,12 +249,22 @@ fn main() {
                 .short("s")
                 .long("small-step"),
         )
+        .arg(
+            clap::Arg::with_name("target-c")
+                .help("Compile to C")
+                .short("c")
+                .long("target-c"),
+        )
         .get_matches();
 
-    exit(match evaluate_file(
-        options.value_of("infile").unwrap(),
-        options.is_present("small-step"),
-    ) {
+    let infile = options.value_of("infile").unwrap();
+    let result = if options.is_present("target-c") {
+        c_compile_file(infile)
+    } else {
+        evaluate_file(infile, options.is_present("small-step"))
+    };
+
+    exit(match result {
         Ok(output) => {
             println!("{}", output);
             0

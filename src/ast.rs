@@ -72,6 +72,31 @@ pub enum Type {
     Record(HashMap<String, Ast<Type>>),
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum CType {
+    Float,
+    Bool,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum CValue {
+    Float(f64),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum CExpr {
+    Value(CValue),
+    BinOp(BinOp, Ast<CExpr>, Ast<CExpr>),
+    Ident(String),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum CStatement {
+    VarDecl(CType, String),
+    VarAssign(String, CExpr),
+    Block(Vec<Ast<CStatement>>),
+}
+
 impl<T> Ast<T> {
     pub fn new(left_loc: usize, right_loc: usize, expr: T) -> Ast<T> {
         Ast {
@@ -81,7 +106,7 @@ impl<T> Ast<T> {
         }
     }
 
-    pub fn replace_expr(&self, expr: T) -> Ast<T> {
+    pub fn replace_expr<U>(&self, expr: U) -> Ast<U> {
         Ast::new(self.left_loc, self.right_loc, expr)
     }
 }
@@ -271,6 +296,66 @@ impl Display for Type {
                     },
                     "}"
                 ),
+            }
+        )
+    }
+}
+
+impl Display for CType {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                &CType::Bool => "bool",
+                &CType::Float => "double",
+            }
+        )
+    }
+}
+
+impl Display for CValue {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                &CValue::Float(value) => format!("{}", value),
+            }
+        )
+    }
+}
+
+impl Display for CExpr {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                &CExpr::Value(ref value) => format!("{}", value),
+                &CExpr::BinOp(ref op, ref left, ref right) => match op {
+                    &BinOp::Add => format!("({} + {})", left, right),
+                    &BinOp::Sub => format!("({} - {})", left, right),
+                    &BinOp::Mul => format!("({} * {})", left, right),
+                    &BinOp::Div => format!("({} / {})", left, right),
+                    &BinOp::Call => format!("{}({})", left, right),
+                    &BinOp::LEq => format!("({} <= {})", left, right),
+                },
+                &CExpr::Ident(ref name) => format!("{}", name),
+            }
+        )
+    }
+}
+
+impl Display for CStatement {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                &CStatement::Block(ref statements) => sequence_to_str("{ ", statements, " }"),
+                &CStatement::VarDecl(ref var_type, ref name) => format!("{} {};", var_type, name),
+                &CStatement::VarAssign(ref name, ref value) => format!("{} = {};", name, value),
             }
         )
     }
