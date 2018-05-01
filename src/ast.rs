@@ -337,7 +337,7 @@ impl Display for CExpr {
                     &BinOp::Add => format!("({} + {})", left, right),
                     &BinOp::Sub => format!("({} - {})", left, right),
                     &BinOp::Mul => format!("({} * {})", left, right),
-                    &BinOp::Div => format!("({} / {})", left, right),
+                    &BinOp::Div => format!("((double) {} / {})", left, right),
                     &BinOp::Call => format!("{}({})", left, right),
                     &BinOp::LEq => format!("({} <= {})", left, right),
                 },

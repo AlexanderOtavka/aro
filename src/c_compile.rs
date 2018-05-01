@@ -1,4 +1,4 @@
-use ast::{Ast, BinOp, CExpr, CStatement, CType, CValue, Expression, Value};
+use ast::{Ast, CExpr, CStatement, CType, CValue, Expression, Value};
 
 fn get_expr_name(expr_index: &mut i32) -> String {
     let old_i = *expr_index;
@@ -16,22 +16,19 @@ pub fn lift_expr(
             &Value::Num(value) => ast.replace_expr(CExpr::Value(CValue::Float(value))),
             _ => panic!(),
         },
-        &Expression::BinOp(ref op, ref left, ref right) => match op {
-            &BinOp::Add => {
-                let left_c_ast = lift_expr(left, scope, expr_index);
-                let right_c_ast = lift_expr(right, scope, expr_index);
+        &Expression::BinOp(ref op, ref left, ref right) => {
+            let left_c_ast = lift_expr(left, scope, expr_index);
+            let right_c_ast = lift_expr(right, scope, expr_index);
 
-                let expr_name = get_expr_name(expr_index);
-                scope.push(ast.replace_expr(CStatement::VarDecl(CType::Float, expr_name.clone())));
-                scope.push(ast.replace_expr(CStatement::VarAssign(
-                    expr_name.clone(),
-                    CExpr::BinOp(BinOp::Add, left_c_ast, right_c_ast),
-                )));
+            let expr_name = get_expr_name(expr_index);
+            scope.push(ast.replace_expr(CStatement::VarDecl(CType::Float, expr_name.clone())));
+            scope.push(ast.replace_expr(CStatement::VarAssign(
+                expr_name.clone(),
+                CExpr::BinOp(op.clone(), left_c_ast, right_c_ast),
+            )));
 
-                ast.replace_expr(CExpr::Ident(expr_name))
-            }
-            _ => panic!(),
-        },
+            ast.replace_expr(CExpr::Ident(expr_name))
+        }
         _ => panic!(),
     }
 }
@@ -59,11 +56,35 @@ mod lift_expr {
     }
 
     #[test]
-    fn handles_addition() {
+    fn handles_arithmatic() {
         assert_lift(
             "1.0 + 1.0",
             vec!["double _aro_expr_0;", "_aro_expr_0 = (1 + 1);"],
             "_aro_expr_0",
-        )
+        );
+        assert_lift(
+            "1.0 - 1.0",
+            vec!["double _aro_expr_0;", "_aro_expr_0 = (1 - 1);"],
+            "_aro_expr_0",
+        );
+        assert_lift(
+            "1.0 * 1.0",
+            vec!["double _aro_expr_0;", "_aro_expr_0 = (1 * 1);"],
+            "_aro_expr_0",
+        );
+        assert_lift(
+            "1.0 / 1.0",
+            vec!["double _aro_expr_0;", "_aro_expr_0 = ((double) 1 / 1);"],
+            "_aro_expr_0",
+        );
+    }
+
+    #[test]
+    fn handles_comparison() {
+        assert_lift(
+            "1.0 <= 1.0",
+            vec!["double _aro_expr_0;", "_aro_expr_0 = (1 <= 1);"],
+            "_aro_expr_0",
+        );
     }
 }
