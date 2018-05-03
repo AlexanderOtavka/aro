@@ -96,8 +96,9 @@ pub enum CExpr {
 #[derive(Debug, PartialEq, Clone)]
 pub enum CStatement {
     VarDecl(CType, String),
-    VarAssign(String, CExpr),
+    VarAssign(String, Ast<CExpr>),
     Block(Vec<Ast<CStatement>>),
+    If(Ast<CExpr>, Ast<CStatement>, Ast<CStatement>),
 }
 
 impl<T> Ast<T> {
@@ -362,6 +363,9 @@ impl Display for CStatement {
                 &CStatement::Block(ref statements) => sequence_to_str("{ ", statements, " }"),
                 &CStatement::VarDecl(ref var_type, ref name) => format!("{} {};", var_type, name),
                 &CStatement::VarAssign(ref name, ref value) => format!("{} = {};", name, value),
+                &CStatement::If(ref condition, ref consequent, ref alternate) => {
+                    format!("if ({}) {} else {}", condition, consequent, alternate)
+                }
             }
         )
     }

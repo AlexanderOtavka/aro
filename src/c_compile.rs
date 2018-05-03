@@ -38,7 +38,34 @@ pub fn lift_expr(
             scope.push(ast.replace_expr(CStatement::VarDecl(expr_type, expr_name.clone())));
             scope.push(ast.replace_expr(CStatement::VarAssign(
                 expr_name.clone(),
-                CExpr::BinOp(op.clone(), left_c_ast, right_c_ast),
+                ast.replace_expr(CExpr::BinOp(op.clone(), left_c_ast, right_c_ast)),
+            )));
+
+            ast.replace_expr(CExpr::Ident(expr_name))
+        }
+        &Expression::If(ref condition, ref consequent, ref alternate) => {
+            let condition_c_ast = lift_expr(condition, scope, expr_index);
+
+            let expr_name = get_expr_name(expr_index);
+            let expr_type = get_expr_ctype(ast);
+
+            let mut consequent_scope = Vec::new();
+            let consequent_c_ast = lift_expr(consequent, &mut consequent_scope, expr_index);
+            consequent_scope
+                .push(ast.replace_expr(CStatement::VarAssign(expr_name.clone(), consequent_c_ast)));
+            let consequent_block = consequent.replace_expr(CStatement::Block(consequent_scope));
+
+            let mut alternate_scope = Vec::new();
+            let alternate_c_ast = lift_expr(alternate, &mut alternate_scope, expr_index);
+            alternate_scope
+                .push(ast.replace_expr(CStatement::VarAssign(expr_name.clone(), alternate_c_ast)));
+            let alternate_block = alternate.replace_expr(CStatement::Block(alternate_scope));
+
+            scope.push(ast.replace_expr(CStatement::VarDecl(expr_type, expr_name.clone())));
+            scope.push(ast.replace_expr(CStatement::If(
+                condition_c_ast,
+                consequent_block,
+                alternate_block,
             )));
 
             ast.replace_expr(CExpr::Ident(expr_name))
@@ -127,6 +154,25 @@ mod lift_expr {
                 "_aro_expr_3 = (_aro_expr_0 <= _aro_expr_2);",
             ],
             "_aro_expr_3",
+        );
+    }
+
+    #[test]
+    fn handles_if_statements() {
+        assert_lift(
+            "
+            if 1 <= 2 then
+                5.3
+            else
+                8 * 2
+            ",
+            vec![
+                "bool _aro_expr_0;",
+                "_aro_expr_0 = (1 <= 2);",
+                "double _aro_expr_1;",
+                "if (_aro_expr_0) { _aro_expr_1 = 5.3; } else { int _aro_expr_2; _aro_expr_2 = (8 * 2); _aro_expr_1 = _aro_expr_2; }",
+            ],
+            "_aro_expr_1",
         );
     }
 }
