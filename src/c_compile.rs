@@ -1,9 +1,19 @@
-use ast::{Ast, CExpr, CStatement, CType, CValue, Expression, Value};
+use ast::{Ast, CExpr, CStatement, CType, CValue, Expression, Type, Value};
+use typecheck::typecheck_ast;
+use std::collections::HashMap;
 
 fn get_expr_name(expr_index: &mut i32) -> String {
     let old_i = *expr_index;
     *expr_index += 1;
     format!("_aro_expr_{}", old_i)
+}
+
+fn get_expr_ctype(ast: &Ast<Expression>) -> CType {
+    match typecheck_ast(ast, &HashMap::new()).unwrap() {
+        Type::Num => CType::Float,
+        Type::Bool => CType::Bool,
+        _ => panic!(),
+    }
 }
 
 pub fn lift_expr(
@@ -14,6 +24,7 @@ pub fn lift_expr(
     match &*ast.expr {
         &Expression::Value(ref v) => match v {
             &Value::Num(value) => ast.replace_expr(CExpr::Value(CValue::Float(value))),
+            &Value::Bool(value) => ast.replace_expr(CExpr::Value(CValue::Bool(value))),
             _ => panic!(),
         },
         &Expression::BinOp(ref op, ref left, ref right) => {
@@ -21,7 +32,8 @@ pub fn lift_expr(
             let right_c_ast = lift_expr(right, scope, expr_index);
 
             let expr_name = get_expr_name(expr_index);
-            scope.push(ast.replace_expr(CStatement::VarDecl(CType::Float, expr_name.clone())));
+            let expr_type = get_expr_ctype(ast);
+            scope.push(ast.replace_expr(CStatement::VarDecl(expr_type, expr_name.clone())));
             scope.push(ast.replace_expr(CStatement::VarAssign(
                 expr_name.clone(),
                 CExpr::BinOp(op.clone(), left_c_ast, right_c_ast),
@@ -83,7 +95,7 @@ mod lift_expr {
     fn handles_comparison() {
         assert_lift(
             "1.0 <= 1.0",
-            vec!["double _aro_expr_0;", "_aro_expr_0 = (1 <= 1);"],
+            vec!["bool _aro_expr_0;", "_aro_expr_0 = (1 <= 1);"],
             "_aro_expr_0",
         );
     }
