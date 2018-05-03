@@ -75,12 +75,14 @@ pub enum Type {
 #[derive(Debug, PartialEq, Clone)]
 pub enum CType {
     Float,
+    Int,
     Bool,
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum CValue {
     Float(f64),
+    Int(i32),
     Bool(bool),
 }
 
@@ -310,6 +312,7 @@ impl Display for CType {
             match self {
                 &CType::Bool => "bool",
                 &CType::Float => "double",
+                &CType::Int => "int",
             }
         )
     }
@@ -322,6 +325,7 @@ impl Display for CValue {
             "{}",
             match self {
                 &CValue::Float(value) => format!("{}", value),
+                &CValue::Int(value) => format!("{}", value),
                 &CValue::Bool(value) => format!("{}", value),
             }
         )
