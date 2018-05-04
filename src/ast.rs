@@ -11,6 +11,7 @@ pub struct Ast<T> {
     pub left_loc: usize,
     pub right_loc: usize,
     pub expr: Box<T>,
+    pub expr_type: RefCell<Option<Box<Type>>>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -107,6 +108,7 @@ impl<T> Ast<T> {
             left_loc,
             right_loc,
             expr: Box::new(expr),
+            expr_type: RefCell::new(None),
         }
     }
 

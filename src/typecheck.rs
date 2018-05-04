@@ -460,7 +460,7 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
     let left_loc = ast.left_loc;
     let right_loc = ast.right_loc;
 
-    match &*ast.expr {
+    let ast_type = match &*ast.expr {
         &Expression::Value(ref value) => match value {
             &Value::Hook(_, ref hook_type) => evaluate_type(hook_type, env),
             &Value::Int(_) => Ok(Type::Int),
@@ -734,7 +734,11 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
                 }
             }
         },
-    }
+    }?;
+
+    *ast.expr_type.borrow_mut() = Some(Box::new(ast_type.clone()));
+
+    Ok(ast_type)
 }
 
 #[cfg(test)]
