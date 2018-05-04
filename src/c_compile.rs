@@ -241,4 +241,30 @@ mod lift_expr {
             "_aro_expr_0",
         );
     }
+
+    #[test]
+    fn handles_let_shadowing() {
+        assert_lift(
+            "
+            let x: Num <- 5
+            let x: Int <- 4
+            x + 3
+            ",
+            "int _aro_expr_0; \
+             { \
+             double aro_x; \
+             aro_x = 5; \
+             int _aro_expr_1; \
+             { \
+             int aro_x; \
+             aro_x = 4; \
+             int _aro_expr_2; \
+             _aro_expr_2 = (aro_x + 3); \
+             _aro_expr_1 = _aro_expr_2; \
+             } \
+             _aro_expr_0 = _aro_expr_1; \
+             } ",
+            "_aro_expr_0",
+        );
+    }
 }
