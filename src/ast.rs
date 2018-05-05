@@ -126,7 +126,7 @@ pub enum CStatement {
 #[derive(Debug, PartialEq, Clone)]
 pub struct CFunc {
     pub name: String,
-    pub param: (Ast<CType>, String),
+    pub param: Ast<CType>,
     pub body: Vec<Ast<CStatement>>,
     pub ret: Ast<CValue>,
 }
@@ -515,7 +515,7 @@ impl CFunc {
             &format!(
                 "{}({}, {})",
                 self.name,
-                ctype_to_string(&self.param.0.expr, "_aro_arg"),
+                ctype_to_string(&self.param.expr, "_aro_arg"),
                 ctype_to_string(&CType::Object, "_aro_captures")
             ),
         )

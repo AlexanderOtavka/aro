@@ -215,10 +215,7 @@ pub fn lift_expr(
 
                     functions.push(ast.replace_expr(CFunc {
                         name: func_name,
-                        param: (
-                            param_type.replace_expr(type_to_ctype(&param_type.expr)),
-                            get_ident_name(param_name),
-                        ),
+                        param: param_type.replace_expr(type_to_ctype(&param_type.expr)),
                         body: func_scope,
                         ret,
                     }));
