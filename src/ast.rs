@@ -79,6 +79,7 @@ pub enum CType {
     Int,
     Bool,
     Object,
+    VoidPtr,
     Closure { param: Ast<CType>, ret: Ast<CType> },
 }
 
@@ -87,15 +88,15 @@ pub enum CValue {
     Float(f64),
     Int(i32),
     Bool(bool),
+    Ident(String, CType),
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum CExpr {
     Value(CValue),
-    BinOp(BinOp, Ast<CExpr>, Ast<CExpr>),
-    Ident(String),
+    BinOp(BinOp, Ast<CValue>, Ast<CValue>),
     ObjectAccess {
-        object: Ast<CExpr>,
+        object: Ast<CValue>,
         index: usize,
         field_type: Ast<CType>,
     },
@@ -107,12 +108,12 @@ pub enum CStatement {
     VarAssign(String, Ast<CExpr>),
     ClosureInit {
         name: String,
-        function: Ast<CExpr>,
-        captures: Ast<CExpr>,
+        function: Ast<CValue>,
+        captures: Ast<CValue>,
     },
     ObjectInit {
         name: String,
-        data: Vec<(Ast<CType>, Ast<CExpr>)>,
+        data: Vec<Ast<CValue>>,
     },
     Block(Vec<Ast<CStatement>>),
     If(Ast<CExpr>, Ast<CStatement>, Ast<CStatement>),
@@ -120,11 +121,10 @@ pub enum CStatement {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct CFunc {
-    pub ret_type: Ast<CType>,
     pub name: String,
     pub param: (Ast<CType>, String),
     pub body: Vec<Ast<CStatement>>,
-    pub ret_expr: Ast<CExpr>,
+    pub ret: Ast<CValue>,
 }
 
 impl<T> Ast<T> {
@@ -180,6 +180,12 @@ impl Ast<Pattern> {
             &Pattern::Ident(ref ident_name, _) => name == ident_name,
             &Pattern::Tuple(ref vec) => vec.into_iter().any(|el| el.contains_name(name)),
         }
+    }
+}
+
+impl Ast<CValue> {
+    pub fn to_c_expr(&self) -> Ast<CExpr> {
+        self.replace_expr(CExpr::Value(*self.expr.clone()))
     }
 }
 
@@ -337,21 +343,19 @@ fn ctype_to_string(ctype: &CType, name: &str) -> String {
         &CType::Bool => format!("bool {}", name),
         &CType::Float => format!("double {}", name),
         &CType::Int => format!("int {}", name),
-        &CType::Object => format!("_Aro_Any* {}", name),
-        &CType::Closure { ref param, ref ret } => format!(
-            "struct {{ {}; {}; }}* {}",
-            ctype_to_string(
-                &ret.expr,
-                &format!(
-                    "(*{})({}, {})",
-                    "function",
-                    ctype_to_string(&param.expr, ""),
-                    ctype_to_string(&CType::Object, "")
-                ),
-            ),
-            ctype_to_string(&CType::Object, "captures"),
-            name
-        ),
+        &CType::Object | &CType::Closure { .. } => format!("_Aro_Any* {}", name),
+        &CType::VoidPtr => format!("void* {}", name),
+    }
+}
+
+impl CValue {
+    pub fn get_ctype(&self) -> CType {
+        match self {
+            &CValue::Int(_) => CType::Int,
+            &CValue::Float(_) => CType::Float,
+            &CValue::Bool(_) => CType::Bool,
+            &CValue::Ident(_, ref ctype) => ctype.clone(),
+        }
     }
 }
 
@@ -364,6 +368,7 @@ impl Display for CValue {
                 &CValue::Float(value) => format!("{}", value),
                 &CValue::Int(value) => format!("{}", value),
                 &CValue::Bool(value) => format!("{}", value),
+                &CValue::Ident(ref name, _) => format!("{}", name),
             }
         )
     }
@@ -374,8 +379,8 @@ fn ctype_to_union_field(ctype: &CType) -> &'static str {
         &CType::Int => "Int",
         &CType::Float => "Float",
         &CType::Bool => "Bool",
-        &CType::Closure { .. } => "Void_Ptr",
-        &CType::Object => "Any_Ptr",
+        &CType::Object | &CType::Closure { .. } => "Any_Ptr",
+        &CType::VoidPtr => "Void_Ptr",
     }
 }
 
@@ -407,10 +412,30 @@ impl Display for CExpr {
                         left,
                         right
                     ),
-                    &BinOp::Call => format!("{}->function({}, {}->captures)", left, right, left),
+                    &BinOp::Call => {
+                        if let CType::Closure { ref param, ref ret } = left.expr.get_ctype() {
+                            format!(
+                                "(({}){}[0].Void_Ptr)({}, {}[1].Any_Ptr)",
+                                ctype_to_string(
+                                    &ret.expr,
+                                    &format!(
+                                        "(*)({}, _Aro_Any*)",
+                                        ctype_to_string(&param.expr, "")
+                                    )
+                                ),
+                                left,
+                                right,
+                                left
+                            )
+                        } else {
+                            panic!(
+                                "Cannot do call with {}",
+                                ctype_to_string(&left.expr.get_ctype(), "")
+                            )
+                        }
+                    }
                     &BinOp::LEq => format!("({} <= {})", left, right),
                 },
-                &CExpr::Ident(ref name) => format!("{}", name),
             }
         )
     }
@@ -433,13 +458,13 @@ impl Display for CStatement {
                     data.len(),
                     {
                         let mut assignments = Vec::new();
-                        for (i, &(ref element_type, ref element_expr)) in data.iter().enumerate() {
+                        for (i, element) in data.iter().enumerate() {
                             assignments.push(format!(
                                 "{}[{}].{} = {};",
                                 name,
                                 i,
-                                ctype_to_union_field(&element_type.expr),
-                                element_expr
+                                ctype_to_union_field(&element.expr.get_ctype()),
+                                element
                             ));
                         }
 
@@ -451,21 +476,10 @@ impl Display for CStatement {
                     ref function,
                     ref captures,
                 } => format!(
-                    "{} = malloc(sizeof({})); \
-                     {}->function = {}; \
-                     {}->captures = {};",
-                    name,
-                    ctype_to_string(
-                        &CType::Closure {
-                            param: Ast::new(0, 0, CType::Object),
-                            ret: Ast::new(0, 0, CType::Object),
-                        },
-                        ""
-                    ),
-                    name,
-                    function,
-                    name,
-                    captures
+                    "{} = malloc(sizeof(_Aro_Any) * 2); \
+                     {}[0].Void_Ptr = {}; \
+                     {}[1].Any_Ptr = {};",
+                    name, name, function, name, captures
                 ),
                 &CStatement::If(ref condition, ref consequent, ref alternate) => {
                     format!("if ({}) {} else {}", condition, consequent, alternate)
@@ -478,7 +492,7 @@ impl Display for CStatement {
 impl CFunc {
     pub fn get_signature_string(&self) -> String {
         ctype_to_string(
-            &self.ret_type.expr,
+            &self.ret.expr.get_ctype(),
             &format!(
                 "{}({}, {})",
                 self.name,
@@ -501,7 +515,7 @@ impl Display for CFunc {
                 .map(|statement| format!("{}", statement))
                 .collect::<Vec<String>>()
                 .join(" "),
-            self.ret_expr
+            self.ret
         )
     }
 }
