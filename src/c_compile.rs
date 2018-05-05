@@ -1,4 +1,5 @@
 use ast::{Ast, CExpr, CFunc, CStatement, CType, CValue, Expression, Pattern, Type, Value};
+use std::collections::{HashMap, HashSet};
 
 fn get_expr_name(expr_index: &mut i32) -> String {
     let old_i = *expr_index;
@@ -36,6 +37,84 @@ fn get_ident_name(name: &str) -> String {
     format!("aro_{}", name)
 }
 
+fn find_names_in_pattern(pattern: &Ast<Pattern>, names: &mut HashSet<String>) {
+    match &*pattern.expr {
+        &Pattern::Ident(ref name, _) => {
+            names.insert(name.clone());
+        }
+        &Pattern::Tuple(ref vec) => for element in vec {
+            find_names_in_pattern(element, names);
+        },
+    }
+}
+
+fn find_captures(
+    ast: &Ast<Expression>,
+    locals: &HashSet<String>,
+    captures: &mut HashMap<String, CType>,
+) {
+    match &*ast.expr {
+        &Expression::BinOp(_, ref left, ref right) => {
+            find_captures(left, locals, captures);
+            find_captures(right, locals, captures);
+        }
+        &Expression::GenericCall(ref expr, _) => find_captures(expr, locals, captures),
+        &Expression::Ident(ref name) => {
+            if !locals.contains(name) {
+                captures.insert(name.clone(), get_expr_ctype(ast));
+            }
+        }
+        &Expression::If(ref condition, ref consequent, ref alternate) => {
+            find_captures(condition, locals, captures);
+            find_captures(consequent, locals, captures);
+            find_captures(alternate, locals, captures);
+        }
+        &Expression::Let(ref pattern, ref value, ref body) => {
+            let mut locals = locals.clone();
+            find_names_in_pattern(pattern, &mut locals);
+            find_captures(value, &locals, captures);
+            find_captures(body, &locals, captures);
+        }
+        &Expression::RecordAccess(ref record, _) => {
+            find_captures(record, locals, captures);
+        }
+        &Expression::Sequence(ref side_effect, ref result) => {
+            find_captures(side_effect, locals, captures);
+            find_captures(result, locals, captures);
+        }
+        &Expression::TypeLet(_, _, ref body) => {
+            find_captures(body, locals, captures);
+        }
+        &Expression::Value(ref value) => match value {
+            &Value::Bool(_) | &Value::Hook(_, _) | &Value::Int(_) | &Value::Num(_) => {}
+            &Value::Func(ref pattern, _, ref body) => {
+                let mut locals = locals.clone();
+                find_names_in_pattern(pattern, &mut locals);
+                find_captures(body, &locals, captures);
+            }
+            &Value::GenericFunc(_, _, _, ref body) => {
+                find_captures(body, locals, captures);
+            }
+            &Value::List(ref vec) => for element in vec {
+                find_captures(element, locals, captures);
+            },
+            &Value::Tuple(ref vec) => for element in vec {
+                find_captures(element, locals, captures);
+            },
+            &Value::Record(ref map) => for (_, element) in map {
+                find_captures(element, locals, captures);
+            },
+            &Value::Ref(ref value) => {
+                find_captures(
+                    &ast.replace_expr(Expression::Value((&*value.borrow()).clone())),
+                    locals,
+                    captures,
+                );
+            }
+        },
+    }
+}
+
 pub fn lift_expr(
     ast: &Ast<Expression>,
     scope: &mut Vec<Ast<CStatement>>,
@@ -50,10 +129,35 @@ pub fn lift_expr(
             &Value::Int(value) => ast.replace_expr(CExpr::Value(CValue::Int(value))),
             &Value::Func(ref pattern, ref return_type, ref body) => match &*pattern.expr {
                 &Pattern::Ident(ref param_name, ref param_type) => {
+                    let mut captures_map = HashMap::new();
+                    let mut locals = HashSet::new();
+                    locals.insert(param_name.clone());
+                    find_captures(body, &locals, &mut captures_map);
+
                     let func_name = get_func_name(function_index);
                     let mut func_scope = Vec::new();
                     let mut func_expr_index = 0;
-                    let return_expr = lift_expr(
+
+                    for (index, (name, var_type)) in captures_map.iter().enumerate() {
+                        let ident_name = get_ident_name(name);
+                        func_scope.push(ast.replace_expr(CStatement::VarDecl(
+                            var_type.clone(),
+                            ident_name.clone(),
+                        )));
+
+                        let captures_object =
+                            ast.replace_expr(CExpr::Ident(String::from("_aro_captures")));
+                        func_scope.push(ast.replace_expr(CStatement::VarAssign(
+                            ident_name,
+                            ast.replace_expr(CExpr::ObjectAccess {
+                                object: captures_object,
+                                index,
+                                field_type: ast.replace_expr(var_type.clone()),
+                            }),
+                        )))
+                    }
+
+                    let ret_expr = lift_expr(
                         body,
                         &mut func_scope,
                         &mut func_expr_index,
@@ -61,19 +165,50 @@ pub fn lift_expr(
                         function_index,
                     );
 
+                    let captures_array_name = get_expr_name(expr_index);
+                    scope.push(ast.replace_expr(CStatement::VarDecl(
+                        CType::Object,
+                        captures_array_name.clone(),
+                    )));
+
+                    scope.push(
+                        ast.replace_expr(CStatement::ObjectInit {
+                            name: captures_array_name.clone(),
+                            data: captures_map
+                                .into_iter()
+                                .map(|(name, var_type)| {
+                                    (
+                                        ast.replace_expr(var_type),
+                                        ast.replace_expr(CExpr::Ident(get_ident_name(&name))),
+                                    )
+                                })
+                                .collect(),
+                        }),
+                    );
+
+                    let closure_name = get_expr_name(expr_index);
+                    scope.push(ast.replace_expr(CStatement::VarDecl(
+                        get_expr_ctype(ast),
+                        closure_name.clone(),
+                    )));
+                    scope.push(ast.replace_expr(CStatement::ClosureInit {
+                        name: closure_name.clone(),
+                        function: ast.replace_expr(CExpr::Ident(func_name.clone())),
+                        captures: ast.replace_expr(CExpr::Ident(captures_array_name)),
+                    }));
+
                     functions.push(ast.replace_expr(CFunc {
                         ret_type: return_type.replace_expr(type_to_ctype(&return_type.expr)),
-                        name: func_name.clone(),
+                        name: func_name,
                         param: (
                             param_type.replace_expr(type_to_ctype(&param_type.expr)),
                             get_ident_name(param_name),
                         ),
-                        captured: Vec::new(),
                         body: func_scope,
-                        ret_expr: return_expr,
+                        ret_expr,
                     }));
 
-                    ast.replace_expr(CExpr::Ident(func_name))
+                    ast.replace_expr(CExpr::Ident(closure_name))
                 }
                 _ => panic!(),
             },
@@ -248,14 +383,14 @@ mod lift_expr {
         assert_lift(
             "1.3 / 1.1",
             "double _aro_expr_0; \
-             _aro_expr_0 = ((double) 1.3 / 1.1); ",
+             _aro_expr_0 = ((double ) 1.3 / 1.1); ",
             "",
             "_aro_expr_0",
         );
         assert_lift(
             "1 / 1",
             "double _aro_expr_0; \
-             _aro_expr_0 = ((double) 1 / 1); ",
+             _aro_expr_0 = ((double ) 1 / 1); ",
             "",
             "_aro_expr_0",
         );

@@ -194,6 +194,17 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
     Ok(format!(
         "#include <stdio.h>\
          \n#include <stdbool.h>\
+         \n#include <stdlib.h>\
+         \n\
+         \ntypedef union _Aro_Any {{\
+         \n  bool Bool;\
+         \n  int Int;\
+         \n  double Float;\
+         \n  void* Void_Ptr;\
+         \n  union _Aro_Any* Any_Ptr;\
+         \n}} _Aro_Any;\
+         \n\
+         \n{}\
          \n\
          \n{}\
          \n\
@@ -203,6 +214,11 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
          \n  printf(\"%f\\n\", {});\
          \n  return 0;\
          \n}}",
+        functions
+            .iter()
+            .map(|function| format!("{};", function.expr.get_signature_string()))
+            .collect::<Vec<String>>()
+            .join("\n"),
         functions
             .into_iter()
             .map(|function| format!("{}", function))
@@ -238,6 +254,15 @@ mod c_compile_file {
             c_compile_file("examples/add.aro").unwrap(),
             "#include <stdio.h>\
              \n#include <stdbool.h>\
+             \n#include <stdlib.h>\
+             \n\
+             \ntypedef union _Aro_Any {\
+             \n  bool Bool;\
+             \n  int Int;\
+             \n  double Float;\
+             \n  void* Void_Ptr;\
+             \n  union _Aro_Any* Any_Ptr;\
+             \n} _Aro_Any;\
              \n\
              \n\
              \n\
