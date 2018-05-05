@@ -109,7 +109,7 @@ pub enum CStatement {
     ClosureInit {
         name: String,
         function: Ast<CValue>,
-        captures: Ast<CValue>,
+        captures: Vec<Ast<CValue>>,
     },
     ObjectInit {
         name: String,
@@ -395,7 +395,7 @@ impl Display for CExpr {
                     ref index,
                     ref field_type,
                 } => format!(
-                    "(({}){}[{}].{})",
+                    "({}){}[{}].{}",
                     ctype_to_string(&field_type.expr, ""),
                     object,
                     index,
@@ -415,12 +415,13 @@ impl Display for CExpr {
                     &BinOp::Call => {
                         if let CType::Closure { ref param, ref ret } = left.expr.get_ctype() {
                             format!(
-                                "(({}){}[0].Void_Ptr)({}, {}[1].Any_Ptr)",
+                                "(*({}){}[0].Void_Ptr)({}, &{}[1])",
                                 ctype_to_string(
                                     &ret.expr,
                                     &format!(
-                                        "(*)({}, _Aro_Any*)",
-                                        ctype_to_string(&param.expr, "")
+                                        "(*)({}, {})",
+                                        ctype_to_string(&param.expr, ""),
+                                        ctype_to_string(&CType::Object, ""),
                                     )
                                 ),
                                 left,
@@ -441,6 +442,21 @@ impl Display for CExpr {
     }
 }
 
+fn init_array(name: &str, elements: &Vec<Ast<CValue>>, start_index: usize) -> String {
+    let mut assignments = Vec::new();
+    for (i, element) in elements.iter().enumerate() {
+        assignments.push(format!(
+            "{}[{}].{} = {};",
+            name,
+            i + start_index,
+            ctype_to_union_field(&element.expr.get_ctype()),
+            element
+        ));
+    }
+
+    assignments.join(" ")
+}
+
 impl Display for CStatement {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
@@ -456,30 +472,21 @@ impl Display for CStatement {
                     "{} = malloc(sizeof(_Aro_Any) * {}); {}",
                     name,
                     data.len(),
-                    {
-                        let mut assignments = Vec::new();
-                        for (i, element) in data.iter().enumerate() {
-                            assignments.push(format!(
-                                "{}[{}].{} = {};",
-                                name,
-                                i,
-                                ctype_to_union_field(&element.expr.get_ctype()),
-                                element
-                            ));
-                        }
-
-                        assignments.join(" ")
-                    }
+                    init_array(name, data, 0)
                 ),
                 &CStatement::ClosureInit {
                     ref name,
                     ref function,
                     ref captures,
                 } => format!(
-                    "{} = malloc(sizeof(_Aro_Any) * 2); \
+                    "{} = malloc(sizeof(_Aro_Any) * {}); \
                      {}[0].Void_Ptr = {}; \
-                     {}[1].Any_Ptr = {};",
-                    name, name, function, name, captures
+                     {}",
+                    name,
+                    captures.len() + 1,
+                    name,
+                    function,
+                    init_array(name, captures, 1)
                 ),
                 &CStatement::If(ref condition, ref consequent, ref alternate) => {
                     format!("if ({}) {} else {}", condition, consequent, alternate)

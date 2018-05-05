@@ -167,17 +167,20 @@ pub fn lift_expr(
                         function_index,
                     );
 
-                    let captures_array_name = get_expr_name(expr_index);
-                    let captures_array_type = CType::Object;
+                    let closure_name = get_expr_name(expr_index);
+                    let closure_type = get_expr_ctype(ast);
                     scope.push(ast.replace_expr(CStatement::VarDecl(
-                        captures_array_type.clone(),
-                        captures_array_name.clone(),
+                        closure_type.clone(),
+                        closure_name.clone(),
                     )));
-
                     scope.push(
-                        ast.replace_expr(CStatement::ObjectInit {
-                            name: captures_array_name.clone(),
-                            data: captures_map
+                        ast.replace_expr(CStatement::ClosureInit {
+                            name: closure_name.clone(),
+                            function: ast.replace_expr(CValue::Ident(
+                                func_name.clone(),
+                                CType::VoidPtr,
+                            )),
+                            captures: captures_map
                                 .into_iter()
                                 .map(|(name, var_type)| {
                                     ast.replace_expr(CValue::Ident(
@@ -188,24 +191,6 @@ pub fn lift_expr(
                                 .collect(),
                         }),
                     );
-
-                    let closure_name = get_expr_name(expr_index);
-                    let closure_type = get_expr_ctype(ast);
-                    scope.push(ast.replace_expr(CStatement::VarDecl(
-                        closure_type.clone(),
-                        closure_name.clone(),
-                    )));
-                    scope.push(ast.replace_expr(CStatement::ClosureInit {
-                        name: closure_name.clone(),
-                        function: ast.replace_expr(CValue::Ident(
-                            func_name.clone(),
-                            CType::VoidPtr,
-                        )),
-                        captures: ast.replace_expr(CValue::Ident(
-                            captures_array_name,
-                            captures_array_type,
-                        )),
-                    }));
 
                     functions.push(ast.replace_expr(CFunc {
                         name: func_name,
@@ -522,19 +507,16 @@ mod lift_expr {
         assert_lift(
             "2 |> (fn x: Int =Int=> x + 1)",
             "_Aro_Any* _aro_expr_0; \
-             _aro_expr_0 = malloc(sizeof(_Aro_Any) * 0);  \
-             struct { int (*function)(int , _Aro_Any* ); _Aro_Any* captures; }* _aro_expr_1; \
-             _aro_expr_1 = malloc(sizeof(struct { _Aro_Any* (*function)(_Aro_Any* , _Aro_Any* ); _Aro_Any* captures; }* )); \
-             _aro_expr_1->function = _aro_func_0; \
-             _aro_expr_1->captures = _aro_expr_0; \
-             int _aro_expr_2; \
-             _aro_expr_2 = _aro_expr_1->function(2, _aro_expr_1->captures); ",
+            _aro_expr_0 = malloc(sizeof(_Aro_Any) * 1); \
+            _aro_expr_0[0].Void_Ptr = _aro_func_0;  \
+            int _aro_expr_1; \
+            _aro_expr_1 = (*(int (*)(int , _Aro_Any* ))_aro_expr_0[0].Void_Ptr)(2, &_aro_expr_0[1]); ",
             "int _aro_func_0(int aro_x, _Aro_Any* _aro_captures) { \
              int _aro_expr_0; \
              _aro_expr_0 = (aro_x + 1); \
              return _aro_expr_0; \
              } ",
-            "_aro_expr_2",
+            "_aro_expr_1",
         );
     }
 }
