@@ -80,6 +80,7 @@ pub enum CType {
     Bool,
     Object,
     VoidPtr,
+    Ref(Box<CType>),
     Closure { param: Ast<CType>, ret: Ast<CType> },
 }
 
@@ -89,6 +90,7 @@ pub enum CValue {
     Int(i32),
     Bool(bool),
     Ident(String, CType),
+    Deref(String, CType),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -106,6 +108,8 @@ pub enum CExpr {
 pub enum CStatement {
     VarDecl(CType, String),
     VarAssign(String, Ast<CExpr>),
+    RefAlloc(String, CType),
+    RefAssign(String, Ast<CExpr>),
     ClosureInit {
         name: String,
         function: Ast<CValue>,
@@ -345,6 +349,7 @@ fn ctype_to_string(ctype: &CType, name: &str) -> String {
         &CType::Int => format!("int {}", name),
         &CType::Object | &CType::Closure { .. } => format!("_Aro_Any* {}", name),
         &CType::VoidPtr => format!("void* {}", name),
+        &CType::Ref(ref contained) => format!("{}* {}", ctype_to_string(contained, ""), name),
     }
 }
 
@@ -354,7 +359,7 @@ impl CValue {
             &CValue::Int(_) => CType::Int,
             &CValue::Float(_) => CType::Float,
             &CValue::Bool(_) => CType::Bool,
-            &CValue::Ident(_, ref ctype) => ctype.clone(),
+            &CValue::Ident(_, ref ctype) | &CValue::Deref(_, ref ctype) => ctype.clone(),
         }
     }
 }
@@ -369,6 +374,7 @@ impl Display for CValue {
                 &CValue::Int(value) => format!("{}", value),
                 &CValue::Bool(value) => format!("{}", value),
                 &CValue::Ident(ref name, _) => format!("{}", name),
+                &CValue::Deref(ref name, _) => format!("(*{})", name),
             }
         )
     }
@@ -380,7 +386,7 @@ fn ctype_to_union_field(ctype: &CType) -> &'static str {
         &CType::Float => "Float",
         &CType::Bool => "Bool",
         &CType::Object | &CType::Closure { .. } => "Any_Ptr",
-        &CType::VoidPtr => "Void_Ptr",
+        &CType::VoidPtr | &CType::Ref(_) => "Void_Ptr",
     }
 }
 
@@ -468,6 +474,12 @@ impl Display for CStatement {
                     format!("{};", ctype_to_string(var_type, name))
                 }
                 &CStatement::VarAssign(ref name, ref value) => format!("{} = {};", name, value),
+                &CStatement::RefAlloc(ref name, ref value_type) => format!(
+                    "{} = malloc(sizeof({}));",
+                    name,
+                    ctype_to_string(value_type, "")
+                ),
+                &CStatement::RefAssign(ref name, ref value) => format!("*{} = {};", name, value),
                 &CStatement::ObjectInit { ref name, ref data } => format!(
                     "{} = malloc(sizeof(_Aro_Any) * {}); {}",
                     name,
@@ -503,7 +515,7 @@ impl CFunc {
             &format!(
                 "{}({}, {})",
                 self.name,
-                ctype_to_string(&self.param.0.expr, &self.param.1),
+                ctype_to_string(&self.param.0.expr, "_aro_arg"),
                 ctype_to_string(&CType::Object, "_aro_captures")
             ),
         )

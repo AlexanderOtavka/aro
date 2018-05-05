@@ -211,7 +211,7 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
          \nint main(void) {{\
          \n  {}\
          \n\
-         \n  printf(\"%f\\n\", {});\
+         \n  printf(\"%f\\n\", (double) {});\
          \n  return 0;\
          \n}}",
         functions
@@ -271,7 +271,7 @@ mod c_compile_file {
              \nint main(void) {\
              \n  double _aro_expr_0; _aro_expr_0 = (1 + 1);\
              \n\
-             \n  printf(\"%f\\n\", _aro_expr_0);\
+             \n  printf(\"%f\\n\", (double) _aro_expr_0);\
              \n  return 0;\
              \n}",
         )

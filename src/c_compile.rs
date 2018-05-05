@@ -138,10 +138,29 @@ pub fn lift_expr(
                     let mut func_scope = Vec::new();
                     let mut func_expr_index = 0;
 
+                    let param_ident_name = get_ident_name(param_name);
+                    let param_ctype = type_to_ctype(&param_type.expr);
+                    let param_ref_type = CType::Ref(Box::new(param_ctype.clone()));
+                    func_scope.push(pattern.replace_expr(CStatement::VarDecl(
+                        param_ref_type.clone(),
+                        param_ident_name.clone(),
+                    )));
+                    func_scope.push(pattern.replace_expr(CStatement::RefAlloc(
+                        param_ident_name.clone(),
+                        param_ctype.clone(),
+                    )));
+                    func_scope.push(pattern.replace_expr(CStatement::RefAssign(
+                        param_ident_name,
+                        pattern.replace_expr(CExpr::Value(CValue::Ident(
+                            String::from("_aro_arg"),
+                            param_ctype,
+                        ))),
+                    )));
+
                     for (index, (name, var_type)) in captures_map.iter().enumerate() {
                         let ident_name = get_ident_name(name);
                         func_scope.push(ast.replace_expr(CStatement::VarDecl(
-                            var_type.clone(),
+                            CType::Ref(Box::new(var_type.clone())),
                             ident_name.clone(),
                         )));
 
@@ -154,7 +173,9 @@ pub fn lift_expr(
                             ast.replace_expr(CExpr::ObjectAccess {
                                 object: captures_object,
                                 index,
-                                field_type: ast.replace_expr(var_type.clone()),
+                                field_type: ast.replace_expr(CType::Ref(Box::new(
+                                    var_type.clone(),
+                                ))),
                             }),
                         )))
                     }
@@ -185,7 +206,7 @@ pub fn lift_expr(
                                 .map(|(name, var_type)| {
                                     ast.replace_expr(CValue::Ident(
                                         get_ident_name(&name),
-                                        var_type.clone(),
+                                        CType::Ref(Box::new(var_type.clone())),
                                     ))
                                 })
                                 .collect(),
@@ -209,7 +230,7 @@ pub fn lift_expr(
             _ => panic!(),
         },
         &Expression::Ident(ref name) => {
-            ast.replace_expr(CValue::Ident(get_ident_name(name), get_expr_ctype(ast)))
+            ast.replace_expr(CValue::Deref(get_ident_name(name), get_expr_ctype(ast)))
         }
         &Expression::BinOp(ref op, ref left, ref right) => {
             let left_c_ast = lift_expr(left, scope, expr_index, functions, function_index);
@@ -280,10 +301,15 @@ pub fn lift_expr(
 
                 let value_name = get_ident_name(name);
                 let value_ctype = type_to_ctype(&value_type.expr);
+                let value_ref_type = CType::Ref(Box::new(value_ctype.clone()));
 
                 let mut body_scope = Vec::new();
                 body_scope.push(
-                    pattern_ast.replace_expr(CStatement::VarDecl(value_ctype, value_name.clone())),
+                    pattern_ast
+                        .replace_expr(CStatement::VarDecl(value_ref_type, value_name.clone())),
+                );
+                body_scope.push(
+                    pattern_ast.replace_expr(CStatement::RefAlloc(value_name.clone(), value_ctype)),
                 );
                 let value_c_ast = lift_expr(
                     value,
@@ -294,7 +320,7 @@ pub fn lift_expr(
                 );
                 body_scope.push(
                     pattern_ast
-                        .replace_expr(CStatement::VarAssign(value_name, value_c_ast.to_c_expr())),
+                        .replace_expr(CStatement::RefAssign(value_name, value_c_ast.to_c_expr())),
                 );
 
                 let body_c_ast =
@@ -464,10 +490,11 @@ mod lift_expr {
             ",
             "double _aro_expr_0; \
              { \
-             double aro_x; \
-             aro_x = 5; \
+             double * aro_x; \
+             aro_x = malloc(sizeof(double )); \
+             *aro_x = 5; \
              double _aro_expr_1; \
-             _aro_expr_1 = (aro_x + 3); \
+             _aro_expr_1 = ((*aro_x) + 3); \
              _aro_expr_0 = _aro_expr_1; \
              } ",
             "",
@@ -485,14 +512,16 @@ mod lift_expr {
             ",
             "int _aro_expr_0; \
              { \
-             double aro_x; \
-             aro_x = 5; \
+             double * aro_x; \
+             aro_x = malloc(sizeof(double )); \
+             *aro_x = 5; \
              int _aro_expr_1; \
              { \
-             int aro_x; \
-             aro_x = 4; \
+             int * aro_x; \
+             aro_x = malloc(sizeof(int )); \
+             *aro_x = 4; \
              int _aro_expr_2; \
-             _aro_expr_2 = (aro_x + 3); \
+             _aro_expr_2 = ((*aro_x) + 3); \
              _aro_expr_1 = _aro_expr_2; \
              } \
              _aro_expr_0 = _aro_expr_1; \
@@ -507,13 +536,17 @@ mod lift_expr {
         assert_lift(
             "2 |> (fn x: Int =Int=> x + 1)",
             "_Aro_Any* _aro_expr_0; \
-            _aro_expr_0 = malloc(sizeof(_Aro_Any) * 1); \
-            _aro_expr_0[0].Void_Ptr = _aro_func_0;  \
-            int _aro_expr_1; \
-            _aro_expr_1 = (*(int (*)(int , _Aro_Any* ))_aro_expr_0[0].Void_Ptr)(2, &_aro_expr_0[1]); ",
-            "int _aro_func_0(int aro_x, _Aro_Any* _aro_captures) { \
+             _aro_expr_0 = malloc(sizeof(_Aro_Any) * 1); \
+             _aro_expr_0[0].Void_Ptr = _aro_func_0;  \
+             int _aro_expr_1; \
+             _aro_expr_1 = (*(int (*)(int , _Aro_Any* ))_aro_expr_0[0].Void_Ptr)\
+             (2, &_aro_expr_0[1]); ",
+            "int _aro_func_0(int _aro_arg, _Aro_Any* _aro_captures) { \
+             int * aro_x; \
+             aro_x = malloc(sizeof(int )); \
+             *aro_x = _aro_arg; \
              int _aro_expr_0; \
-             _aro_expr_0 = (aro_x + 1); \
+             _aro_expr_0 = ((*aro_x) + 1); \
              return _aro_expr_0; \
              } ",
             "_aro_expr_1",
