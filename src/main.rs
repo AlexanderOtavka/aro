@@ -266,6 +266,8 @@ mod c_compile_file {
              \n\
              \n\
              \n\
+             \n\
+             \n\
              \nint main(void) {\
              \n  double _aro_expr_0; _aro_expr_0 = (1 + 1);\
              \n\

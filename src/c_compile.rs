@@ -499,14 +499,20 @@ mod lift_expr {
     fn handles_functions() {
         assert_lift(
             "2 |> (fn x: Int =Int=> x + 1)",
-            "int _aro_expr_0; \
-             _aro_expr_0 = _aro_func_0(2); ",
-            "int _aro_func_0(int aro_x) { \
+            "_Aro_Any* _aro_expr_0; \
+             _aro_expr_0 = malloc(sizeof(_Aro_Any) * 0);  \
+             struct { int (*function)(int , _Aro_Any* ); _Aro_Any* captures; }* _aro_expr_1; \
+             _aro_expr_1 = malloc(sizeof(struct { _Aro_Any* (*function)(_Aro_Any* , _Aro_Any* ); _Aro_Any* captures; }* )); \
+             _aro_expr_1->function = _aro_func_0; \
+             _aro_expr_1->captures = _aro_expr_0; \
+             int _aro_expr_2; \
+             _aro_expr_2 = _aro_expr_1->function(2, _aro_expr_1->captures); ",
+            "int _aro_func_0(int aro_x, _Aro_Any* _aro_captures) { \
              int _aro_expr_0; \
              _aro_expr_0 = (aro_x + 1); \
              return _aro_expr_0; \
              } ",
-            "_aro_expr_0",
+            "_aro_expr_2",
         );
     }
 }
