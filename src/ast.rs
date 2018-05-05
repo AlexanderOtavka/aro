@@ -78,6 +78,7 @@ pub enum CType {
     Float,
     Int,
     Bool,
+    Closure { param: Ast<CType>, ret: Ast<CType> },
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -100,6 +101,16 @@ pub enum CStatement {
     VarAssign(String, Ast<CExpr>),
     Block(Vec<Ast<CStatement>>),
     If(Ast<CExpr>, Ast<CStatement>, Ast<CStatement>),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct CFunc {
+    pub ret_type: Ast<CType>,
+    pub name: String,
+    pub param: (Ast<CType>, String),
+    pub captured: Vec<(Ast<CType>, String)>,
+    pub body: Vec<Ast<CStatement>>,
+    pub ret_expr: Ast<CExpr>,
 }
 
 impl<T> Ast<T> {
@@ -307,17 +318,15 @@ impl Display for Type {
     }
 }
 
-impl Display for CType {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                &CType::Bool => "bool",
-                &CType::Float => "double",
-                &CType::Int => "int",
-            }
-        )
+fn ctype_to_string(ctype: &CType, name: &str) -> String {
+    match ctype {
+        &CType::Bool => format!("bool {}", name),
+        &CType::Float => format!("double {}", name),
+        &CType::Int => format!("int {}", name),
+        &CType::Closure { ref param, ref ret } => ctype_to_string(
+            &ret.expr,
+            &format!("(*{})({})", name, ctype_to_string(&param.expr, "")),
+        ),
     }
 }
 
@@ -363,12 +372,38 @@ impl Display for CStatement {
             "{}",
             match self {
                 &CStatement::Block(ref statements) => sequence_to_str("{ ", statements, " }"),
-                &CStatement::VarDecl(ref var_type, ref name) => format!("{} {};", var_type, name),
+                &CStatement::VarDecl(ref var_type, ref name) => {
+                    format!("{};", ctype_to_string(var_type, name))
+                }
                 &CStatement::VarAssign(ref name, ref value) => format!("{} = {};", name, value),
                 &CStatement::If(ref condition, ref consequent, ref alternate) => {
                     format!("if ({}) {} else {}", condition, consequent, alternate)
                 }
             }
+        )
+    }
+}
+
+impl Display for CFunc {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{} {{ {} return {}; }}",
+            ctype_to_string(
+                &self.ret_type.expr,
+                &format!(
+                    "{}({})",
+                    self.name,
+                    ctype_to_string(&self.param.0.expr, &self.param.1)
+                )
+            ),
+            self.body
+                .clone()
+                .into_iter()
+                .map(|statement| format!("{}", statement))
+                .collect::<Vec<String>>()
+                .join(" "),
+            self.ret_expr
         )
     }
 }

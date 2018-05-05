@@ -181,23 +181,39 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
 
     let mut scope = Vec::new();
     let mut expr_index = 0;
-    let expr = c_compile::lift_expr(&ast, &mut scope, &mut expr_index);
-
-    let mut statements = String::new();
-    for statement in scope {
-        statements += &format!("  {}\n", statement);
-    }
+    let mut functions = Vec::new();
+    let mut function_index = 0;
+    let expr = c_compile::lift_expr(
+        &ast,
+        &mut scope,
+        &mut expr_index,
+        &mut functions,
+        &mut function_index,
+    );
 
     Ok(format!(
         "#include <stdio.h>\
          \n#include <stdbool.h>\
          \n\
-         \nint main(void) {{\
          \n{}\
+         \n\
+         \nint main(void) {{\
+         \n  {}\
+         \n\
          \n  printf(\"%f\\n\", {});\
          \n  return 0;\
          \n}}",
-        statements, expr
+        functions
+            .into_iter()
+            .map(|function| format!("{}", function))
+            .collect::<Vec<String>>()
+            .join("\n\n"),
+        scope
+            .into_iter()
+            .map(|statement| format!("{}", statement))
+            .collect::<Vec<String>>()
+            .join(" "),
+        expr
     ))
 }
 
@@ -223,9 +239,10 @@ mod c_compile_file {
             "#include <stdio.h>\
              \n#include <stdbool.h>\
              \n\
+             \n\
+             \n\
              \nint main(void) {\
-             \n  double _aro_expr_0;\
-             \n  _aro_expr_0 = (1 + 1);\
+             \n  double _aro_expr_0; _aro_expr_0 = (1 + 1);\
              \n\
              \n  printf(\"%f\\n\", _aro_expr_0);\
              \n  return 0;\
