@@ -22,7 +22,15 @@ fn type_to_ctype(t: &Type) -> CType {
             param: param.replace_expr(type_to_ctype(&param.expr)),
             ret: ret.replace_expr(type_to_ctype(&ret.expr)),
         },
+        &Type::Tuple(_) => CType::Object,
         _ => panic!("Unhandled type: {}", t),
+    }
+}
+
+fn pattern_to_ctype(pattern: &Pattern) -> CType {
+    match pattern {
+        &Pattern::Ident(_, ref ident_type) => type_to_ctype(&ident_type.expr),
+        &Pattern::Tuple(_) => CType::Object,
     }
 }
 
@@ -115,6 +123,41 @@ fn find_captures(
     }
 }
 
+fn make_declarations(pattern: &Ast<Pattern>, scope: &mut Vec<Ast<CStatement>>) {
+    match &*pattern.expr {
+        &Pattern::Ident(ref name, ref value_type) => {
+            let value_name = get_ident_name(name);
+            let value_ctype = type_to_ctype(&value_type.expr);
+            let value_ref_type = CType::Ref(Box::new(value_ctype.clone()));
+
+            scope.push(
+                pattern.replace_expr(CStatement::VarDecl(value_ref_type, value_name.clone())),
+            );
+            scope.push(pattern.replace_expr(CStatement::RefAlloc(value_name.clone(), value_ctype)));
+        }
+        &Pattern::Tuple(ref vec) => for element in vec {
+            make_declarations(element, scope);
+        },
+    }
+}
+
+fn bind_declarations(pattern: &Ast<Pattern>, value: Ast<CExpr>, scope: &mut Vec<Ast<CStatement>>) {
+    match &*pattern.expr {
+        &Pattern::Ident(ref name, _) => {
+            let value_name = get_ident_name(name);
+            scope.push(pattern.replace_expr(CStatement::RefAssign(value_name, value)));
+        }
+        &Pattern::Tuple(ref vec) => for (index, element) in vec.iter().enumerate() {
+            let inner_value = value.replace_expr(CExpr::ObjectAccess {
+                object: value.clone(),
+                index,
+                field_type: element.replace_expr(pattern_to_ctype(&element.expr)),
+            });
+            bind_declarations(element, inner_value, scope);
+        },
+    }
+}
+
 pub fn lift_expr(
     ast: &Ast<Expression>,
     scope: &mut Vec<Ast<CStatement>>,
@@ -127,103 +170,108 @@ pub fn lift_expr(
             &Value::Num(value) => ast.replace_expr(CValue::Float(value)),
             &Value::Bool(value) => ast.replace_expr(CValue::Bool(value)),
             &Value::Int(value) => ast.replace_expr(CValue::Int(value)),
-            &Value::Func(ref pattern, _, ref body) => match &*pattern.expr {
-                &Pattern::Ident(ref param_name, ref param_type) => {
-                    let mut captures_map = HashMap::new();
-                    let mut locals = HashSet::new();
-                    locals.insert(param_name.clone());
-                    find_captures(body, &locals, &mut captures_map);
+            &Value::Func(ref pattern, _, ref body) => {
+                let mut captures_map = HashMap::new();
+                let mut locals = HashSet::new();
+                find_names_in_pattern(pattern, &mut locals);
+                find_captures(body, &locals, &mut captures_map);
 
-                    let func_name = get_func_name(function_index);
-                    let mut func_scope = Vec::new();
-                    let mut func_expr_index = 0;
+                let func_name = get_func_name(function_index);
+                let mut func_scope = Vec::new();
+                let mut func_expr_index = 0;
 
-                    let param_ident_name = get_ident_name(param_name);
-                    let param_ctype = type_to_ctype(&param_type.expr);
-                    let param_ref_type = CType::Ref(Box::new(param_ctype.clone()));
-                    func_scope.push(pattern.replace_expr(CStatement::VarDecl(
-                        param_ref_type.clone(),
-                        param_ident_name.clone(),
-                    )));
-                    func_scope.push(pattern.replace_expr(CStatement::RefAlloc(
-                        param_ident_name.clone(),
-                        param_ctype.clone(),
-                    )));
-                    func_scope.push(pattern.replace_expr(CStatement::RefAssign(
-                        param_ident_name,
-                        pattern.replace_expr(CExpr::Value(CValue::Ident(
-                            String::from("_aro_arg"),
-                            param_ctype,
-                        ))),
+                let param_ctype = pattern_to_ctype(&pattern.expr);
+                let param_value = pattern.replace_expr(CExpr::Value(CValue::Ident(
+                    String::from("_aro_arg"),
+                    param_ctype.clone(),
+                )));
+                make_declarations(pattern, &mut func_scope);
+                bind_declarations(pattern, param_value, &mut func_scope);
+
+                for (index, (name, var_type)) in captures_map.iter().enumerate() {
+                    let ident_name = get_ident_name(name);
+                    func_scope.push(ast.replace_expr(CStatement::VarDecl(
+                        CType::Ref(Box::new(var_type.clone())),
+                        ident_name.clone(),
                     )));
 
-                    for (index, (name, var_type)) in captures_map.iter().enumerate() {
-                        let ident_name = get_ident_name(name);
-                        func_scope.push(ast.replace_expr(CStatement::VarDecl(
-                            CType::Ref(Box::new(var_type.clone())),
-                            ident_name.clone(),
-                        )));
+                    let captures_object = ast.replace_expr(CExpr::Value(CValue::Ident(
+                        String::from("_aro_captures"),
+                        CType::Object,
+                    )));
+                    func_scope.push(ast.replace_expr(CStatement::VarAssign(
+                        ident_name,
+                        ast.replace_expr(CExpr::ObjectAccess {
+                            object: captures_object,
+                            index,
+                            field_type: ast.replace_expr(CType::Ref(Box::new(var_type.clone()))),
+                        }),
+                    )))
+                }
 
-                        let captures_object = ast.replace_expr(CValue::Ident(
-                            String::from("_aro_captures"),
-                            CType::Object,
-                        ));
-                        func_scope.push(ast.replace_expr(CStatement::VarAssign(
-                            ident_name,
-                            ast.replace_expr(CExpr::ObjectAccess {
-                                object: captures_object,
-                                index,
-                                field_type: ast.replace_expr(CType::Ref(Box::new(
-                                    var_type.clone(),
-                                ))),
-                            }),
-                        )))
-                    }
+                let ret = lift_expr(
+                    body,
+                    &mut func_scope,
+                    &mut func_expr_index,
+                    functions,
+                    function_index,
+                );
 
-                    let ret = lift_expr(
-                        body,
-                        &mut func_scope,
-                        &mut func_expr_index,
+                let closure_name = get_expr_name(expr_index);
+                let closure_type = get_expr_ctype(ast);
+                scope.push(ast.replace_expr(CStatement::VarDecl(
+                    closure_type.clone(),
+                    closure_name.clone(),
+                )));
+                scope.push(
+                    ast.replace_expr(CStatement::ClosureInit {
+                        name: closure_name.clone(),
+                        function: ast.replace_expr(CValue::Ident(
+                            func_name.clone(),
+                            CType::VoidPtr,
+                        )),
+                        captures: captures_map
+                            .into_iter()
+                            .map(|(name, var_type)| {
+                                ast.replace_expr(CValue::Ident(
+                                    get_ident_name(&name),
+                                    CType::Ref(Box::new(var_type.clone())),
+                                ))
+                            })
+                            .collect(),
+                    }),
+                );
+
+                functions.push(ast.replace_expr(CFunc {
+                    name: func_name,
+                    param: pattern.replace_expr(param_ctype),
+                    body: func_scope,
+                    ret,
+                }));
+
+                ast.replace_expr(CValue::Ident(closure_name, closure_type))
+            }
+            &Value::Tuple(ref vec) => {
+                let mut data = Vec::new();
+                for element in vec {
+                    data.push(lift_expr(
+                        element,
+                        scope,
+                        expr_index,
                         functions,
                         function_index,
-                    );
-
-                    let closure_name = get_expr_name(expr_index);
-                    let closure_type = get_expr_ctype(ast);
-                    scope.push(ast.replace_expr(CStatement::VarDecl(
-                        closure_type.clone(),
-                        closure_name.clone(),
-                    )));
-                    scope.push(
-                        ast.replace_expr(CStatement::ClosureInit {
-                            name: closure_name.clone(),
-                            function: ast.replace_expr(CValue::Ident(
-                                func_name.clone(),
-                                CType::VoidPtr,
-                            )),
-                            captures: captures_map
-                                .into_iter()
-                                .map(|(name, var_type)| {
-                                    ast.replace_expr(CValue::Ident(
-                                        get_ident_name(&name),
-                                        CType::Ref(Box::new(var_type.clone())),
-                                    ))
-                                })
-                                .collect(),
-                        }),
-                    );
-
-                    functions.push(ast.replace_expr(CFunc {
-                        name: func_name,
-                        param: param_type.replace_expr(type_to_ctype(&param_type.expr)),
-                        body: func_scope,
-                        ret,
-                    }));
-
-                    ast.replace_expr(CValue::Ident(closure_name, closure_type))
+                    ));
                 }
-                _ => panic!(),
-            },
+
+                let expr_name = get_expr_name(expr_index);
+                scope.push(ast.replace_expr(CStatement::VarDecl(CType::Object, expr_name.clone())));
+                scope.push(ast.replace_expr(CStatement::ObjectInit {
+                    name: expr_name.clone(),
+                    data,
+                }));
+
+                ast.replace_expr(CValue::Ident(expr_name, CType::Object))
+            }
             _ => panic!(),
         },
         &Expression::Ident(ref name) => {
@@ -287,52 +335,34 @@ pub fn lift_expr(
 
             ast.replace_expr(CValue::Ident(expr_name, expr_type))
         }
-        &Expression::Let(ref pattern_ast, ref value, ref body) => match &*pattern_ast.expr {
-            &Pattern::Ident(ref name, ref value_type) => {
-                let body_name = get_expr_name(expr_index);
-                let body_type = get_expr_ctype(body);
-                scope.push(body.replace_expr(CStatement::VarDecl(
-                    body_type.clone(),
-                    body_name.clone(),
-                )));
+        &Expression::Let(ref pattern, ref value, ref body) => {
+            let body_name = get_expr_name(expr_index);
+            let body_type = get_expr_ctype(body);
+            scope
+                .push(body.replace_expr(CStatement::VarDecl(body_type.clone(), body_name.clone())));
 
-                let value_name = get_ident_name(name);
-                let value_ctype = type_to_ctype(&value_type.expr);
-                let value_ref_type = CType::Ref(Box::new(value_ctype.clone()));
+            let mut body_scope = Vec::new();
+            make_declarations(pattern, &mut body_scope);
+            let value_c_ast = lift_expr(
+                value,
+                &mut body_scope,
+                expr_index,
+                functions,
+                function_index,
+            );
+            bind_declarations(pattern, value_c_ast.to_c_expr(), &mut body_scope);
 
-                let mut body_scope = Vec::new();
-                body_scope.push(
-                    pattern_ast
-                        .replace_expr(CStatement::VarDecl(value_ref_type, value_name.clone())),
-                );
-                body_scope.push(
-                    pattern_ast.replace_expr(CStatement::RefAlloc(value_name.clone(), value_ctype)),
-                );
-                let value_c_ast = lift_expr(
-                    value,
-                    &mut body_scope,
-                    expr_index,
-                    functions,
-                    function_index,
-                );
-                body_scope.push(
-                    pattern_ast
-                        .replace_expr(CStatement::RefAssign(value_name, value_c_ast.to_c_expr())),
-                );
+            let body_c_ast =
+                lift_expr(body, &mut body_scope, expr_index, functions, function_index);
+            body_scope.push(body.replace_expr(CStatement::VarAssign(
+                body_name.clone(),
+                body_c_ast.to_c_expr(),
+            )));
 
-                let body_c_ast =
-                    lift_expr(body, &mut body_scope, expr_index, functions, function_index);
-                body_scope.push(body.replace_expr(CStatement::VarAssign(
-                    body_name.clone(),
-                    body_c_ast.to_c_expr(),
-                )));
+            scope.push(ast.replace_expr(CStatement::Block(body_scope)));
 
-                scope.push(ast.replace_expr(CStatement::Block(body_scope)));
-
-                ast.replace_expr(CValue::Ident(body_name, body_type))
-            }
-            _ => panic!(),
-        },
+            ast.replace_expr(CValue::Ident(body_name, body_type))
+        }
         _ => panic!(),
     }
 }
@@ -482,17 +512,19 @@ mod lift_expr {
     fn handles_let_expressions() {
         assert_lift(
             "
-            let x: Num <- 5
+            let x: Num <- 5 + 2
             x + 3
             ",
             "double _aro_expr_0; \
              { \
              double * aro_x; \
              aro_x = malloc(sizeof(double )); \
-             *aro_x = 5; \
-             double _aro_expr_1; \
-             _aro_expr_1 = ((*aro_x) + 3); \
-             _aro_expr_0 = _aro_expr_1; \
+             int _aro_expr_1; \
+             _aro_expr_1 = (5 + 2); \
+             *aro_x = _aro_expr_1; \
+             double _aro_expr_2; \
+             _aro_expr_2 = ((*aro_x) + 3); \
+             _aro_expr_0 = _aro_expr_2; \
              } ",
             "",
             "_aro_expr_0",
@@ -547,6 +579,61 @@ mod lift_expr {
              return _aro_expr_0; \
              } ",
             "_aro_expr_1",
+        );
+    }
+
+    #[test]
+    fn unpacks_tuples() {
+        assert_lift(
+            "
+            let (a: Int  b: Num) <- (1 2.3)
+            a + b
+            ",
+            "double _aro_expr_0; \
+             { \
+             int * aro_a; \
+             aro_a = malloc(sizeof(int )); \
+             double * aro_b; \
+             aro_b = malloc(sizeof(double )); \
+             _Aro_Any* _aro_expr_1; \
+             _aro_expr_1 = malloc(sizeof(_Aro_Any) * 2); \
+             _aro_expr_1[0].Int = 1; \
+             _aro_expr_1[1].Float = 2.3; \
+             *aro_a = ((int )_aro_expr_1[0].Int); \
+             *aro_b = ((double )_aro_expr_1[1].Float); \
+             double _aro_expr_2; \
+             _aro_expr_2 = ((*aro_a) + (*aro_b)); \
+             _aro_expr_0 = _aro_expr_2; \
+             } ",
+            "",
+            "_aro_expr_0",
+        );
+        assert_lift(
+            "
+            (1 2.3) |> (fn (a: Int  b: Num) =Num=> a + b)
+            ",
+            "_Aro_Any* _aro_expr_0; \
+             _aro_expr_0 = malloc(sizeof(_Aro_Any) * 1); \
+             _aro_expr_0[0].Void_Ptr = _aro_func_0;  \
+             _Aro_Any* _aro_expr_1; \
+             _aro_expr_1 = malloc(sizeof(_Aro_Any) * 2); \
+             _aro_expr_1[0].Int = 1; \
+             _aro_expr_1[1].Float = 2.3; \
+             double _aro_expr_2; \
+             _aro_expr_2 = (*(double (*)(_Aro_Any* , _Aro_Any* ))_aro_expr_0[0].Void_Ptr)\
+             (_aro_expr_1, &_aro_expr_0[1]); ",
+            "double _aro_func_0(_Aro_Any* _aro_arg, _Aro_Any* _aro_captures) { \
+             int * aro_a; \
+             aro_a = malloc(sizeof(int )); \
+             double * aro_b; \
+             aro_b = malloc(sizeof(double )); \
+             *aro_a = ((int )_aro_arg[0].Int); \
+             *aro_b = ((double )_aro_arg[1].Float); \
+             double _aro_expr_0; \
+             _aro_expr_0 = ((*aro_a) + (*aro_b)); \
+             return _aro_expr_0; \
+             } ",
+            "_aro_expr_2",
         );
     }
 }

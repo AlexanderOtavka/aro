@@ -98,7 +98,7 @@ pub enum CExpr {
     Value(CValue),
     BinOp(BinOp, Ast<CValue>, Ast<CValue>),
     ObjectAccess {
-        object: Ast<CValue>,
+        object: Ast<CExpr>,
         index: usize,
         field_type: Ast<CType>,
     },
@@ -401,7 +401,7 @@ impl Display for CExpr {
                     ref index,
                     ref field_type,
                 } => format!(
-                    "({}){}[{}].{}",
+                    "(({}){}[{}].{})",
                     ctype_to_string(&field_type.expr, ""),
                     object,
                     index,
