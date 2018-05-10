@@ -112,7 +112,7 @@ impl Type {
                 })
             }
             (&Type::Ref(ref self_type), &Type::Ref(ref other_type)) => {
-                self_type.is_sub_type(other_type, env)
+                self_type.is_sub_type(other_type, env) && other_type.is_sub_type(self_type, env)
             }
             (&Type::Func(ref self_in, ref self_out), &Type::Func(ref other_in, ref other_out)) => {
                 self_out.is_sub_type(other_out, env) && other_in.is_sub_type(self_in, env)
