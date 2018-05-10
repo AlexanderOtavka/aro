@@ -49,8 +49,8 @@ fn rename_type(ast: &Ast<Type>, name: &str, new_name: &str) -> Ast<Type> {
                 ))
             }
         }
-        &Type::Ident(ref ident_name) => if ident_name == name {
-            ast.replace_expr(Type::Ident(String::from(new_name)))
+        &Type::Ident(ref ident_name, ref supertype) => if ident_name == name {
+            ast.replace_expr(Type::Ident(String::from(new_name), supertype.clone()))
         } else {
             ast.clone()
         },
@@ -90,16 +90,18 @@ impl Type {
             | (&Type::Int, &Type::Int)
             | (&Type::Int, &Type::Num)
             | (&Type::Num, &Type::Num) => true,
-            (&Type::Ident(ref self_name), &Type::Ident(ref other_name)) => self_name == other_name,
-            (&Type::Ident(ref self_name), _) => {
+            (&Type::Ident(ref self_name, _), &Type::Ident(ref other_name, _)) => {
+                self_name == other_name
+            }
+            (&Type::Ident(ref self_name, _), _) => {
                 if let Some(self_supertype) = env.get(self_name) {
                     self_supertype.is_sub_type(other, env)
                 } else {
                     false
                 }
             }
-            // Nothing is a subtype of a generic, because any generic could be empty
-            (_, &Type::Ident(_)) => false,
+            // Nothing is a subtype of a generic (except empty), because any generic could be empty
+            (_, &Type::Ident(_, _)) => false,
             (&Type::Record(ref self_map), &Type::Record(ref other_map)) => {
                 other_map.iter().all(|(name, other_entry_type)| {
                     if let Some(self_entry_type) = self_map.get(name) {
@@ -136,15 +138,27 @@ impl Type {
 }
 
 impl Ast<Type> {
-    pub fn from_pattern(pattern: &Ast<Pattern>) -> Ast<Type> {
-        match &*pattern.expr {
-            &Pattern::Ident(_, ref ident_type) => ident_type.clone(),
-            &Pattern::Tuple(ref vec) => Ast::<Type>::new(
-                pattern.left_loc,
-                pattern.right_loc,
-                Type::Tuple(vec.into_iter().map(Ast::from_pattern).collect()),
-            ),
-        }
+    fn from_pattern(
+        pattern: &Ast<Pattern>,
+        env: &HashMap<String, Type>,
+    ) -> Result<Ast<Type>, Error> {
+        let pattern_type = match &*pattern.expr {
+            &Pattern::Ident(_, ref ident_type) => {
+                ident_type.replace_expr(evaluate_type(ident_type, env)?)
+            }
+            &Pattern::Tuple(ref vec) => pattern.replace_expr(Type::Tuple({
+                let mut new_vec = Vec::new();
+                for element in vec {
+                    new_vec.push(Ast::<Type>::from_pattern(element, env)?);
+                }
+
+                new_vec
+            })),
+        };
+
+        *pattern.expr_type.borrow_mut() = Some(pattern_type.clone().expr);
+
+        Ok(pattern_type)
     }
 
     pub fn is_sub_type(&self, other: &Ast<Type>, env: &HashMap<String, Type>) -> bool {
@@ -267,7 +281,7 @@ fn substitute_type(ast: &Ast<Type>, name: &str, value: &Ast<Type>) -> Ast<Type> 
                 },
             ))
         }
-        &Type::Ident(ref ident_name) => if ident_name == name {
+        &Type::Ident(ref ident_name, _) => if ident_name == name {
             value.clone()
         } else {
             ast.clone()
@@ -409,8 +423,8 @@ fn evaluate_type(ast: &Ast<Type>, env: &HashMap<String, Type>) -> Result<Type, E
             output.replace_expr(evaluate_type(output, env)?),
         )),
         &Type::GenericFunc(ref param_name, ref param_supertype, ref output) => {
-            let env = &mut env.clone();
             let param_supertype_type = evaluate_type(param_supertype, env)?;
+            let env = &mut env.clone();
             env.insert(param_name.clone(), param_supertype_type.clone());
             Ok(Type::GenericFunc(
                 param_name.clone(),
@@ -418,8 +432,11 @@ fn evaluate_type(ast: &Ast<Type>, env: &HashMap<String, Type>) -> Result<Type, E
                 output.replace_expr(evaluate_type(output, env)?),
             ))
         }
-        &Type::Ident(ref ident_name) => if env.contains_key(ident_name) {
-            Ok(*ast.expr.clone())
+        &Type::Ident(ref ident_name, _) => if let Some(ident_type) = env.get(ident_name) {
+            Ok(Type::Ident(
+                ident_name.clone(),
+                Some(ast.replace_expr(ident_type.clone())),
+            ))
         } else {
             Err(Error::LRLocated {
                 message: format!("Wut `{}`?  Dat ain't no type.", ident_name),
@@ -513,9 +530,9 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
                 let mut body_env = env.clone();
                 build_env(&mut body_env, pattern)?;
 
-                let param_type_ast = Ast::<Type>::from_pattern(pattern);
+                let param_type_ast = Ast::<Type>::from_pattern(pattern, env)?;
                 let declared_param_type = evaluate_type(&param_type_ast, env)?;
-                let declared_body_type = evaluate_type(body_type_ast, env)?;
+                let declared_body_type = evaluate_type(body_type_ast, &body_env)?;
                 let actual_body_type = typecheck_ast(body, &body_env)?;
                 if !actual_body_type.is_sub_type(&declared_body_type, env) {
                     Err(Error::type_error(
@@ -527,7 +544,7 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
                 } else {
                     Ok(Type::Func(
                         param_type_ast.replace_expr(declared_param_type),
-                        body_type_ast.clone(),
+                        body_type_ast.replace_expr(declared_body_type),
                     ))
                 }
             }
@@ -645,7 +662,7 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
             let mut body_env = env.clone();
             build_env(&mut body_env, &pattern)?;
 
-            let declared_value_type = evaluate_type(&Ast::<Type>::from_pattern(pattern), env)?;
+            let declared_value_type = *Ast::<Type>::from_pattern(pattern, env)?.expr;
             let actual_value_type = typecheck_ast(value, &body_env)?;
 
             if !actual_value_type.is_sub_type(&declared_value_type, env) {

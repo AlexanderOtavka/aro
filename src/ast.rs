@@ -64,7 +64,7 @@ pub enum Type {
     Bool,
     Any,
     Empty,
-    Ident(String),
+    Ident(String, Option<Ast<Type>>),
     Func(Ast<Type>, Ast<Type>),
     GenericFunc(String, Ast<Type>, Ast<Type>),
     Tuple(Vec<Ast<Type>>),
@@ -79,6 +79,7 @@ pub enum CType {
     Int,
     Bool,
     Object,
+    Any,
     VoidPtr,
     Ref(Box<CType>),
     Closure { param: Ast<CType>, ret: Ast<CType> },
@@ -102,12 +103,21 @@ pub enum CExpr {
         index: usize,
         field_type: Ast<CType>,
     },
+    AnyAccess {
+        value: Ast<CExpr>,
+        value_type: CType,
+    },
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum CStatement {
     VarDecl(CType, String),
     VarAssign(String, Ast<CExpr>),
+    AnyAssign {
+        name: String,
+        value_type: CType,
+        value: Ast<CExpr>,
+    },
     RefAlloc(String, CType),
     RefAssign(String, Ast<CExpr>),
     ClosureInit {
@@ -318,7 +328,7 @@ impl Display for Type {
                 &Type::Bool => String::from("Bool"),
                 &Type::Any => String::from("Any"),
                 &Type::Empty => String::from("Empty"),
-                &Type::Ident(ref name) => format!("({})", name),
+                &Type::Ident(ref name, _) => format!("({})", name),
                 &Type::Func(ref input, ref output) => format!("({} => {})", input, output),
                 &Type::GenericFunc(ref name, ref supertype, ref output) => {
                     format!("({}: {} => {})", name, supertype, output)
@@ -344,6 +354,7 @@ impl Display for Type {
 
 fn ctype_to_string(ctype: &CType, name: &str) -> String {
     match ctype {
+        &CType::Any => format!("_Aro_Any {}", name),
         &CType::Bool => format!("bool {}", name),
         &CType::Float => format!("double {}", name),
         &CType::Int => format!("int {}", name),
@@ -387,6 +398,7 @@ fn ctype_to_union_field(ctype: &CType) -> &'static str {
         &CType::Bool => "Bool",
         &CType::Object | &CType::Closure { .. } => "Any_Ptr",
         &CType::VoidPtr | &CType::Ref(_) => "Void_Ptr",
+        &CType::Any => panic!("Can't pull Any out of a union"),
     }
 }
 
@@ -407,6 +419,10 @@ impl Display for CExpr {
                     index,
                     ctype_to_union_field(&field_type.expr)
                 ),
+                &CExpr::AnyAccess {
+                    ref value,
+                    ref value_type,
+                } => format!("({}.{})", value, ctype_to_union_field(value_type)),
                 &CExpr::Value(ref value) => format!("{}", value),
                 &CExpr::BinOp(ref op, ref left, ref right) => match op {
                     &BinOp::Add => format!("({} + {})", left, right),
@@ -474,6 +490,11 @@ impl Display for CStatement {
                     format!("{};", ctype_to_string(var_type, name))
                 }
                 &CStatement::VarAssign(ref name, ref value) => format!("{} = {};", name, value),
+                &CStatement::AnyAssign {
+                    ref name,
+                    ref value,
+                    ref value_type,
+                } => format!("{}.{} = {};", name, ctype_to_union_field(value_type), value),
                 &CStatement::RefAlloc(ref name, ref value_type) => format!(
                     "{} = malloc(sizeof({}));",
                     name,

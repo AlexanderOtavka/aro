@@ -89,7 +89,7 @@ pub Type: Ast<Type> = {
 };
 
 ValueType = {
-    <l:@L> <n:TypeIdent> <r:@R> => Ast::<Type>::new(l, r, Type::Ident(n)),
+    <l:@L> <n:TypeIdent> <r:@R> => Ast::<Type>::new(l, r, Type::Ident(n, None)),
 
     <l:@L> "Int" <r:@R> => Ast::<Type>::new(l, r, Type::Int),
     <l:@L> "Num" <r:@R> => Ast::<Type>::new(l, r, Type::Num),

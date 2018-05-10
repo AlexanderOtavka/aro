@@ -1,4 +1,4 @@
-use ast::{Ast, CExpr, CFunc, CStatement, CType, CValue, Expression, Pattern, Type, Value};
+use ast::{Ast, BinOp, CExpr, CFunc, CStatement, CType, CValue, Expression, Pattern, Type, Value};
 use std::collections::{HashMap, HashSet};
 
 fn get_expr_name(expr_index: &mut i32) -> String {
@@ -15,6 +15,7 @@ fn get_func_name(func_index: &mut i32) -> String {
 
 fn type_to_ctype(t: &Type) -> CType {
     match t {
+        &Type::Any => CType::Any,
         &Type::Num => CType::Float,
         &Type::Int => CType::Int,
         &Type::Bool => CType::Bool,
@@ -23,22 +24,33 @@ fn type_to_ctype(t: &Type) -> CType {
             ret: ret.replace_expr(type_to_ctype(&ret.expr)),
         },
         &Type::Tuple(_) => CType::Object,
+        &Type::GenericFunc(_, _, ref body) => type_to_ctype(&body.expr),
+        &Type::Ident(ref name, ref supertype) => type_to_ctype(
+            &supertype
+                .as_ref()
+                .expect(&format!("Ident `{}` not typechecked", name))
+                .expr,
+        ),
         _ => panic!("Unhandled type: {}", t),
     }
 }
 
-fn pattern_to_ctype(pattern: &Pattern) -> CType {
-    match pattern {
-        &Pattern::Ident(_, ref ident_type) => type_to_ctype(&ident_type.expr),
+fn pattern_to_ctype(pattern: &Ast<Pattern>) -> CType {
+    match &*pattern.expr {
+        &Pattern::Ident(_, _) => get_expr_ctype(pattern),
         &Pattern::Tuple(_) => CType::Object,
     }
 }
 
-fn get_expr_ctype(ast: &Ast<Expression>) -> CType {
+fn get_expr_type<T>(ast: &Ast<T>) -> Type {
     match &*ast.expr_type.borrow() {
-        &Some(ref expr_type) => type_to_ctype(expr_type),
+        &Some(ref expr_type) => *expr_type.clone(),
         &None => panic!("Ast must be typechecked before compilation"),
     }
+}
+
+fn get_expr_ctype<T>(ast: &Ast<T>) -> CType {
+    type_to_ctype(&get_expr_type(ast))
 }
 
 fn get_ident_name(name: &str) -> String {
@@ -125,9 +137,9 @@ fn find_captures(
 
 fn make_declarations(pattern: &Ast<Pattern>, scope: &mut Vec<Ast<CStatement>>) {
     match &*pattern.expr {
-        &Pattern::Ident(ref name, ref value_type) => {
+        &Pattern::Ident(ref name, _) => {
             let value_name = get_ident_name(name);
-            let value_ctype = type_to_ctype(&value_type.expr);
+            let value_ctype = type_to_ctype(&get_expr_type(pattern));
             let value_ref_type = CType::Ref(Box::new(value_ctype.clone()));
 
             scope.push(
@@ -151,7 +163,7 @@ fn bind_declarations(pattern: &Ast<Pattern>, value: Ast<CExpr>, scope: &mut Vec<
             let inner_value = value.replace_expr(CExpr::ObjectAccess {
                 object: value.clone(),
                 index,
-                field_type: element.replace_expr(pattern_to_ctype(&element.expr)),
+                field_type: element.replace_expr(pattern_to_ctype(element)),
             });
             bind_declarations(element, inner_value, scope);
         },
@@ -180,7 +192,7 @@ pub fn lift_expr(
                 let mut func_scope = Vec::new();
                 let mut func_expr_index = 0;
 
-                let param_ctype = pattern_to_ctype(&pattern.expr);
+                let param_ctype = pattern_to_ctype(pattern);
                 let param_value = pattern.replace_expr(CExpr::Value(CValue::Ident(
                     String::from("_aro_arg"),
                     param_ctype.clone(),
@@ -272,6 +284,9 @@ pub fn lift_expr(
 
                 ast.replace_expr(CValue::Ident(expr_name, CType::Object))
             }
+            &Value::GenericFunc(_, _, _, ref body) => {
+                lift_expr(body, scope, expr_index, functions, function_index)
+            }
             _ => panic!(),
         },
         &Expression::Ident(ref name) => {
@@ -279,14 +294,61 @@ pub fn lift_expr(
         }
         &Expression::BinOp(ref op, ref left, ref right) => {
             let left_c_ast = lift_expr(left, scope, expr_index, functions, function_index);
-            let right_c_ast = lift_expr(right, scope, expr_index, functions, function_index);
+            let right_c_ast = {
+                let right_c_ast = lift_expr(right, scope, expr_index, functions, function_index);
+                match op {
+                    &BinOp::Call => {
+                        if let CType::Closure { param, .. } = left_c_ast.expr.get_ctype() {
+                            let right_ctype = get_expr_ctype(right);
+                            if *param.expr == CType::Any && right_ctype != CType::Any {
+                                let any_name = get_expr_name(expr_index);
+                                scope.push(right.replace_expr(CStatement::VarDecl(
+                                    CType::Any,
+                                    any_name.clone(),
+                                )));
+                                scope.push(right.replace_expr(CStatement::AnyAssign {
+                                    name: any_name.clone(),
+                                    value: right_c_ast.to_c_expr(),
+                                    value_type: right_ctype,
+                                }));
+
+                                right.replace_expr(CValue::Ident(any_name, CType::Any))
+                            } else {
+                                right_c_ast
+                            }
+                        } else {
+                            panic!()
+                        }
+                    }
+                    _ => right_c_ast,
+                }
+            };
 
             let expr_name = get_expr_name(expr_index);
             let expr_type = get_expr_ctype(ast);
             scope.push(ast.replace_expr(CStatement::VarDecl(expr_type.clone(), expr_name.clone())));
             scope.push(ast.replace_expr(CStatement::VarAssign(
                 expr_name.clone(),
-                ast.replace_expr(CExpr::BinOp(op.clone(), left_c_ast, right_c_ast)),
+                ast.replace_expr({
+                    let bin_op_ast = CExpr::BinOp(op.clone(), left_c_ast.clone(), right_c_ast);
+                    match op {
+                        &BinOp::Call => {
+                            if let CType::Closure { ret, .. } = left_c_ast.expr.get_ctype() {
+                                if *ret.expr == CType::Any && expr_type != CType::Any {
+                                    CExpr::AnyAccess {
+                                        value: ast.replace_expr(bin_op_ast),
+                                        value_type: expr_type.clone(),
+                                    }
+                                } else {
+                                    bin_op_ast
+                                }
+                            } else {
+                                panic!()
+                            }
+                        }
+                        _ => bin_op_ast,
+                    }
+                }),
             )));
 
             ast.replace_expr(CValue::Ident(expr_name, expr_type))
@@ -362,6 +424,10 @@ pub fn lift_expr(
             scope.push(ast.replace_expr(CStatement::Block(body_scope)));
 
             ast.replace_expr(CValue::Ident(body_name, body_type))
+        }
+        &Expression::GenericCall(ref expression, _)
+        | &Expression::TypeLet(_, _, ref expression) => {
+            lift_expr(expression, scope, expr_index, functions, function_index)
         }
         _ => panic!(),
     }

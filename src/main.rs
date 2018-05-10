@@ -198,7 +198,7 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
          \n\
          \ntypedef union _Aro_Any {{\
          \n  bool Bool;\
-         \n  int Int;\
+         \n  double Int;\
          \n  double Float;\
          \n  void* Void_Ptr;\
          \n  union _Aro_Any* Any_Ptr;\
@@ -258,7 +258,7 @@ mod c_compile_file {
              \n\
              \ntypedef union _Aro_Any {\
              \n  bool Bool;\
-             \n  int Int;\
+             \n  double Int;\
              \n  double Float;\
              \n  void* Void_Ptr;\
              \n  union _Aro_Any* Any_Ptr;\
