@@ -97,7 +97,6 @@ pub enum TypedValue {
     Tuple(Vec<TypedAst<TypedExpression, Type>>),
     List(Vec<TypedAst<TypedExpression, Type>>),
     Hook(Vec<String>, Ast<Type>),
-    Ref(Rc<RefCell<Value>>),
     Record(HashMap<String, TypedAst<TypedExpression, Type>>),
 }
 
@@ -275,12 +274,11 @@ impl<Expr, ExprType> TypedAst<Expr, ExprType>
 where
     ExprType: Clone,
 {
-    pub fn replace_expr<NewExpr>(&self, expr: NewExpr) -> TypedAst<NewExpr, ExprType> {
-        TypedAst {
+    pub fn replace_untyped<NewExpr>(&self, expr: NewExpr) -> Ast<NewExpr> {
+        Ast {
             left_loc: self.left_loc,
             right_loc: self.right_loc,
             expr: Box::new(expr),
-            expr_type: self.expr_type.clone(),
         }
     }
 

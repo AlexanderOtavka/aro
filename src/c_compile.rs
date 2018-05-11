@@ -1,4 +1,5 @@
-use ast::{Ast, BinOp, CExpr, CFunc, CStatement, CType, CValue, Expression, Pattern, Type, Value};
+use ast::{Ast, BinOp, CExpr, CFunc, CStatement, CType, CValue, Type, TypedAst, TypedExpression,
+          TypedPattern, TypedValue};
 use std::collections::{HashMap, HashSet};
 
 fn get_expr_name(expr_index: &mut i32) -> String {
@@ -11,6 +12,10 @@ fn get_func_name(func_index: &mut i32) -> String {
     let old_i = *func_index;
     *func_index += 1;
     format!("_aro_func_{}", old_i)
+}
+
+fn get_ident_name(name: &str) -> String {
+    format!("aro_{}", name)
 }
 
 fn type_to_ctype(t: &Type) -> CType {
@@ -35,132 +40,108 @@ fn type_to_ctype(t: &Type) -> CType {
     }
 }
 
-fn pattern_to_ctype(pattern: &Ast<Pattern>) -> CType {
+fn find_names_in_pattern(pattern: &TypedAst<TypedPattern, Type>, names: &mut HashSet<String>) {
     match &*pattern.expr {
-        &Pattern::Ident(_, _) => get_expr_ctype(pattern),
-        &Pattern::Tuple(_) => CType::Object,
-    }
-}
-
-fn get_expr_type<T>(ast: &Ast<T>) -> Type {
-    panic!()
-}
-
-fn get_expr_ctype<T>(ast: &Ast<T>) -> CType {
-    type_to_ctype(&get_expr_type(ast))
-}
-
-fn get_ident_name(name: &str) -> String {
-    format!("aro_{}", name)
-}
-
-fn find_names_in_pattern(pattern: &Ast<Pattern>, names: &mut HashSet<String>) {
-    match &*pattern.expr {
-        &Pattern::Ident(ref name, _) => {
+        &TypedPattern::Ident(ref name, _) => {
             names.insert(name.clone());
         }
-        &Pattern::Tuple(ref vec) => for element in vec {
+        &TypedPattern::Tuple(ref vec) => for element in vec {
             find_names_in_pattern(element, names);
         },
     }
 }
 
 fn find_captures(
-    ast: &Ast<Expression>,
+    ast: &TypedAst<TypedExpression, Type>,
     locals: &HashSet<String>,
     captures: &mut HashMap<String, CType>,
 ) {
     match &*ast.expr {
-        &Expression::BinOp(_, ref left, ref right) => {
+        &TypedExpression::BinOp(_, ref left, ref right) => {
             find_captures(left, locals, captures);
             find_captures(right, locals, captures);
         }
-        &Expression::GenericCall(ref expr, _) => find_captures(expr, locals, captures),
-        &Expression::Ident(ref name) => {
+        &TypedExpression::Ident(ref name) => {
             if !locals.contains(name) {
-                captures.insert(name.clone(), get_expr_ctype(ast));
+                captures.insert(name.clone(), type_to_ctype(&ast.expr_type));
             }
         }
-        &Expression::If(ref condition, ref consequent, ref alternate) => {
+        &TypedExpression::If(ref condition, ref consequent, ref alternate) => {
             find_captures(condition, locals, captures);
             find_captures(consequent, locals, captures);
             find_captures(alternate, locals, captures);
         }
-        &Expression::Let(ref pattern, ref value, ref body) => {
+        &TypedExpression::Let(ref pattern, ref value, ref body) => {
             let mut locals = locals.clone();
             find_names_in_pattern(pattern, &mut locals);
             find_captures(value, &locals, captures);
             find_captures(body, &locals, captures);
         }
-        &Expression::RecordAccess(ref record, _) => {
+        &TypedExpression::RecordAccess(ref record, _) => {
             find_captures(record, locals, captures);
         }
-        &Expression::Sequence(ref side_effect, ref result) => {
+        &TypedExpression::Sequence(ref side_effect, ref result) => {
             find_captures(side_effect, locals, captures);
             find_captures(result, locals, captures);
         }
-        &Expression::TypeLet(_, _, ref body) => {
-            find_captures(body, locals, captures);
-        }
-        &Expression::Value(ref value) => match value {
-            &Value::Bool(_) | &Value::Hook(_, _) | &Value::Int(_) | &Value::Num(_) => {}
-            &Value::Func(ref pattern, _, ref body) => {
+        &TypedExpression::Value(ref value) => match value {
+            &TypedValue::Bool(_)
+            | &TypedValue::Hook(_, _)
+            | &TypedValue::Int(_)
+            | &TypedValue::Num(_) => {}
+            &TypedValue::Func(ref pattern, _, ref body) => {
                 let mut locals = locals.clone();
                 find_names_in_pattern(pattern, &mut locals);
                 find_captures(body, &locals, captures);
             }
-            &Value::GenericFunc(_, _, _, ref body) => {
-                find_captures(body, locals, captures);
-            }
-            &Value::List(ref vec) => for element in vec {
+            &TypedValue::List(ref vec) => for element in vec {
                 find_captures(element, locals, captures);
             },
-            &Value::Tuple(ref vec) => for element in vec {
+            &TypedValue::Tuple(ref vec) => for element in vec {
                 find_captures(element, locals, captures);
             },
-            &Value::Record(ref map) => for (_, element) in map {
+            &TypedValue::Record(ref map) => for (_, element) in map {
                 find_captures(element, locals, captures);
             },
-            &Value::Ref(ref value) => {
-                find_captures(
-                    &ast.replace_expr(Expression::Value((&*value.borrow()).clone())),
-                    locals,
-                    captures,
-                );
-            }
         },
     }
 }
 
-fn make_declarations(pattern: &Ast<Pattern>, scope: &mut Vec<Ast<CStatement>>) {
+fn make_declarations(pattern: &TypedAst<TypedPattern, Type>, scope: &mut Vec<Ast<CStatement>>) {
     match &*pattern.expr {
-        &Pattern::Ident(ref name, _) => {
+        &TypedPattern::Ident(ref name, _) => {
             let value_name = get_ident_name(name);
-            let value_ctype = type_to_ctype(&get_expr_type(pattern));
+            let value_ctype = type_to_ctype(&pattern.expr_type);
             let value_ref_type = CType::Ref(Box::new(value_ctype.clone()));
 
             scope.push(
-                pattern.replace_expr(CStatement::VarDecl(value_ref_type, value_name.clone())),
+                pattern.replace_untyped(CStatement::VarDecl(value_ref_type, value_name.clone())),
             );
-            scope.push(pattern.replace_expr(CStatement::RefAlloc(value_name.clone(), value_ctype)));
+            scope.push(
+                pattern.replace_untyped(CStatement::RefAlloc(value_name.clone(), value_ctype)),
+            );
         }
-        &Pattern::Tuple(ref vec) => for element in vec {
+        &TypedPattern::Tuple(ref vec) => for element in vec {
             make_declarations(element, scope);
         },
     }
 }
 
-fn bind_declarations(pattern: &Ast<Pattern>, value: Ast<CExpr>, scope: &mut Vec<Ast<CStatement>>) {
+fn bind_declarations(
+    pattern: &TypedAst<TypedPattern, Type>,
+    value: Ast<CExpr>,
+    scope: &mut Vec<Ast<CStatement>>,
+) {
     match &*pattern.expr {
-        &Pattern::Ident(ref name, _) => {
+        &TypedPattern::Ident(ref name, _) => {
             let value_name = get_ident_name(name);
-            scope.push(pattern.replace_expr(CStatement::RefAssign(value_name, value)));
+            scope.push(pattern.replace_untyped(CStatement::RefAssign(value_name, value)));
         }
-        &Pattern::Tuple(ref vec) => for (index, element) in vec.iter().enumerate() {
+        &TypedPattern::Tuple(ref vec) => for (index, element) in vec.iter().enumerate() {
             let inner_value = value.replace_expr(CExpr::ObjectAccess {
                 object: value.clone(),
                 index,
-                field_type: element.replace_expr(pattern_to_ctype(element)),
+                field_type: element.replace_untyped(type_to_ctype(&element.expr_type)),
             });
             bind_declarations(element, inner_value, scope);
         },
@@ -168,18 +149,18 @@ fn bind_declarations(pattern: &Ast<Pattern>, value: Ast<CExpr>, scope: &mut Vec<
 }
 
 pub fn lift_expr(
-    ast: &Ast<Expression>,
+    ast: &TypedAst<TypedExpression, Type>,
     scope: &mut Vec<Ast<CStatement>>,
     expr_index: &mut i32,
     functions: &mut Vec<Ast<CFunc>>,
     function_index: &mut i32,
 ) -> Ast<CValue> {
     match &*ast.expr {
-        &Expression::Value(ref v) => match v {
-            &Value::Num(value) => ast.replace_expr(CValue::Float(value)),
-            &Value::Bool(value) => ast.replace_expr(CValue::Bool(value)),
-            &Value::Int(value) => ast.replace_expr(CValue::Int(value)),
-            &Value::Func(ref pattern, _, ref body) => {
+        &TypedExpression::Value(ref v) => match v {
+            &TypedValue::Num(value) => ast.replace_untyped(CValue::Float(value)),
+            &TypedValue::Bool(value) => ast.replace_untyped(CValue::Bool(value)),
+            &TypedValue::Int(value) => ast.replace_untyped(CValue::Int(value)),
+            &TypedValue::Func(ref pattern, _, ref body) => {
                 let mut captures_map = HashMap::new();
                 let mut locals = HashSet::new();
                 find_names_in_pattern(pattern, &mut locals);
@@ -189,8 +170,8 @@ pub fn lift_expr(
                 let mut func_scope = Vec::new();
                 let mut func_expr_index = 0;
 
-                let param_ctype = pattern_to_ctype(pattern);
-                let param_value = pattern.replace_expr(CExpr::Value(CValue::Ident(
+                let param_ctype = type_to_ctype(&pattern.expr_type);
+                let param_value = pattern.replace_untyped(CExpr::Value(CValue::Ident(
                     String::from("_aro_arg"),
                     param_ctype.clone(),
                 )));
@@ -199,21 +180,21 @@ pub fn lift_expr(
 
                 for (index, (name, var_type)) in captures_map.iter().enumerate() {
                     let ident_name = get_ident_name(name);
-                    func_scope.push(ast.replace_expr(CStatement::VarDecl(
+                    func_scope.push(ast.replace_untyped(CStatement::VarDecl(
                         CType::Ref(Box::new(var_type.clone())),
                         ident_name.clone(),
                     )));
 
-                    let captures_object = ast.replace_expr(CExpr::Value(CValue::Ident(
+                    let captures_object = ast.replace_untyped(CExpr::Value(CValue::Ident(
                         String::from("_aro_captures"),
                         CType::Object,
                     )));
-                    func_scope.push(ast.replace_expr(CStatement::VarAssign(
+                    func_scope.push(ast.replace_untyped(CStatement::VarAssign(
                         ident_name,
-                        ast.replace_expr(CExpr::ObjectAccess {
+                        ast.replace_untyped(CExpr::ObjectAccess {
                             object: captures_object,
                             index,
-                            field_type: ast.replace_expr(CType::Ref(Box::new(var_type.clone()))),
+                            field_type: ast.replace_untyped(CType::Ref(Box::new(var_type.clone()))),
                         }),
                     )))
                 }
@@ -227,22 +208,22 @@ pub fn lift_expr(
                 );
 
                 let closure_name = get_expr_name(expr_index);
-                let closure_type = get_expr_ctype(ast);
-                scope.push(ast.replace_expr(CStatement::VarDecl(
+                let closure_type = type_to_ctype(&ast.expr_type);
+                scope.push(ast.replace_untyped(CStatement::VarDecl(
                     closure_type.clone(),
                     closure_name.clone(),
                 )));
                 scope.push(
-                    ast.replace_expr(CStatement::ClosureInit {
+                    ast.replace_untyped(CStatement::ClosureInit {
                         name: closure_name.clone(),
-                        function: ast.replace_expr(CValue::Ident(
+                        function: ast.replace_untyped(CValue::Ident(
                             func_name.clone(),
                             CType::VoidPtr,
                         )),
                         captures: captures_map
                             .into_iter()
                             .map(|(name, var_type)| {
-                                ast.replace_expr(CValue::Ident(
+                                ast.replace_untyped(CValue::Ident(
                                     get_ident_name(&name),
                                     CType::Ref(Box::new(var_type.clone())),
                                 ))
@@ -251,16 +232,16 @@ pub fn lift_expr(
                     }),
                 );
 
-                functions.push(ast.replace_expr(CFunc {
+                functions.push(ast.replace_untyped(CFunc {
                     name: func_name,
-                    param: pattern.replace_expr(param_ctype),
+                    param: pattern.replace_untyped(param_ctype),
                     body: func_scope,
                     ret,
                 }));
 
-                ast.replace_expr(CValue::Ident(closure_name, closure_type))
+                ast.replace_untyped(CValue::Ident(closure_name, closure_type))
             }
-            &Value::Tuple(ref vec) => {
+            &TypedValue::Tuple(ref vec) => {
                 let mut data = Vec::new();
                 for element in vec {
                     data.push(lift_expr(
@@ -273,43 +254,44 @@ pub fn lift_expr(
                 }
 
                 let expr_name = get_expr_name(expr_index);
-                scope.push(ast.replace_expr(CStatement::VarDecl(CType::Object, expr_name.clone())));
-                scope.push(ast.replace_expr(CStatement::ObjectInit {
+                scope.push(ast.replace_untyped(CStatement::VarDecl(
+                    CType::Object,
+                    expr_name.clone(),
+                )));
+                scope.push(ast.replace_untyped(CStatement::ObjectInit {
                     name: expr_name.clone(),
                     data,
                 }));
 
-                ast.replace_expr(CValue::Ident(expr_name, CType::Object))
-            }
-            &Value::GenericFunc(_, _, _, ref body) => {
-                lift_expr(body, scope, expr_index, functions, function_index)
+                ast.replace_untyped(CValue::Ident(expr_name, CType::Object))
             }
             _ => panic!(),
         },
-        &Expression::Ident(ref name) => {
-            ast.replace_expr(CValue::Deref(get_ident_name(name), get_expr_ctype(ast)))
-        }
-        &Expression::BinOp(ref op, ref left, ref right) => {
+        &TypedExpression::Ident(ref name) => ast.replace_untyped(CValue::Deref(
+            get_ident_name(name),
+            type_to_ctype(&ast.expr_type),
+        )),
+        &TypedExpression::BinOp(ref op, ref left, ref right) => {
             let left_c_ast = lift_expr(left, scope, expr_index, functions, function_index);
             let right_c_ast = {
                 let right_c_ast = lift_expr(right, scope, expr_index, functions, function_index);
                 match op {
                     &BinOp::Call => {
                         if let CType::Closure { param, .. } = left_c_ast.expr.get_ctype() {
-                            let right_ctype = get_expr_ctype(right);
+                            let right_ctype = type_to_ctype(&right.expr_type);
                             if *param.expr == CType::Any && right_ctype != CType::Any {
                                 let any_name = get_expr_name(expr_index);
-                                scope.push(right.replace_expr(CStatement::VarDecl(
+                                scope.push(right.replace_untyped(CStatement::VarDecl(
                                     CType::Any,
                                     any_name.clone(),
                                 )));
-                                scope.push(right.replace_expr(CStatement::AnyAssign {
+                                scope.push(right.replace_untyped(CStatement::AnyAssign {
                                     name: any_name.clone(),
                                     value: right_c_ast.to_c_expr(),
                                     value_type: right_ctype,
                                 }));
 
-                                right.replace_expr(CValue::Ident(any_name, CType::Any))
+                                right.replace_untyped(CValue::Ident(any_name, CType::Any))
                             } else {
                                 right_c_ast
                             }
@@ -322,18 +304,21 @@ pub fn lift_expr(
             };
 
             let expr_name = get_expr_name(expr_index);
-            let expr_type = get_expr_ctype(ast);
-            scope.push(ast.replace_expr(CStatement::VarDecl(expr_type.clone(), expr_name.clone())));
-            scope.push(ast.replace_expr(CStatement::VarAssign(
+            let expr_type = type_to_ctype(&ast.expr_type);
+            scope.push(ast.replace_untyped(CStatement::VarDecl(
+                expr_type.clone(),
                 expr_name.clone(),
-                ast.replace_expr({
+            )));
+            scope.push(ast.replace_untyped(CStatement::VarAssign(
+                expr_name.clone(),
+                ast.replace_untyped({
                     let bin_op_ast = CExpr::BinOp(op.clone(), left_c_ast.clone(), right_c_ast);
                     match op {
                         &BinOp::Call => {
                             if let CType::Closure { ret, .. } = left_c_ast.expr.get_ctype() {
                                 if *ret.expr == CType::Any && expr_type != CType::Any {
                                     CExpr::AnyAccess {
-                                        value: ast.replace_expr(bin_op_ast),
+                                        value: ast.replace_untyped(bin_op_ast),
                                         value_type: expr_type.clone(),
                                     }
                                 } else {
@@ -348,14 +333,14 @@ pub fn lift_expr(
                 }),
             )));
 
-            ast.replace_expr(CValue::Ident(expr_name, expr_type))
+            ast.replace_untyped(CValue::Ident(expr_name, expr_type))
         }
-        &Expression::If(ref condition, ref consequent, ref alternate) => {
+        &TypedExpression::If(ref condition, ref consequent, ref alternate) => {
             let condition_c_ast =
                 lift_expr(condition, scope, expr_index, functions, function_index);
 
             let expr_name = get_expr_name(expr_index);
-            let expr_type = get_expr_ctype(ast);
+            let expr_type = type_to_ctype(&ast.expr_type);
 
             let mut consequent_scope = Vec::new();
             let consequent_c_ast = lift_expr(
@@ -365,11 +350,11 @@ pub fn lift_expr(
                 functions,
                 function_index,
             );
-            consequent_scope.push(ast.replace_expr(CStatement::VarAssign(
+            consequent_scope.push(ast.replace_untyped(CStatement::VarAssign(
                 expr_name.clone(),
                 consequent_c_ast.to_c_expr(),
             )));
-            let consequent_block = consequent.replace_expr(CStatement::Block(consequent_scope));
+            let consequent_block = consequent.replace_untyped(CStatement::Block(consequent_scope));
 
             let mut alternate_scope = Vec::new();
             let alternate_c_ast = lift_expr(
@@ -379,26 +364,31 @@ pub fn lift_expr(
                 functions,
                 function_index,
             );
-            alternate_scope.push(ast.replace_expr(CStatement::VarAssign(
+            alternate_scope.push(ast.replace_untyped(CStatement::VarAssign(
                 expr_name.clone(),
                 alternate_c_ast.to_c_expr(),
             )));
-            let alternate_block = alternate.replace_expr(CStatement::Block(alternate_scope));
+            let alternate_block = alternate.replace_untyped(CStatement::Block(alternate_scope));
 
-            scope.push(ast.replace_expr(CStatement::VarDecl(expr_type.clone(), expr_name.clone())));
-            scope.push(ast.replace_expr(CStatement::If(
+            scope.push(ast.replace_untyped(CStatement::VarDecl(
+                expr_type.clone(),
+                expr_name.clone(),
+            )));
+            scope.push(ast.replace_untyped(CStatement::If(
                 condition_c_ast.to_c_expr(),
                 consequent_block,
                 alternate_block,
             )));
 
-            ast.replace_expr(CValue::Ident(expr_name, expr_type))
+            ast.replace_untyped(CValue::Ident(expr_name, expr_type))
         }
-        &Expression::Let(ref pattern, ref value, ref body) => {
+        &TypedExpression::Let(ref pattern, ref value, ref body) => {
             let body_name = get_expr_name(expr_index);
-            let body_type = get_expr_ctype(body);
-            scope
-                .push(body.replace_expr(CStatement::VarDecl(body_type.clone(), body_name.clone())));
+            let body_type = type_to_ctype(&body.expr_type);
+            scope.push(body.replace_untyped(CStatement::VarDecl(
+                body_type.clone(),
+                body_name.clone(),
+            )));
 
             let mut body_scope = Vec::new();
             make_declarations(pattern, &mut body_scope);
@@ -413,18 +403,14 @@ pub fn lift_expr(
 
             let body_c_ast =
                 lift_expr(body, &mut body_scope, expr_index, functions, function_index);
-            body_scope.push(body.replace_expr(CStatement::VarAssign(
+            body_scope.push(body.replace_untyped(CStatement::VarAssign(
                 body_name.clone(),
                 body_c_ast.to_c_expr(),
             )));
 
-            scope.push(ast.replace_expr(CStatement::Block(body_scope)));
+            scope.push(ast.replace_untyped(CStatement::Block(body_scope)));
 
-            ast.replace_expr(CValue::Ident(body_name, body_type))
-        }
-        &Expression::GenericCall(ref expression, _)
-        | &Expression::TypeLet(_, _, ref expression) => {
-            lift_expr(expression, scope, expr_index, functions, function_index)
+            ast.replace_untyped(CValue::Ident(body_name, body_type))
         }
         _ => panic!(),
     }
@@ -444,14 +430,14 @@ mod lift_expr {
         expected_expr: &str,
     ) {
         let ast = source_to_ast(aro_code).unwrap();
-        typecheck_ast(&ast, &HashMap::new()).unwrap();
+        let typechecked_ast = typecheck_ast(&ast, &HashMap::new()).unwrap();
 
         let mut scope = Vec::new();
         let mut expr_index = 0;
         let mut functions = Vec::new();
         let mut function_index = 0;
         let actual_expr = lift_expr(
-            &ast,
+            &typechecked_ast,
             &mut scope,
             &mut expr_index,
             &mut functions,

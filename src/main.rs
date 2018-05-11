@@ -171,7 +171,7 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
 
     let globals = get_globals();
 
-    typecheck::typecheck_ast(
+    let typechecked_ast = typecheck::typecheck_ast(
         &ast,
         &globals
             .iter()
@@ -184,7 +184,7 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
     let mut functions = Vec::new();
     let mut function_index = 0;
     let expr = c_compile::lift_expr(
-        &ast,
+        &typechecked_ast,
         &mut scope,
         &mut expr_index,
         &mut functions,
