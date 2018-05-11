@@ -1,4 +1,5 @@
-use ast::{Ast, BinOp, Expression, Pattern, Type, Value};
+use ast::{Ast, BinOp, Expression, Pattern, Type, TypedAst, TypedExpression, TypedPattern,
+          TypedValue, Value};
 use util::Error;
 use std::collections::HashMap;
 use std::iter::Iterator;
@@ -138,32 +139,32 @@ impl Type {
 }
 
 impl Ast<Type> {
-    fn from_pattern(
-        pattern: &Ast<Pattern>,
-        env: &HashMap<String, Type>,
-    ) -> Result<Ast<Type>, Error> {
-        let pattern_type = match &*pattern.expr {
-            &Pattern::Ident(_, ref ident_type) => {
-                ident_type.replace_expr(evaluate_type(ident_type, env)?)
-            }
-            &Pattern::Tuple(ref vec) => pattern.replace_expr(Type::Tuple({
-                let mut new_vec = Vec::new();
-                for element in vec {
-                    new_vec.push(Ast::<Type>::from_pattern(element, env)?);
-                }
-
-                new_vec
-            })),
-        };
-
-        *pattern.expr_type.borrow_mut() = Some(pattern_type.clone().expr);
-
-        Ok(pattern_type)
-    }
-
     pub fn is_sub_type(&self, other: &Ast<Type>, env: &HashMap<String, Type>) -> bool {
         self.expr.is_sub_type(&other.expr, env)
     }
+}
+
+fn typecheck_pattern(
+    pattern: &Ast<Pattern>,
+    env: &HashMap<String, Type>,
+) -> Result<TypedAst<TypedPattern, Type>, Error> {
+    Ok(match &*pattern.expr {
+        &Pattern::Ident(ref name, ref ident_type) => pattern.to_typed(
+            TypedPattern::Ident(name.clone(), ident_type.clone()),
+            evaluate_type(ident_type, env)?,
+        ),
+        &Pattern::Tuple(ref vec) => {
+            let mut new_types = Vec::new();
+            let mut new_subpatterns = Vec::new();
+            for element in vec {
+                let typed_ast = typecheck_pattern(element, env)?;
+                new_types.push(typed_ast.to_type_ast());
+                new_subpatterns.push(typed_ast);
+            }
+
+            pattern.to_typed(TypedPattern::Tuple(new_subpatterns), Type::Tuple(new_types))
+        }
+    })
 }
 
 #[cfg(test)]
@@ -473,78 +474,145 @@ fn evaluate_type(ast: &Ast<Type>, env: &HashMap<String, Type>) -> Result<Type, E
     }
 }
 
-pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Result<Type, Error> {
+fn typecheck_numeric_bin_op<TypeGetter>(
+    ast: &Ast<Expression>,
+    operation: &BinOp,
+    left: &Ast<Expression>,
+    right: &Ast<Expression>,
+    env: &HashMap<String, Type>,
+    get_type: TypeGetter,
+) -> Result<TypedAst<TypedExpression, Type>, Error>
+where
+    TypeGetter: Fn(Type, Type) -> Type,
+{
+    let typechecked_left = typecheck_ast(left, env)?;
+    let left_type = *typechecked_left.expr_type.clone();
+
+    let typechecked_right = typecheck_ast(right, env)?;
+    let right_type = *typechecked_right.expr_type.clone();
+
+    if !left_type.is_sub_type(&Type::Int, env) && !left_type.is_sub_type(&Type::Num, env) {
+        Err(Error::LRLocated {
+            message: format!(
+                "Did you think this was python?  You can't do math with `{}`s.",
+                left_type
+            ),
+            left_loc: left.left_loc,
+            right_loc: left.right_loc,
+        })
+    } else if !right_type.is_sub_type(&Type::Int, env) && !right_type.is_sub_type(&Type::Num, env) {
+        Err(Error::LRLocated {
+            message: format!(
+                "Did you think this was python?  You can't do math with `{}`s.",
+                right_type
+            ),
+            left_loc: right.left_loc,
+            right_loc: right.right_loc,
+        })
+    } else {
+        Ok(ast.to_typed(
+            TypedExpression::BinOp(operation.clone(), typechecked_left, typechecked_right),
+            get_type(left_type, right_type),
+        ))
+    }
+}
+
+pub fn typecheck_ast(
+    ast: &Ast<Expression>,
+    env: &HashMap<String, Type>,
+) -> Result<TypedAst<TypedExpression, Type>, Error> {
     let left_loc = ast.left_loc;
     let right_loc = ast.right_loc;
 
-    let ast_type = match &*ast.expr {
+    match &*ast.expr {
         &Expression::Value(ref value) => match value {
-            &Value::Hook(_, ref hook_type) => evaluate_type(hook_type, env),
-            &Value::Int(_) => Ok(Type::Int),
-            &Value::Num(_) => Ok(Type::Num),
-            &Value::Bool(_) => Ok(Type::Bool),
+            &Value::Hook(ref name, ref hook_type) => Ok(ast.to_typed(
+                TypedExpression::Value(TypedValue::Hook(name.clone(), hook_type.clone())),
+                evaluate_type(hook_type, env)?,
+            )),
+            &Value::Int(value) => {
+                Ok(ast.to_typed(TypedExpression::Value(TypedValue::Int(value)), Type::Int))
+            }
+            &Value::Num(value) => {
+                Ok(ast.to_typed(TypedExpression::Value(TypedValue::Num(value)), Type::Num))
+            }
+            &Value::Bool(value) => {
+                Ok(ast.to_typed(TypedExpression::Value(TypedValue::Bool(value)), Type::Bool))
+            }
             &Value::Ref(_) => panic!("Cannot typecheck raw pointer"),
-            &Value::Tuple(ref vec) => Ok(Type::Tuple({
+            &Value::Tuple(ref vec) => {
                 let mut type_vec = Vec::new();
+                let mut value_vec = Vec::new();
 
                 for item in vec {
-                    type_vec.push(Ast::<Type>::new(
-                        item.left_loc,
-                        item.right_loc,
-                        typecheck_ast(item, env)?,
-                    ))
+                    let typed_ast = typecheck_ast(item, env)?;
+                    type_vec.push(typed_ast.to_type_ast());
+                    value_vec.push(typed_ast);
                 }
 
-                type_vec
-            })),
-            &Value::Record(ref map) => Ok(Type::Record({
+                Ok(ast.to_typed(
+                    TypedExpression::Value(TypedValue::Tuple(value_vec)),
+                    Type::Tuple(type_vec),
+                ))
+            }
+            &Value::Record(ref map) => {
                 let mut type_map = HashMap::new();
+                let mut value_map = HashMap::new();
 
                 for (name, value) in map {
-                    type_map.insert(
-                        name.clone(),
-                        Ast::<Type>::new(
-                            value.left_loc,
-                            value.right_loc,
-                            typecheck_ast(value, env)?,
-                        ),
-                    );
+                    let typed_ast = typecheck_ast(value, env)?;
+                    type_map.insert(name.clone(), typed_ast.to_type_ast());
+                    value_map.insert(name.clone(), typed_ast);
                 }
 
-                type_map
-            })),
-            &Value::List(ref vec) => Ok(Type::List(Ast::<Type>::new(left_loc, right_loc, {
-                if vec.is_empty() {
-                    Type::Empty
-                } else {
-                    let mut union_type = typecheck_ast(&vec[0], env)?;
+                Ok(ast.to_typed(
+                    TypedExpression::Value(TypedValue::Record(value_map)),
+                    Type::Record(type_map),
+                ))
+            }
+            &Value::List(ref vec) => {
+                let mut union_type = Type::Empty;
+                let mut value_vec = Vec::new();
 
-                    for item in &vec[1..] {
-                        union_type = union_type.union(&typecheck_ast(item, env)?, env);
-                    }
-
-                    union_type
+                for item in vec {
+                    let typed_ast = typecheck_ast(item, env)?;
+                    union_type = union_type.union(&typed_ast.expr_type, env);
+                    value_vec.push(typed_ast);
                 }
-            }))),
+
+                Ok(ast.to_typed(
+                    TypedExpression::Value(TypedValue::List(value_vec)),
+                    Type::List(ast.replace_expr(union_type)),
+                ))
+            }
             &Value::Func(ref pattern, ref body_type_ast, ref body) => {
                 let mut body_env = env.clone();
                 build_env(&mut body_env, pattern)?;
 
-                let param_type_ast = Ast::<Type>::from_pattern(pattern, env)?;
-                let declared_param_type = evaluate_type(&param_type_ast, env)?;
+                let typechecked_param = typecheck_pattern(pattern, env)?;
+                let param_type_ast = typechecked_param.to_type_ast();
+
                 let declared_body_type = evaluate_type(body_type_ast, &body_env)?;
-                let actual_body_type = typecheck_ast(body, &body_env)?;
-                if !actual_body_type.is_sub_type(&declared_body_type, env) {
+                let declared_body_type_ast = body_type_ast.replace_expr(declared_body_type.clone());
+
+                let typechecked_body = typecheck_ast(body, &body_env)?;
+                let actual_body_type_ast = typechecked_body.to_type_ast();
+
+                if !actual_body_type_ast.is_sub_type(&declared_body_type_ast, env) {
                     Err(Error::type_error(
                         body.left_loc,
                         body.right_loc,
                         &declared_body_type,
-                        &actual_body_type,
+                        &actual_body_type_ast.expr,
                     ))
                 } else {
-                    Ok(Type::Func(
-                        param_type_ast.replace_expr(declared_param_type),
-                        body_type_ast.replace_expr(declared_body_type),
+                    Ok(ast.to_typed(
+                        TypedExpression::Value(TypedValue::Func(
+                            typechecked_param,
+                            body_type_ast.clone(),
+                            typechecked_body,
+                        )),
+                        Type::Func(param_type_ast, declared_body_type_ast),
                     ))
                 }
             }
@@ -554,37 +622,57 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
                 env.insert(type_name.clone(), declared_supertype.clone());
 
                 let declared_body_type = evaluate_type(body_type_ast, env)?;
-                let actual_body_type = typecheck_ast(body, env)?;
-                if !actual_body_type.is_sub_type(&declared_body_type, env) {
+                let declared_body_type_ast = body_type_ast.replace_expr(declared_body_type.clone());
+
+                let typechecked_body = typecheck_ast(body, env)?;
+                let actual_body_type_ast = typechecked_body.to_type_ast();
+
+                if !actual_body_type_ast.is_sub_type(&declared_body_type_ast, env) {
                     Err(Error::type_error(
                         body.left_loc,
                         body.right_loc,
                         &declared_body_type,
-                        &actual_body_type,
+                        &actual_body_type_ast.expr,
                     ))
                 } else {
-                    Ok(Type::GenericFunc(
-                        type_name.clone(),
-                        supertype.replace_expr(declared_supertype),
-                        body_type_ast.replace_expr(declared_body_type),
+                    Ok(ast.to_typed(
+                        TypedExpression::Value(TypedValue::GenericFunc(
+                            type_name.clone(),
+                            supertype.clone(),
+                            body_type_ast.clone(),
+                            typechecked_body,
+                        )),
+                        Type::GenericFunc(
+                            type_name.clone(),
+                            supertype.replace_expr(declared_supertype),
+                            declared_body_type_ast,
+                        ),
                     ))
                 }
             }
         },
         &Expression::Sequence(ref side_effect, ref result) => {
-            typecheck_ast(side_effect, env)?;
-            typecheck_ast(result, env)
+            let typechecked_side_effect = typecheck_ast(side_effect, env)?;
+            let typechecked_result = typecheck_ast(result, env)?;
+            let result_type = *typechecked_result.expr_type.clone();
+            Ok(ast.to_typed(
+                TypedExpression::Sequence(typechecked_side_effect, typechecked_result),
+                result_type,
+            ))
         }
         &Expression::RecordAccess(ref record, ref field) => {
-            let record_type = typecheck_ast(record, env)?;
-            if let &Type::Record(ref map) = &record_type {
+            let typechecked_record = typecheck_ast(record, env)?;
+            if let Type::Record(ref map) = *typechecked_record.expr_type.clone() {
                 if let Some(field_type) = map.get(field) {
-                    evaluate_type(field_type, env)
+                    Ok(ast.to_typed(
+                        TypedExpression::RecordAccess(typechecked_record, field.clone()),
+                        evaluate_type(field_type, env)?,
+                    ))
                 } else {
                     Err(Error::LRLocated {
                         message: format!(
                             "Why would you even try to access a `{}` field of a `{}`?",
-                            field, record_type
+                            field, typechecked_record.expr_type
                         ),
                         left_loc: record.left_loc,
                         right_loc: record.right_loc,
@@ -594,7 +682,7 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
                 Err(Error::LRLocated {
                     message: format!(
                         "Why would you even try to access a field of a `{}`?",
-                        record_type
+                        typechecked_record.expr_type
                     ),
                     left_loc: record.left_loc,
                     right_loc: record.right_loc,
@@ -602,21 +690,24 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
             }
         }
         &Expression::GenericCall(ref generic_func, ref arg) => {
+            let typechecked_generic_func = typecheck_ast(generic_func, env)?;
             if let Type::GenericFunc(ref param, ref supertype, ref body) =
-                typecheck_ast(generic_func, env)?
+                *typechecked_generic_func.expr_type.clone()
             {
                 let arg_type = evaluate_type(arg, env)?;
-                let supertype = evaluate_type(supertype, env)?;
-                if arg_type.is_sub_type(&supertype, env) {
-                    Ok(evaluate_type(
-                        &substitute_type(body, param, &arg.replace_expr(arg_type)),
-                        env,
-                    )?)
+                if arg_type.is_sub_type(&supertype.expr, env) {
+                    Ok(ast.to_typed(
+                        TypedExpression::GenericCall(typechecked_generic_func, arg.clone()),
+                        evaluate_type(
+                            &substitute_type(body, param, &arg.replace_expr(arg_type)),
+                            env,
+                        )?,
+                    ))
                 } else {
                     Err(Error::type_error(
                         generic_func.left_loc,
                         generic_func.right_loc,
-                        &supertype,
+                        &supertype.expr,
                         &arg_type,
                     ))
                 }
@@ -631,7 +722,7 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
             }
         }
         &Expression::Ident(ref name) => if let Some(ident_type) = env.get(name) {
-            Ok(ident_type.clone())
+            Ok(ast.to_typed(TypedExpression::Ident(name.clone()), ident_type.clone()))
         } else {
             Err(Error::LRLocated {
                 message: format!(
@@ -643,119 +734,122 @@ pub fn typecheck_ast(ast: &Ast<Expression>, env: &HashMap<String, Type>) -> Resu
             })
         },
         &Expression::If(ref condition, ref consequent, ref alternate) => {
-            let condition_type = typecheck_ast(condition, env)?;
-            if condition_type != Type::Bool {
+            let typechecked_condition = typecheck_ast(condition, env)?;
+            if *typechecked_condition.expr_type != Type::Bool {
                 Err(Error::type_error(
                     alternate.left_loc,
                     alternate.right_loc,
                     &Type::Bool,
-                    &condition_type,
+                    &typechecked_condition.expr_type,
                 ))
             } else {
-                let consequent_type = typecheck_ast(consequent, env)?;
-                let alternate_type = typecheck_ast(alternate, env)?;
+                let typechecked_consequent = typecheck_ast(consequent, env)?;
+                let typechecked_alternate = typecheck_ast(alternate, env)?;
+                let result_type = typechecked_consequent
+                    .expr_type
+                    .union(&typechecked_alternate.expr_type, env);
 
-                Ok(consequent_type.union(&alternate_type, env))
+                Ok(ast.to_typed(
+                    TypedExpression::If(
+                        typechecked_condition,
+                        typechecked_consequent,
+                        typechecked_alternate,
+                    ),
+                    result_type,
+                ))
             }
         }
         &Expression::Let(ref pattern, ref value, ref body) => {
             let mut body_env = env.clone();
             build_env(&mut body_env, &pattern)?;
 
-            let declared_value_type = *Ast::<Type>::from_pattern(pattern, env)?.expr;
-            let actual_value_type = typecheck_ast(value, &body_env)?;
+            let typechecked_pattern = typecheck_pattern(pattern, env)?;
+            let declared_value_type = typechecked_pattern.to_type_ast();
+
+            let typechecked_value = typecheck_ast(value, &body_env)?;
+            let actual_value_type = typechecked_value.to_type_ast();
 
             if !actual_value_type.is_sub_type(&declared_value_type, env) {
                 Err(Error::type_error(
                     value.left_loc,
                     value.right_loc,
-                    &declared_value_type,
-                    &actual_value_type,
+                    &declared_value_type.expr,
+                    &actual_value_type.expr,
                 ))
             } else {
-                typecheck_ast(body, &body_env)
+                let typechecked_body = typecheck_ast(body, &body_env)?;
+                let body_type = *typechecked_body.expr_type.clone();
+                Ok(ast.to_typed(
+                    TypedExpression::Let(typechecked_pattern, typechecked_value, typechecked_body),
+                    body_type,
+                ))
             }
         }
         &Expression::TypeLet(ref name, ref value, ref body) => {
-            let replaced_value = value.replace_expr(evaluate_type(value, env)?);
-            typecheck_ast(&substitute_expr(body, name, &replaced_value), &env)
+            let value = value.replace_expr(evaluate_type(value, env)?);
+            typecheck_ast(&substitute_expr(body, name, &value), env)
         }
         &Expression::BinOp(ref operation, ref left, ref right) => match operation {
             &BinOp::Call => {
-                let left_type = typecheck_ast(left, env)?;
-                let right_type = typecheck_ast(right, env)?;
+                let typechecked_left = typecheck_ast(left, env)?;
+                let typechecked_right = typecheck_ast(right, env)?;
 
-                if let Type::Func(ref param_type, ref output_type) = left_type {
+                if let Type::Func(ref param_type, ref output_type) =
+                    *typechecked_left.expr_type.clone()
+                {
                     let param_type = evaluate_type(param_type, env)?;
                     let output_type = evaluate_type(output_type, env)?;
-                    if !right_type.is_sub_type(&param_type, env) {
+                    if !typechecked_right.expr_type.is_sub_type(&param_type, env) {
                         Err(Error::type_error(
                             right.left_loc,
                             right.right_loc,
                             &param_type,
-                            &right_type,
+                            &typechecked_right.expr_type,
                         ))
                     } else {
-                        Ok(output_type)
+                        Ok(ast.to_typed(
+                            TypedExpression::BinOp(
+                                operation.clone(),
+                                typechecked_left,
+                                typechecked_right,
+                            ),
+                            output_type,
+                        ))
                     }
                 } else {
                     Err(Error::LRLocated {
-                        message: String::from(
+                        message: format!(
                             "I only call two things on a regular basis: functions, and your mom.\n\
-                             That's not a function.",
+                             `{}` is not a function.",
+                            typechecked_left.expr_type
                         ),
                         left_loc: left.left_loc,
                         right_loc: left.right_loc,
                     })
                 }
             }
-            &BinOp::Add | &BinOp::Sub | &BinOp::Mul | &BinOp::Div | &BinOp::LEq => {
-                let left_type = typecheck_ast(left, env)?;
-                let right_type = typecheck_ast(right, env)?;
-
-                if !left_type.is_sub_type(&Type::Int, env)
-                    && !left_type.is_sub_type(&Type::Num, env)
-                {
-                    Err(Error::LRLocated {
-                        message: format!(
-                            "Did you think this was python?  You can't do math with `{}`s.",
-                            left_type
-                        ),
-                        left_loc: left.left_loc,
-                        right_loc: left.right_loc,
-                    })
-                } else if !right_type.is_sub_type(&Type::Int, env)
-                    && !right_type.is_sub_type(&Type::Num, env)
-                {
-                    Err(Error::LRLocated {
-                        message: format!(
-                            "Did you think this was python?  You can't do math with `{}`s.",
-                            right_type
-                        ),
-                        left_loc: right.left_loc,
-                        right_loc: right.right_loc,
-                    })
-                } else {
-                    match operation {
-                        &BinOp::LEq => Ok(Type::Bool),
-                        &BinOp::Div => Ok(Type::Num),
-                        &BinOp::Add | &BinOp::Sub | &BinOp::Mul => {
-                            if (left_type, right_type) == (Type::Int, Type::Int) {
-                                Ok(Type::Int)
-                            } else {
-                                Ok(Type::Num)
-                            }
-                        }
-                        _ => panic!("Cannot typecheck operation"),
+            &BinOp::LEq => {
+                typecheck_numeric_bin_op(ast, operation, left, right, env, |_, _| Type::Bool)
+            }
+            &BinOp::Div => {
+                typecheck_numeric_bin_op(ast, operation, left, right, env, |_, _| Type::Num)
+            }
+            &BinOp::Add | &BinOp::Sub | &BinOp::Mul => typecheck_numeric_bin_op(
+                ast,
+                operation,
+                left,
+                right,
+                env,
+                |left_type, right_type| {
+                    if (left_type, right_type) == (Type::Int, Type::Int) {
+                        Type::Int
+                    } else {
+                        Type::Num
                     }
-                }
-            }
+                },
+            ),
         },
-    }?;
-
-    *ast.expr_type.borrow_mut() = Some(Box::new(ast_type.clone()));
-
-    Ok(ast_type)
+    }
 }
 
 #[cfg(test)]
@@ -767,7 +861,9 @@ mod typecheck_ast {
         assert_eq!(
             format!(
                 "{}",
-                typecheck_ast(&source_to_ast(actual).unwrap(), &HashMap::new()).unwrap()
+                typecheck_ast(&source_to_ast(actual).unwrap(), &HashMap::new())
+                    .unwrap()
+                    .expr_type
             ),
             expected
         );
@@ -801,7 +897,9 @@ mod typecheck_ast {
         assert_eq!(
             format!(
                 "{}",
-                typecheck_ast(&source_to_ast("global_val").unwrap(), &globals).unwrap()
+                typecheck_ast(&source_to_ast("global_val").unwrap(), &globals)
+                    .unwrap()
+                    .expr_type
             ),
             "Int"
         );

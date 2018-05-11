@@ -11,7 +11,14 @@ pub struct Ast<T> {
     pub left_loc: usize,
     pub right_loc: usize,
     pub expr: Box<T>,
-    pub expr_type: RefCell<Option<Box<Type>>>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct TypedAst<Expr, ExprType> {
+    pub left_loc: usize,
+    pub right_loc: usize,
+    pub expr: Box<Expr>,
+    pub expr_type: Box<ExprType>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -25,6 +32,34 @@ pub enum Expression {
     TypeLet(String, Ast<Type>, Ast<Expression>),
     Sequence(Ast<Expression>, Ast<Expression>),
     RecordAccess(Ast<Expression>, String),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum TypedExpression {
+    Value(TypedValue),
+    BinOp(
+        BinOp,
+        TypedAst<TypedExpression, Type>,
+        TypedAst<TypedExpression, Type>,
+    ),
+    If(
+        TypedAst<TypedExpression, Type>,
+        TypedAst<TypedExpression, Type>,
+        TypedAst<TypedExpression, Type>,
+    ),
+    Ident(String),
+    Let(
+        TypedAst<TypedPattern, Type>,
+        TypedAst<TypedExpression, Type>,
+        TypedAst<TypedExpression, Type>,
+    ),
+    GenericCall(TypedAst<TypedExpression, Type>, Ast<Type>),
+    TypeLet(String, Ast<Type>, TypedAst<TypedExpression, Type>),
+    Sequence(
+        TypedAst<TypedExpression, Type>,
+        TypedAst<TypedExpression, Type>,
+    ),
+    RecordAccess(TypedAst<TypedExpression, Type>, String),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -52,9 +87,38 @@ pub enum Value {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub enum TypedValue {
+    Int(i32),
+    Num(f64),
+    Bool(bool),
+    Func(
+        TypedAst<TypedPattern, Type>,
+        Ast<Type>,
+        TypedAst<TypedExpression, Type>,
+    ),
+    GenericFunc(
+        String,
+        Ast<Type>,
+        Ast<Type>,
+        TypedAst<TypedExpression, Type>,
+    ),
+    Tuple(Vec<TypedAst<TypedExpression, Type>>),
+    List(Vec<TypedAst<TypedExpression, Type>>),
+    Hook(Vec<String>, Ast<Type>),
+    Ref(Rc<RefCell<Value>>),
+    Record(HashMap<String, TypedAst<TypedExpression, Type>>),
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum Pattern {
     Ident(String, Ast<Type>),
     Tuple(Vec<Ast<Pattern>>),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum TypedPattern {
+    Ident(String, Ast<Type>),
+    Tuple(Vec<TypedAst<TypedPattern, Type>>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -133,7 +197,7 @@ pub enum CStatement {
     If(Ast<CExpr>, Ast<CStatement>, Ast<CStatement>),
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct CFunc {
     pub name: String,
     pub param: Ast<CType>,
@@ -147,12 +211,24 @@ impl<T> Ast<T> {
             left_loc,
             right_loc,
             expr: Box::new(expr),
-            expr_type: RefCell::new(None),
         }
     }
 
     pub fn replace_expr<U>(&self, expr: U) -> Ast<U> {
         Ast::new(self.left_loc, self.right_loc, expr)
+    }
+
+    pub fn to_typed<NewExpr, NewType>(
+        &self,
+        expr: NewExpr,
+        expr_type: NewType,
+    ) -> TypedAst<NewExpr, NewType> {
+        TypedAst {
+            left_loc: self.left_loc,
+            right_loc: self.right_loc,
+            expr: Box::new(expr),
+            expr_type: Box::new(expr_type),
+        }
     }
 }
 
@@ -200,6 +276,24 @@ impl Ast<Pattern> {
 impl Ast<CValue> {
     pub fn to_c_expr(&self) -> Ast<CExpr> {
         self.replace_expr(CExpr::Value(*self.expr.clone()))
+    }
+}
+
+impl<Expr, ExprType> TypedAst<Expr, ExprType>
+where
+    ExprType: Clone,
+{
+    pub fn replace_expr<NewExpr>(&self, expr: NewExpr) -> TypedAst<NewExpr, ExprType> {
+        TypedAst {
+            left_loc: self.left_loc,
+            right_loc: self.right_loc,
+            expr: Box::new(expr),
+            expr_type: self.expr_type.clone(),
+        }
+    }
+
+    pub fn to_type_ast(&self) -> Ast<ExprType> {
+        Ast::new(self.left_loc, self.right_loc, *self.expr_type.clone())
     }
 }
 

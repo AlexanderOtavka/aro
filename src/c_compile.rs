@@ -43,10 +43,7 @@ fn pattern_to_ctype(pattern: &Ast<Pattern>) -> CType {
 }
 
 fn get_expr_type<T>(ast: &Ast<T>) -> Type {
-    match &*ast.expr_type.borrow() {
-        &Some(ref expr_type) => *expr_type.clone(),
-        &None => panic!("Ast must be typechecked before compilation"),
-    }
+    panic!()
 }
 
 fn get_expr_ctype<T>(ast: &Ast<T>) -> CType {

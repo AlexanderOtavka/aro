@@ -88,7 +88,7 @@ pub fn get_globals() -> HashMap<String, (Value, Type)> {
             String::from(name),
             (
                 evaluate_ast(&ast, &HashMap::new()).unwrap(),
-                typecheck_ast(&ast, &HashMap::new()).unwrap(),
+                *typecheck_ast(&ast, &HashMap::new()).unwrap().expr_type,
             ),
         );
     }
