@@ -53,8 +53,6 @@ pub enum TypedExpression {
         TypedAst<TypedExpression, Type>,
         TypedAst<TypedExpression, Type>,
     ),
-    GenericCall(TypedAst<TypedExpression, Type>, Ast<Type>),
-    TypeLet(String, Ast<Type>, TypedAst<TypedExpression, Type>),
     Sequence(
         TypedAst<TypedExpression, Type>,
         TypedAst<TypedExpression, Type>,
@@ -93,12 +91,6 @@ pub enum TypedValue {
     Bool(bool),
     Func(
         TypedAst<TypedPattern, Type>,
-        Ast<Type>,
-        TypedAst<TypedExpression, Type>,
-    ),
-    GenericFunc(
-        String,
-        Ast<Type>,
         Ast<Type>,
         TypedAst<TypedExpression, Type>,
     ),

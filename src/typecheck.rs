@@ -636,12 +636,7 @@ pub fn typecheck_ast(
                     ))
                 } else {
                     Ok(ast.to_typed(
-                        TypedExpression::Value(TypedValue::GenericFunc(
-                            type_name.clone(),
-                            supertype.clone(),
-                            body_type_ast.clone(),
-                            typechecked_body,
-                        )),
+                        *typechecked_body.expr,
                         Type::GenericFunc(
                             type_name.clone(),
                             supertype.replace_expr(declared_supertype),
@@ -697,7 +692,7 @@ pub fn typecheck_ast(
                 let arg_type = evaluate_type(arg, env)?;
                 if arg_type.is_sub_type(&supertype.expr, env) {
                     Ok(ast.to_typed(
-                        TypedExpression::GenericCall(typechecked_generic_func, arg.clone()),
+                        *typechecked_generic_func.expr,
                         evaluate_type(
                             &substitute_type(body, param, &arg.replace_expr(arg_type)),
                             env,
