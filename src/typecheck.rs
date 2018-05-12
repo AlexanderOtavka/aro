@@ -84,21 +84,17 @@ fn rename_type(ast: &Ast<EvaluatedType>, name: &str, new_name: &str) -> Ast<Eval
 impl EvaluatedType {
     // This version isn't terribly smart, but it is guranteed that both input
     // types will be suptypes of the result.
-    pub fn union(
-        &self,
-        other: &EvaluatedType,
-        env: &HashMap<String, EvaluatedType>,
-    ) -> EvaluatedType {
-        if self.is_sub_type(other, env) {
+    pub fn union(&self, other: &EvaluatedType) -> EvaluatedType {
+        if self.is_sub_type(other) {
             other.clone()
-        } else if other.is_sub_type(self, env) {
+        } else if other.is_sub_type(self) {
             self.clone()
         } else {
             EvaluatedType::Any
         }
     }
 
-    pub fn is_sub_type(&self, other: &EvaluatedType, env: &HashMap<String, EvaluatedType>) -> bool {
+    pub fn is_sub_type(&self, other: &EvaluatedType) -> bool {
         match (self, other) {
             (&EvaluatedType::Empty, _)
             | (_, &EvaluatedType::Any)
@@ -109,45 +105,42 @@ impl EvaluatedType {
             (&EvaluatedType::Ident(ref self_name, _), &EvaluatedType::Ident(ref other_name, _)) => {
                 self_name == other_name
             }
-            (&EvaluatedType::Ident(ref self_name, _), _) => {
-                if let Some(self_supertype) = env.get(self_name) {
-                    self_supertype.is_sub_type(other, env)
-                } else {
-                    false
-                }
+            (&EvaluatedType::Ident(_, ref self_supertype), _) => {
+                self_supertype.expr.is_sub_type(other)
             }
-            // Nothing is a subtype of a generic (except empty), because any generic could be empty
+            // Nothing is a subtype of a generic (except empty and the generic
+            // itself), because any generic could be empty
             (_, &EvaluatedType::Ident(_, _)) => false,
             (&EvaluatedType::Record(ref self_map), &EvaluatedType::Record(ref other_map)) => {
                 other_map.iter().all(|(name, other_entry_type)| {
                     if let Some(self_entry_type) = self_map.get(name) {
-                        self_entry_type.is_sub_type(other_entry_type, env)
+                        self_entry_type.is_sub_type(other_entry_type)
                     } else {
                         false
                     }
                 })
             }
             (&EvaluatedType::Ref(ref self_type), &EvaluatedType::Ref(ref other_type)) => {
-                self_type.is_sub_type(other_type, env) && other_type.is_sub_type(self_type, env)
+                self_type.is_sub_type(other_type) && other_type.is_sub_type(self_type)
             }
             (
                 &EvaluatedType::Func(ref self_in, ref self_out),
                 &EvaluatedType::Func(ref other_in, ref other_out),
-            ) => self_out.is_sub_type(other_out, env) && other_in.is_sub_type(self_in, env),
+            ) => self_out.is_sub_type(other_out) && other_in.is_sub_type(self_in),
             (
                 &EvaluatedType::GenericFunc(ref self_name, ref self_super, ref self_out),
                 &EvaluatedType::GenericFunc(ref other_name, ref other_super, ref other_out),
             ) => {
                 let other_out = &rename_type(other_out, other_name, self_name);
-                self_out.is_sub_type(other_out, env) && other_super.is_sub_type(self_super, env)
+                self_out.is_sub_type(other_out) && other_super.is_sub_type(self_super)
             }
             (&EvaluatedType::Tuple(ref self_vec), &EvaluatedType::Tuple(ref other_vec)) => {
                 self_vec.len() == other_vec.len()
                     && Iterator::zip(self_vec.into_iter(), other_vec.into_iter())
-                        .all(|(self_el, other_el)| self_el.is_sub_type(other_el, env))
+                        .all(|(self_el, other_el)| self_el.is_sub_type(other_el))
             }
             (&EvaluatedType::List(ref self_el), &EvaluatedType::List(ref other_el)) => {
-                self_el.is_sub_type(other_el, env)
+                self_el.is_sub_type(other_el)
             }
             _ => false,
         }
@@ -155,12 +148,8 @@ impl EvaluatedType {
 }
 
 impl Ast<EvaluatedType> {
-    pub fn is_sub_type(
-        &self,
-        other: &Ast<EvaluatedType>,
-        env: &HashMap<String, EvaluatedType>,
-    ) -> bool {
-        self.expr.is_sub_type(&other.expr, env)
+    pub fn is_sub_type(&self, other: &Ast<EvaluatedType>) -> bool {
+        self.expr.is_sub_type(&other.expr)
     }
 }
 
@@ -177,14 +166,14 @@ mod is_sub_type {
         // let x: [] <- []
         //   same ^^     ^^ same
         // Empty.is_sub_type(Empty) = true  -- so this typechecks (if [] were allowed)
-        assert!(ast(EvaluatedType::Empty).is_sub_type(&ast(EvaluatedType::Empty), &HashMap::new()));
+        assert!(ast(EvaluatedType::Empty).is_sub_type(&ast(EvaluatedType::Empty)));
 
-        assert!(ast(EvaluatedType::Int).is_sub_type(&ast(EvaluatedType::Int), &HashMap::new()));
-        assert!(ast(EvaluatedType::Bool).is_sub_type(&ast(EvaluatedType::Bool), &HashMap::new()));
-        assert!(ast(EvaluatedType::Num).is_sub_type(&ast(EvaluatedType::Num), &HashMap::new()));
-        assert!(ast(EvaluatedType::Any).is_sub_type(&ast(EvaluatedType::Any), &HashMap::new()));
+        assert!(ast(EvaluatedType::Int).is_sub_type(&ast(EvaluatedType::Int)));
+        assert!(ast(EvaluatedType::Bool).is_sub_type(&ast(EvaluatedType::Bool)));
+        assert!(ast(EvaluatedType::Num).is_sub_type(&ast(EvaluatedType::Num)));
+        assert!(ast(EvaluatedType::Any).is_sub_type(&ast(EvaluatedType::Any)));
 
-        assert!(EvaluatedType::Int.is_sub_type(&EvaluatedType::Int, &HashMap::new()));
+        assert!(EvaluatedType::Int.is_sub_type(&EvaluatedType::Int));
     }
 
     #[test]
@@ -193,21 +182,21 @@ mod is_sub_type {
         // let x: [Int..] <- []
         //  super ^^^^^^^     ^^ subtype
         // Empty.is_sub_type(Int) = true  -- so this typechecks
-        assert!(ast(EvaluatedType::Empty).is_sub_type(&ast(EvaluatedType::Int), &HashMap::new()));
+        assert!(ast(EvaluatedType::Empty).is_sub_type(&ast(EvaluatedType::Int)));
 
         // let x: [] <- [5]
         //    sub ^^     ^^^ supertype
         // Int.is_sub_type(Empty) = false  -- so this does not typecheck
-        assert!(!ast(EvaluatedType::Int).is_sub_type(&ast(EvaluatedType::Empty), &HashMap::new()));
+        assert!(!ast(EvaluatedType::Int).is_sub_type(&ast(EvaluatedType::Empty)));
     }
 
     #[test]
     fn any() {
         // Any behaves opposite to empty
-        assert!(ast(EvaluatedType::Int).is_sub_type(&ast(EvaluatedType::Any), &HashMap::new()));
-        assert!(ast(EvaluatedType::Empty).is_sub_type(&ast(EvaluatedType::Any), &HashMap::new()));
-        assert!(!ast(EvaluatedType::Any).is_sub_type(&ast(EvaluatedType::Int), &HashMap::new()));
-        assert!(!ast(EvaluatedType::Any).is_sub_type(&ast(EvaluatedType::Empty), &HashMap::new()));
+        assert!(ast(EvaluatedType::Int).is_sub_type(&ast(EvaluatedType::Any)));
+        assert!(ast(EvaluatedType::Empty).is_sub_type(&ast(EvaluatedType::Any)));
+        assert!(!ast(EvaluatedType::Any).is_sub_type(&ast(EvaluatedType::Int)));
+        assert!(!ast(EvaluatedType::Any).is_sub_type(&ast(EvaluatedType::Empty)));
     }
 
     //
@@ -229,26 +218,20 @@ mod is_sub_type {
             ast(EvaluatedType::Func(
                 ast(EvaluatedType::Int),
                 ast(EvaluatedType::Empty)
-            )).is_sub_type(
-                &ast(EvaluatedType::Func(
-                    ast(EvaluatedType::Int),
-                    ast(EvaluatedType::Int)
-                )),
-                &HashMap::new()
-            )
+            )).is_sub_type(&ast(EvaluatedType::Func(
+                ast(EvaluatedType::Int),
+                ast(EvaluatedType::Int)
+            )))
         );
 
         // Reverse them, and it's false
         assert!(!ast(EvaluatedType::Func(
             ast(EvaluatedType::Int),
             ast(EvaluatedType::Int)
-        )).is_sub_type(
-            &ast(EvaluatedType::Func(
-                ast(EvaluatedType::Int),
-                ast(EvaluatedType::Empty)
-            )),
-            &HashMap::new()
-        ));
+        )).is_sub_type(&ast(EvaluatedType::Func(
+            ast(EvaluatedType::Int),
+            ast(EvaluatedType::Empty)
+        ))));
 
         // let x: ([] -> Int) <- x: [Int..] -Int-> 1
         //  super ^^^^^^^^^^^     ^^^^^^^^^^^^^^^^^^^ subtype
@@ -261,26 +244,20 @@ mod is_sub_type {
             ast(EvaluatedType::Func(
                 ast(EvaluatedType::Int),
                 ast(EvaluatedType::Int)
-            )).is_sub_type(
-                &ast(EvaluatedType::Func(
-                    ast(EvaluatedType::Empty),
-                    ast(EvaluatedType::Int)
-                ),),
-                &HashMap::new()
-            )
+            )).is_sub_type(&ast(EvaluatedType::Func(
+                ast(EvaluatedType::Empty),
+                ast(EvaluatedType::Int)
+            )))
         );
 
         // Again, reverse them, and it's false
         assert!(!ast(EvaluatedType::Func(
             ast(EvaluatedType::Empty),
             ast(EvaluatedType::Int)
-        )).is_sub_type(
-            &ast(EvaluatedType::Func(
-                ast(EvaluatedType::Int),
-                ast(EvaluatedType::Int)
-            )),
-            &HashMap::new()
-        ));
+        )).is_sub_type(&ast(EvaluatedType::Func(
+            ast(EvaluatedType::Int),
+            ast(EvaluatedType::Int)
+        ))));
     }
 }
 
@@ -590,10 +567,7 @@ where
 {
     let typechecked_left = typecheck_ast(left, env)?;
     let typechecked_right = typecheck_ast(right, env)?;
-    if !typechecked_left
-        .expr_type
-        .is_sub_type(&EvaluatedType::Num, env)
-    {
+    if !typechecked_left.expr_type.is_sub_type(&EvaluatedType::Num) {
         Err(Error::LRLocated {
             message: format!(
                 "Did you think this was python?  You can't do math with `{}`s.",
@@ -602,10 +576,7 @@ where
             left_loc: left.left_loc,
             right_loc: left.right_loc,
         })
-    } else if !typechecked_right
-        .expr_type
-        .is_sub_type(&EvaluatedType::Num, env)
-    {
+    } else if !typechecked_right.expr_type.is_sub_type(&EvaluatedType::Num) {
         Err(Error::LRLocated {
             message: format!(
                 "Did you think this was python?  You can't do math with `{}`s.",
@@ -685,7 +656,7 @@ pub fn typecheck_ast(
 
                 for item in vec {
                     let typed_ast = typecheck_ast(item, env)?;
-                    union_type = union_type.union(&typed_ast.expr_type, env);
+                    union_type = union_type.union(&typed_ast.expr_type);
                     value_vec.push(typed_ast);
                 }
 
@@ -707,7 +678,7 @@ pub fn typecheck_ast(
                 let typechecked_body = typecheck_ast(body, &body_env)?;
                 let actual_body_type_ast = typechecked_body.to_type_ast();
 
-                if !actual_body_type_ast.is_sub_type(&declared_body_type_ast, env) {
+                if !actual_body_type_ast.is_sub_type(&declared_body_type_ast) {
                     Err(Error::type_error(
                         body.left_loc,
                         body.right_loc,
@@ -735,7 +706,7 @@ pub fn typecheck_ast(
                 let typechecked_body = typecheck_ast(body, env)?;
                 let actual_body_type_ast = typechecked_body.to_type_ast();
 
-                if !actual_body_type_ast.is_sub_type(&declared_body_type_ast, env) {
+                if !actual_body_type_ast.is_sub_type(&declared_body_type_ast) {
                     Err(Error::type_error(
                         body.left_loc,
                         body.right_loc,
@@ -807,7 +778,7 @@ pub fn typecheck_ast(
                 *typechecked_generic_func.expr_type.clone()
             {
                 let arg_type = evaluate_type(arg, env)?;
-                if arg_type.is_sub_type(&supertype.expr, env) {
+                if arg_type.is_sub_type(&supertype.expr) {
                     let return_type =
                         substitute_evaluated_type(body, param, &arg.replace_expr(arg_type));
                     Ok(ast.to_typed(*typechecked_generic_func.expr, *return_type.expr))
@@ -855,7 +826,7 @@ pub fn typecheck_ast(
                 let typechecked_alternate = typecheck_ast(alternate, env)?;
                 let result_type = typechecked_consequent
                     .expr_type
-                    .union(&typechecked_alternate.expr_type, env);
+                    .union(&typechecked_alternate.expr_type);
 
                 Ok(ast.to_typed(
                     TypedExpression::If(
@@ -877,7 +848,7 @@ pub fn typecheck_ast(
             let typechecked_value = typecheck_ast(value, &body_env)?;
             let actual_value_type = typechecked_value.to_type_ast();
 
-            if !actual_value_type.is_sub_type(&declared_value_type, env) {
+            if !actual_value_type.is_sub_type(&declared_value_type) {
                 Err(Error::type_error(
                     value.left_loc,
                     value.right_loc,
@@ -904,10 +875,7 @@ pub fn typecheck_ast(
                 if let EvaluatedType::Func(ref param_type, ref output_type) =
                     *typechecked_left.expr_type.clone()
                 {
-                    if !typechecked_right
-                        .expr_type
-                        .is_sub_type(&param_type.expr, env)
-                    {
+                    if !typechecked_right.expr_type.is_sub_type(&param_type.expr) {
                         Err(Error::type_error(
                             right.left_loc,
                             right.right_loc,
