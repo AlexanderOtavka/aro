@@ -164,32 +164,6 @@ impl Ast<EvaluatedType> {
     }
 }
 
-fn typecheck_pattern(
-    pattern: &Ast<Pattern>,
-    env: &HashMap<String, EvaluatedType>,
-) -> Result<TypedAst<TypedPattern>, Error> {
-    Ok(match &*pattern.expr {
-        &Pattern::Ident(ref name, ref ident_type) => pattern.to_typed(
-            TypedPattern::Ident(name.clone()),
-            evaluate_type(ident_type, env)?,
-        ),
-        &Pattern::Tuple(ref vec) => {
-            let mut new_types = Vec::new();
-            let mut new_subpatterns = Vec::new();
-            for element in vec {
-                let typed_ast = typecheck_pattern(element, env)?;
-                new_types.push(typed_ast.to_type_ast());
-                new_subpatterns.push(typed_ast);
-            }
-
-            pattern.to_typed(
-                TypedPattern::Tuple(new_subpatterns),
-                EvaluatedType::Tuple(new_types),
-            )
-        }
-    })
-}
-
 #[cfg(test)]
 mod is_sub_type {
     use super::*;
@@ -308,6 +282,32 @@ mod is_sub_type {
             &HashMap::new()
         ));
     }
+}
+
+fn typecheck_pattern(
+    pattern: &Ast<Pattern>,
+    env: &HashMap<String, EvaluatedType>,
+) -> Result<TypedAst<TypedPattern>, Error> {
+    Ok(match &*pattern.expr {
+        &Pattern::Ident(ref name, ref ident_type) => pattern.to_typed(
+            TypedPattern::Ident(name.clone()),
+            evaluate_type(ident_type, env)?,
+        ),
+        &Pattern::Tuple(ref vec) => {
+            let mut new_types = Vec::new();
+            let mut new_subpatterns = Vec::new();
+            for element in vec {
+                let typed_ast = typecheck_pattern(element, env)?;
+                new_types.push(typed_ast.to_type_ast());
+                new_subpatterns.push(typed_ast);
+            }
+
+            pattern.to_typed(
+                TypedPattern::Tuple(new_subpatterns),
+                EvaluatedType::Tuple(new_types),
+            )
+        }
+    })
 }
 
 fn substitute_evaluated_type(
@@ -765,31 +765,40 @@ pub fn typecheck_ast(
         }
         &Expression::RecordAccess(ref record, ref field) => {
             let typechecked_record = typecheck_ast(record, env)?;
-            if let EvaluatedType::Record(ref map) = *typechecked_record.expr_type.clone() {
-                if let Some(field_type) = map.get(field) {
-                    Ok(ast.to_typed(
-                        TypedExpression::RecordAccess(typechecked_record, field.clone()),
-                        *field_type.expr.clone(),
-                    ))
+            let record_type = *typechecked_record.expr_type.clone();
+            let try_access_record = |object_type| {
+                if let &EvaluatedType::Record(ref map) = object_type {
+                    if let Some(field_type) = map.get(field) {
+                        Ok(ast.to_typed(
+                            TypedExpression::RecordAccess(typechecked_record, field.clone()),
+                            *field_type.expr.clone(),
+                        ))
+                    } else {
+                        Err(Error::LRLocated {
+                            message: format!(
+                                "Why would you even try to access a `{}` field of a `{}`?",
+                                field, typechecked_record.expr_type
+                            ),
+                            left_loc: record.left_loc,
+                            right_loc: record.right_loc,
+                        })
+                    }
                 } else {
                     Err(Error::LRLocated {
                         message: format!(
-                            "Why would you even try to access a `{}` field of a `{}`?",
-                            field, typechecked_record.expr_type
+                            "Why would you even try to access a field of a `{}`?",
+                            typechecked_record.expr_type
                         ),
                         left_loc: record.left_loc,
                         right_loc: record.right_loc,
                     })
                 }
+            };
+
+            if let EvaluatedType::Ident(_, ref supertype) = record_type {
+                try_access_record(&supertype.expr)
             } else {
-                Err(Error::LRLocated {
-                    message: format!(
-                        "Why would you even try to access a field of a `{}`?",
-                        typechecked_record.expr_type
-                    ),
-                    left_loc: record.left_loc,
-                    right_loc: record.right_loc,
-                })
+                try_access_record(&record_type)
             }
         }
         &Expression::GenericCall(ref generic_func, ref arg) => {
@@ -1486,10 +1495,39 @@ mod typecheck_ast {
                 T: Num =(T => T => T)=>
                 x: T =(T => T)=>
                 y: T =T=>
-                    x + y
+                    x / y
 
             add <| type Num
             ",
+        );
+    }
+
+    #[test]
+    fn lets_you_do_things_in_generic_functions() {
+        assert_typecheck_eq(
+            "
+            let plus: (T: Num => T => T => T) <-
+                T: Num =(T => T => T)=>
+                x: T =(T => T)=>
+                y: T =T=>
+                    x + y
+            2 |> (plus <| type Int) <| 3
+            ",
+            "Int",
+        );
+        assert_typecheck_eq(
+            "
+            let access_record: (T: Any => U: {foo: T} => U => (T U)) <-
+                T: Any =(U: {foo: T} => U => (T U))=>
+                U: {foo: T} =(U => (T U))=>
+                record: U =(T U)=>
+                    (record.foo  record)
+            access_record <| type Num <| type {foo: Num  bar: Int} <| {
+                foo <- 3
+                bar <- 5
+            }
+            ",
+            "(Num {bar: Int foo: Num})",
         );
     }
 }
