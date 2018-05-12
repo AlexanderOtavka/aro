@@ -978,6 +978,17 @@ mod typecheck_ast {
     }
 
     #[test]
+    fn checks_let_subtype_annotations() {
+        assert_typecheck_eq(
+            "
+            let func: (Int => Num) <- x: Any =Int=> 5
+            func
+            ",
+            "(Int => Num)",
+        );
+    }
+
+    #[test]
     fn checks_nested_let_expression() {
         assert_typecheck_eq(
             "
