@@ -91,12 +91,11 @@ pub enum TypedValue {
     Bool(bool),
     Func(
         TypedAst<TypedPattern, Type>,
-        Ast<Type>,
         TypedAst<TypedExpression, Type>,
     ),
     Tuple(Vec<TypedAst<TypedExpression, Type>>),
     List(Vec<TypedAst<TypedExpression, Type>>),
-    Hook(Vec<String>, Ast<Type>),
+    Hook(Vec<String>),
     Record(HashMap<String, TypedAst<TypedExpression, Type>>),
 }
 
@@ -108,7 +107,7 @@ pub enum Pattern {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum TypedPattern {
-    Ident(String, Ast<Type>),
+    Ident(String),
     Tuple(Vec<TypedAst<TypedPattern, Type>>),
 }
 

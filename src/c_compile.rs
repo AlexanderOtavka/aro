@@ -42,7 +42,7 @@ fn type_to_ctype(t: &Type) -> CType {
 
 fn find_names_in_pattern(pattern: &TypedAst<TypedPattern, Type>, names: &mut HashSet<String>) {
     match &*pattern.expr {
-        &TypedPattern::Ident(ref name, _) => {
+        &TypedPattern::Ident(ref name) => {
             names.insert(name.clone());
         }
         &TypedPattern::Tuple(ref vec) => for element in vec {
@@ -86,10 +86,10 @@ fn find_captures(
         }
         &TypedExpression::Value(ref value) => match value {
             &TypedValue::Bool(_)
-            | &TypedValue::Hook(_, _)
+            | &TypedValue::Hook(_)
             | &TypedValue::Int(_)
             | &TypedValue::Num(_) => {}
-            &TypedValue::Func(ref pattern, _, ref body) => {
+            &TypedValue::Func(ref pattern, ref body) => {
                 let mut locals = locals.clone();
                 find_names_in_pattern(pattern, &mut locals);
                 find_captures(body, &locals, captures);
@@ -109,7 +109,7 @@ fn find_captures(
 
 fn make_declarations(pattern: &TypedAst<TypedPattern, Type>, scope: &mut Vec<Ast<CStatement>>) {
     match &*pattern.expr {
-        &TypedPattern::Ident(ref name, _) => {
+        &TypedPattern::Ident(ref name) => {
             let value_name = get_ident_name(name);
             let value_ctype = type_to_ctype(&pattern.expr_type);
             let value_ref_type = CType::Ref(Box::new(value_ctype.clone()));
@@ -133,7 +133,7 @@ fn bind_declarations(
     scope: &mut Vec<Ast<CStatement>>,
 ) {
     match &*pattern.expr {
-        &TypedPattern::Ident(ref name, _) => {
+        &TypedPattern::Ident(ref name) => {
             let value_name = get_ident_name(name);
             scope.push(pattern.replace_untyped(CStatement::RefAssign(value_name, value)));
         }
@@ -160,7 +160,7 @@ pub fn lift_expr(
             &TypedValue::Num(value) => ast.replace_untyped(CValue::Float(value)),
             &TypedValue::Bool(value) => ast.replace_untyped(CValue::Bool(value)),
             &TypedValue::Int(value) => ast.replace_untyped(CValue::Int(value)),
-            &TypedValue::Func(ref pattern, _, ref body) => {
+            &TypedValue::Func(ref pattern, ref body) => {
                 let mut captures_map = HashMap::new();
                 let mut locals = HashSet::new();
                 find_names_in_pattern(pattern, &mut locals);

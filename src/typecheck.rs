@@ -150,7 +150,7 @@ fn typecheck_pattern(
 ) -> Result<TypedAst<TypedPattern, Type>, Error> {
     Ok(match &*pattern.expr {
         &Pattern::Ident(ref name, ref ident_type) => pattern.to_typed(
-            TypedPattern::Ident(name.clone(), ident_type.clone()),
+            TypedPattern::Ident(name.clone()),
             evaluate_type(ident_type, env)?,
         ),
         &Pattern::Tuple(ref vec) => {
@@ -527,7 +527,7 @@ pub fn typecheck_ast(
     match &*ast.expr {
         &Expression::Value(ref value) => match value {
             &Value::Hook(ref name, ref hook_type) => Ok(ast.to_typed(
-                TypedExpression::Value(TypedValue::Hook(name.clone(), hook_type.clone())),
+                TypedExpression::Value(TypedValue::Hook(name.clone())),
                 evaluate_type(hook_type, env)?,
             )),
             &Value::Int(value) => {
@@ -609,7 +609,6 @@ pub fn typecheck_ast(
                     Ok(ast.to_typed(
                         TypedExpression::Value(TypedValue::Func(
                             typechecked_param,
-                            body_type_ast.clone(),
                             typechecked_body,
                         )),
                         Type::Func(param_type_ast, declared_body_type_ast),
@@ -691,13 +690,10 @@ pub fn typecheck_ast(
             {
                 let arg_type = evaluate_type(arg, env)?;
                 if arg_type.is_sub_type(&supertype.expr, env) {
-                    Ok(ast.to_typed(
-                        *typechecked_generic_func.expr,
-                        evaluate_type(
-                            &substitute_type(body, param, &arg.replace_expr(arg_type)),
-                            env,
-                        )?,
-                    ))
+                    let evaluated_arg = arg.replace_expr(arg_type);
+                    let return_type =
+                        evaluate_type(&substitute_type(body, param, &evaluated_arg), env)?;
+                    Ok(ast.to_typed(*typechecked_generic_func.expr, return_type))
                 } else {
                     Err(Error::type_error(
                         generic_func.left_loc,
