@@ -1,4 +1,4 @@
-use ast::{Ast, BinOp, Expression, Pattern, Type, Value};
+use ast::{Ast, BinOp, EvaluatedType, Expression, Pattern, Type, Value};
 use util::Error;
 use std::collections::HashMap;
 use std::f64;
@@ -597,7 +597,7 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
 
 pub fn get_eval_steps(
     ast: &Ast<Expression>,
-    globals: &HashMap<String, (Value, Type)>,
+    globals: &HashMap<String, (Value, EvaluatedType)>,
 ) -> Result<Vec<Ast<Expression>>, Error> {
     let mut ast = ast.clone();
 
@@ -632,7 +632,7 @@ pub fn get_eval_steps(
 
 pub fn evaluate_ast(
     ast: &Ast<Expression>,
-    globals: &HashMap<String, (Value, Type)>,
+    globals: &HashMap<String, (Value, EvaluatedType)>,
 ) -> Result<Value, Error> {
     let steps = get_eval_steps(ast, globals)?;
     if let &Expression::Value(ref value) = &*steps[steps.len() - 1].expr {
@@ -689,7 +689,10 @@ mod evaluate_ast {
     #[test]
     fn spits_back_out_globals() {
         let mut globals = HashMap::new();
-        globals.insert(String::from("global_val"), (Value::Int(5), Type::Int));
+        globals.insert(
+            String::from("global_val"),
+            (Value::Int(5), EvaluatedType::Int),
+        );
 
         assert_eq!(
             format!(

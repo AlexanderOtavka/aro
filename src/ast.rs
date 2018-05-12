@@ -14,11 +14,11 @@ pub struct Ast<T> {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct TypedAst<Expr, ExprType> {
+pub struct TypedAst<Expr> {
     pub left_loc: usize,
     pub right_loc: usize,
     pub expr: Box<Expr>,
-    pub expr_type: Box<ExprType>,
+    pub expr_type: Box<EvaluatedType>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -37,27 +37,20 @@ pub enum Expression {
 #[derive(Debug, PartialEq, Clone)]
 pub enum TypedExpression {
     Value(TypedValue),
-    BinOp(
-        BinOp,
-        TypedAst<TypedExpression, Type>,
-        TypedAst<TypedExpression, Type>,
-    ),
+    BinOp(BinOp, TypedAst<TypedExpression>, TypedAst<TypedExpression>),
     If(
-        TypedAst<TypedExpression, Type>,
-        TypedAst<TypedExpression, Type>,
-        TypedAst<TypedExpression, Type>,
+        TypedAst<TypedExpression>,
+        TypedAst<TypedExpression>,
+        TypedAst<TypedExpression>,
     ),
     Ident(String),
     Let(
-        TypedAst<TypedPattern, Type>,
-        TypedAst<TypedExpression, Type>,
-        TypedAst<TypedExpression, Type>,
+        TypedAst<TypedPattern>,
+        TypedAst<TypedExpression>,
+        TypedAst<TypedExpression>,
     ),
-    Sequence(
-        TypedAst<TypedExpression, Type>,
-        TypedAst<TypedExpression, Type>,
-    ),
-    RecordAccess(TypedAst<TypedExpression, Type>, String),
+    Sequence(TypedAst<TypedExpression>, TypedAst<TypedExpression>),
+    RecordAccess(TypedAst<TypedExpression>, String),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -89,14 +82,11 @@ pub enum TypedValue {
     Int(i32),
     Num(f64),
     Bool(bool),
-    Func(
-        TypedAst<TypedPattern, Type>,
-        TypedAst<TypedExpression, Type>,
-    ),
-    Tuple(Vec<TypedAst<TypedExpression, Type>>),
-    List(Vec<TypedAst<TypedExpression, Type>>),
+    Func(TypedAst<TypedPattern>, TypedAst<TypedExpression>),
+    Tuple(Vec<TypedAst<TypedExpression>>),
+    List(Vec<TypedAst<TypedExpression>>),
     Hook(Vec<String>),
-    Record(HashMap<String, TypedAst<TypedExpression, Type>>),
+    Record(HashMap<String, TypedAst<TypedExpression>>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -108,7 +98,7 @@ pub enum Pattern {
 #[derive(Debug, PartialEq, Clone)]
 pub enum TypedPattern {
     Ident(String),
-    Tuple(Vec<TypedAst<TypedPattern, Type>>),
+    Tuple(Vec<TypedAst<TypedPattern>>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -118,13 +108,29 @@ pub enum Type {
     Bool,
     Any,
     Empty,
-    Ident(String, Option<Ast<Type>>),
+    Ident(String),
     Func(Ast<Type>, Ast<Type>),
     GenericFunc(String, Ast<Type>, Ast<Type>),
     Tuple(Vec<Ast<Type>>),
     List(Ast<Type>),
     Ref(Ast<Type>),
     Record(HashMap<String, Ast<Type>>),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum EvaluatedType {
+    Int,
+    Num,
+    Bool,
+    Any,
+    Empty,
+    Ident(String, Ast<EvaluatedType>),
+    Func(Ast<EvaluatedType>, Ast<EvaluatedType>),
+    GenericFunc(String, Ast<EvaluatedType>, Ast<EvaluatedType>),
+    Tuple(Vec<Ast<EvaluatedType>>),
+    List(Ast<EvaluatedType>),
+    Ref(Ast<EvaluatedType>),
+    Record(HashMap<String, Ast<EvaluatedType>>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -208,11 +214,7 @@ impl<T> Ast<T> {
         Ast::new(self.left_loc, self.right_loc, expr)
     }
 
-    pub fn to_typed<NewExpr, NewType>(
-        &self,
-        expr: NewExpr,
-        expr_type: NewType,
-    ) -> TypedAst<NewExpr, NewType> {
+    pub fn to_typed<NewExpr>(&self, expr: NewExpr, expr_type: EvaluatedType) -> TypedAst<NewExpr> {
         TypedAst {
             left_loc: self.left_loc,
             right_loc: self.right_loc,
@@ -269,10 +271,7 @@ impl Ast<CValue> {
     }
 }
 
-impl<Expr, ExprType> TypedAst<Expr, ExprType>
-where
-    ExprType: Clone,
-{
+impl<Expr> TypedAst<Expr> {
     pub fn replace_untyped<NewExpr>(&self, expr: NewExpr) -> Ast<NewExpr> {
         Ast {
             left_loc: self.left_loc,
@@ -281,7 +280,7 @@ where
         }
     }
 
-    pub fn to_type_ast(&self) -> Ast<ExprType> {
+    pub fn to_type_ast(&self) -> Ast<EvaluatedType> {
         Ast::new(self.left_loc, self.right_loc, *self.expr_type.clone())
     }
 }
@@ -411,7 +410,7 @@ impl Display for Type {
                 &Type::Bool => String::from("Bool"),
                 &Type::Any => String::from("Any"),
                 &Type::Empty => String::from("Empty"),
-                &Type::Ident(ref name, _) => format!("({})", name),
+                &Type::Ident(ref name) => format!("({})", name),
                 &Type::Func(ref input, ref output) => format!("({} => {})", input, output),
                 &Type::GenericFunc(ref name, ref supertype, ref output) => {
                     format!("({}: {} => {})", name, supertype, output)
@@ -420,6 +419,43 @@ impl Display for Type {
                 &Type::List(ref element_type) => format!("[{}..]", element_type),
                 &Type::Ref(ref value_type) => format!("(Ref <| {})", value_type),
                 &Type::Record(ref map) => sequence_to_str(
+                    "{",
+                    &{
+                        let mut vec = map.iter()
+                            .map(|(name, value_type)| format!("{}: {}", name, value_type))
+                            .collect::<Vec<String>>();
+                        vec.sort();
+                        vec
+                    },
+                    "}"
+                ),
+            }
+        )
+    }
+}
+
+impl Display for EvaluatedType {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                &EvaluatedType::Int => String::from("Int"),
+                &EvaluatedType::Num => String::from("Num"),
+                &EvaluatedType::Bool => String::from("Bool"),
+                &EvaluatedType::Any => String::from("Any"),
+                &EvaluatedType::Empty => String::from("Empty"),
+                &EvaluatedType::Ident(ref name, ref supertype) => {
+                    format!("({} <: {})", name, supertype)
+                }
+                &EvaluatedType::Func(ref input, ref output) => format!("({} => {})", input, output),
+                &EvaluatedType::GenericFunc(ref name, ref supertype, ref output) => {
+                    format!("({}: {} => {})", name, supertype, output)
+                }
+                &EvaluatedType::Tuple(ref vec) => sequence_to_str("(", vec, ")"),
+                &EvaluatedType::List(ref element_type) => format!("[{}..]", element_type),
+                &EvaluatedType::Ref(ref value_type) => format!("(Ref <| {})", value_type),
+                &EvaluatedType::Record(ref map) => sequence_to_str(
                     "{",
                     &{
                         let mut vec = map.iter()

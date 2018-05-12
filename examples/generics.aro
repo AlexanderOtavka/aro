@@ -1,7 +1,8 @@
-let Element <- Num
-let list_3_elements: (El: Any => El => [El..]) <-
-    T: Any =(T => [T..])=>
-    el: T =[T..]=>
-        [el el el]
+let increment: (El: Num => El => El) <-
+    T: Num =(T => T)=>
+    el: T =T=>
+        el + 1
 
-list_3_elements <| type Element <| 5
+let Value <- Int
+
+increment <| type Value <| 5

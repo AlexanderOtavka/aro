@@ -1,10 +1,10 @@
 use parse::source_to_ast;
 use eval::evaluate_ast;
 use typecheck::typecheck_ast;
-use ast::{Type, Value};
+use ast::{EvaluatedType, Value};
 use std::collections::HashMap;
 
-pub fn get_globals() -> HashMap<String, (Value, Type)> {
+pub fn get_globals() -> HashMap<String, (Value, EvaluatedType)> {
     let mut sources = HashMap::new();
 
     sources.insert("inf", "1/0");

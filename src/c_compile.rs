@@ -1,5 +1,5 @@
-use ast::{Ast, BinOp, CExpr, CFunc, CStatement, CType, CValue, Type, TypedAst, TypedExpression,
-          TypedPattern, TypedValue};
+use ast::{Ast, BinOp, CExpr, CFunc, CStatement, CType, CValue, EvaluatedType, TypedAst,
+          TypedExpression, TypedPattern, TypedValue};
 use std::collections::{HashMap, HashSet};
 
 fn get_expr_name(expr_index: &mut i32) -> String {
@@ -18,29 +18,24 @@ fn get_ident_name(name: &str) -> String {
     format!("aro_{}", name)
 }
 
-fn type_to_ctype(t: &Type) -> CType {
+fn type_to_ctype(t: &EvaluatedType) -> CType {
     match t {
-        &Type::Any => CType::Any,
-        &Type::Num => CType::Float,
-        &Type::Int => CType::Int,
-        &Type::Bool => CType::Bool,
-        &Type::Func(ref param, ref ret) => CType::Closure {
+        &EvaluatedType::Any => CType::Any,
+        &EvaluatedType::Num => CType::Float,
+        &EvaluatedType::Int => CType::Int,
+        &EvaluatedType::Bool => CType::Bool,
+        &EvaluatedType::Func(ref param, ref ret) => CType::Closure {
             param: param.replace_expr(type_to_ctype(&param.expr)),
             ret: ret.replace_expr(type_to_ctype(&ret.expr)),
         },
-        &Type::Tuple(_) => CType::Object,
-        &Type::GenericFunc(_, _, ref body) => type_to_ctype(&body.expr),
-        &Type::Ident(ref name, ref supertype) => type_to_ctype(
-            &supertype
-                .as_ref()
-                .expect(&format!("Ident `{}` not typechecked", name))
-                .expr,
-        ),
+        &EvaluatedType::Tuple(_) => CType::Object,
+        &EvaluatedType::GenericFunc(_, _, ref body) => type_to_ctype(&body.expr),
+        &EvaluatedType::Ident(_, ref supertype) => type_to_ctype(&supertype.expr),
         _ => panic!("Unhandled type: {}", t),
     }
 }
 
-fn find_names_in_pattern(pattern: &TypedAst<TypedPattern, Type>, names: &mut HashSet<String>) {
+fn find_names_in_pattern(pattern: &TypedAst<TypedPattern>, names: &mut HashSet<String>) {
     match &*pattern.expr {
         &TypedPattern::Ident(ref name) => {
             names.insert(name.clone());
@@ -52,7 +47,7 @@ fn find_names_in_pattern(pattern: &TypedAst<TypedPattern, Type>, names: &mut Has
 }
 
 fn find_captures(
-    ast: &TypedAst<TypedExpression, Type>,
+    ast: &TypedAst<TypedExpression>,
     locals: &HashSet<String>,
     captures: &mut HashMap<String, CType>,
 ) {
@@ -107,7 +102,7 @@ fn find_captures(
     }
 }
 
-fn make_declarations(pattern: &TypedAst<TypedPattern, Type>, scope: &mut Vec<Ast<CStatement>>) {
+fn make_declarations(pattern: &TypedAst<TypedPattern>, scope: &mut Vec<Ast<CStatement>>) {
     match &*pattern.expr {
         &TypedPattern::Ident(ref name) => {
             let value_name = get_ident_name(name);
@@ -128,7 +123,7 @@ fn make_declarations(pattern: &TypedAst<TypedPattern, Type>, scope: &mut Vec<Ast
 }
 
 fn bind_declarations(
-    pattern: &TypedAst<TypedPattern, Type>,
+    pattern: &TypedAst<TypedPattern>,
     value: Ast<CExpr>,
     scope: &mut Vec<Ast<CStatement>>,
 ) {
@@ -149,7 +144,7 @@ fn bind_declarations(
 }
 
 pub fn lift_expr(
-    ast: &TypedAst<TypedExpression, Type>,
+    ast: &TypedAst<TypedExpression>,
     scope: &mut Vec<Ast<CStatement>>,
     expr_index: &mut i32,
     functions: &mut Vec<Ast<CFunc>>,

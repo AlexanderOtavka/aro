@@ -1,11 +1,16 @@
-use ast::{Ast, BinOp, Expression, Pattern, Type, TypedAst, TypedExpression, TypedPattern,
-          TypedValue, Value};
+use ast::{Ast, BinOp, EvaluatedType, Expression, Pattern, Type, TypedAst, TypedExpression,
+          TypedPattern, TypedValue, Value};
 use util::Error;
 use std::collections::HashMap;
 use std::iter::Iterator;
 
 impl Error {
-    pub fn type_error(left_loc: usize, right_loc: usize, expected: &Type, actual: &Type) -> Error {
+    pub fn type_error(
+        left_loc: usize,
+        right_loc: usize,
+        expected: &EvaluatedType,
+        actual: &EvaluatedType,
+    ) -> Error {
         Error::LRLocated {
             message: format!(
                 "Did you have trouble matching shapes as a toddler?\n\
@@ -19,7 +24,10 @@ impl Error {
     }
 }
 
-fn build_env(env: &mut HashMap<String, Type>, pattern: &Ast<Pattern>) -> Result<(), Error> {
+fn build_env(
+    env: &mut HashMap<String, EvaluatedType>,
+    pattern: &Ast<Pattern>,
+) -> Result<(), Error> {
     match &*pattern.expr {
         &Pattern::Ident(ref name, ref ident_type) => {
             let ident_type = evaluate_type(ident_type, env)?;
@@ -33,68 +41,75 @@ fn build_env(env: &mut HashMap<String, Type>, pattern: &Ast<Pattern>) -> Result<
     Ok(())
 }
 
-fn rename_type(ast: &Ast<Type>, name: &str, new_name: &str) -> Ast<Type> {
+fn rename_type(ast: &Ast<EvaluatedType>, name: &str, new_name: &str) -> Ast<EvaluatedType> {
     match &*ast.expr {
-        &Type::Func(ref input, ref output) => ast.replace_expr(Type::Func(
+        &EvaluatedType::Func(ref input, ref output) => ast.replace_expr(EvaluatedType::Func(
             rename_type(input, name, new_name),
             rename_type(output, name, new_name),
         )),
-        &Type::GenericFunc(ref param_name, ref param_supertype, ref output) => {
+        &EvaluatedType::GenericFunc(ref param_name, ref param_supertype, ref output) => {
             if param_name == name {
                 ast.clone()
             } else {
-                ast.replace_expr(Type::GenericFunc(
+                ast.replace_expr(EvaluatedType::GenericFunc(
                     param_name.clone(),
                     rename_type(param_supertype, name, new_name),
                     rename_type(output, name, new_name),
                 ))
             }
         }
-        &Type::Ident(ref ident_name, ref supertype) => if ident_name == name {
-            ast.replace_expr(Type::Ident(String::from(new_name), supertype.clone()))
+        &EvaluatedType::Ident(ref ident_name, ref supertype) => if ident_name == name {
+            ast.replace_expr(EvaluatedType::Ident(
+                String::from(new_name),
+                supertype.clone(),
+            ))
         } else {
             ast.clone()
         },
-        &Type::List(ref el_type) => {
-            ast.replace_expr(Type::List(rename_type(el_type, name, new_name)))
+        &EvaluatedType::List(ref el_type) => {
+            ast.replace_expr(EvaluatedType::List(rename_type(el_type, name, new_name)))
         }
-        &Type::Tuple(ref vec) => ast.replace_expr(Type::Tuple(
+        &EvaluatedType::Tuple(ref vec) => ast.replace_expr(EvaluatedType::Tuple(
             vec.into_iter()
                 .map(|element| rename_type(element, name, new_name))
                 .collect(),
         )),
-        &Type::Ref(ref value_type) => {
-            ast.replace_expr(Type::Ref(rename_type(value_type, name, new_name)))
+        &EvaluatedType::Ref(ref value_type) => {
+            ast.replace_expr(EvaluatedType::Ref(rename_type(value_type, name, new_name)))
         }
         _ => ast.clone(),
     }
 }
 
-impl Type {
+impl EvaluatedType {
     // This version isn't terribly smart, but it is guranteed that both input
     // types will be suptypes of the result.
-    pub fn union(&self, other: &Type, env: &HashMap<String, Type>) -> Type {
+    pub fn union(
+        &self,
+        other: &EvaluatedType,
+        env: &HashMap<String, EvaluatedType>,
+    ) -> EvaluatedType {
         if self.is_sub_type(other, env) {
             other.clone()
         } else if other.is_sub_type(self, env) {
             self.clone()
         } else {
-            Type::Any
+            EvaluatedType::Any
         }
     }
 
-    pub fn is_sub_type(&self, other: &Type, env: &HashMap<String, Type>) -> bool {
+    pub fn is_sub_type(&self, other: &EvaluatedType, env: &HashMap<String, EvaluatedType>) -> bool {
         match (self, other) {
-            (&Type::Empty, _)
-            | (_, &Type::Any)
-            | (&Type::Bool, &Type::Bool)
-            | (&Type::Int, &Type::Int)
-            | (&Type::Int, &Type::Num)
-            | (&Type::Num, &Type::Num) => true,
-            (&Type::Ident(ref self_name, _), &Type::Ident(ref other_name, _)) => {
+            (&EvaluatedType::Empty, _)
+            | (_, &EvaluatedType::Any)
+            | (&EvaluatedType::Bool, &EvaluatedType::Bool)
+            | (&EvaluatedType::Int, &EvaluatedType::Int)
+            | (&EvaluatedType::Int, &EvaluatedType::Num)
+            | (&EvaluatedType::Num, &EvaluatedType::Num) => true,
+            (&EvaluatedType::Ident(ref self_name, _), &EvaluatedType::Ident(ref other_name, _)) => {
                 self_name == other_name
             }
-            (&Type::Ident(ref self_name, _), _) => {
+            (&EvaluatedType::Ident(ref self_name, _), _) => {
                 if let Some(self_supertype) = env.get(self_name) {
                     self_supertype.is_sub_type(other, env)
                 } else {
@@ -102,8 +117,8 @@ impl Type {
                 }
             }
             // Nothing is a subtype of a generic (except empty), because any generic could be empty
-            (_, &Type::Ident(_, _)) => false,
-            (&Type::Record(ref self_map), &Type::Record(ref other_map)) => {
+            (_, &EvaluatedType::Ident(_, _)) => false,
+            (&EvaluatedType::Record(ref self_map), &EvaluatedType::Record(ref other_map)) => {
                 other_map.iter().all(|(name, other_entry_type)| {
                     if let Some(self_entry_type) = self_map.get(name) {
                         self_entry_type.is_sub_type(other_entry_type, env)
@@ -112,25 +127,26 @@ impl Type {
                     }
                 })
             }
-            (&Type::Ref(ref self_type), &Type::Ref(ref other_type)) => {
+            (&EvaluatedType::Ref(ref self_type), &EvaluatedType::Ref(ref other_type)) => {
                 self_type.is_sub_type(other_type, env) && other_type.is_sub_type(self_type, env)
             }
-            (&Type::Func(ref self_in, ref self_out), &Type::Func(ref other_in, ref other_out)) => {
-                self_out.is_sub_type(other_out, env) && other_in.is_sub_type(self_in, env)
-            }
             (
-                &Type::GenericFunc(ref self_name, ref self_super, ref self_out),
-                &Type::GenericFunc(ref other_name, ref other_super, ref other_out),
+                &EvaluatedType::Func(ref self_in, ref self_out),
+                &EvaluatedType::Func(ref other_in, ref other_out),
+            ) => self_out.is_sub_type(other_out, env) && other_in.is_sub_type(self_in, env),
+            (
+                &EvaluatedType::GenericFunc(ref self_name, ref self_super, ref self_out),
+                &EvaluatedType::GenericFunc(ref other_name, ref other_super, ref other_out),
             ) => {
                 let other_out = &rename_type(other_out, other_name, self_name);
                 self_out.is_sub_type(other_out, env) && other_super.is_sub_type(self_super, env)
             }
-            (&Type::Tuple(ref self_vec), &Type::Tuple(ref other_vec)) => {
+            (&EvaluatedType::Tuple(ref self_vec), &EvaluatedType::Tuple(ref other_vec)) => {
                 self_vec.len() == other_vec.len()
                     && Iterator::zip(self_vec.into_iter(), other_vec.into_iter())
                         .all(|(self_el, other_el)| self_el.is_sub_type(other_el, env))
             }
-            (&Type::List(ref self_el), &Type::List(ref other_el)) => {
+            (&EvaluatedType::List(ref self_el), &EvaluatedType::List(ref other_el)) => {
                 self_el.is_sub_type(other_el, env)
             }
             _ => false,
@@ -138,16 +154,20 @@ impl Type {
     }
 }
 
-impl Ast<Type> {
-    pub fn is_sub_type(&self, other: &Ast<Type>, env: &HashMap<String, Type>) -> bool {
+impl Ast<EvaluatedType> {
+    pub fn is_sub_type(
+        &self,
+        other: &Ast<EvaluatedType>,
+        env: &HashMap<String, EvaluatedType>,
+    ) -> bool {
         self.expr.is_sub_type(&other.expr, env)
     }
 }
 
 fn typecheck_pattern(
     pattern: &Ast<Pattern>,
-    env: &HashMap<String, Type>,
-) -> Result<TypedAst<TypedPattern, Type>, Error> {
+    env: &HashMap<String, EvaluatedType>,
+) -> Result<TypedAst<TypedPattern>, Error> {
     Ok(match &*pattern.expr {
         &Pattern::Ident(ref name, ref ident_type) => pattern.to_typed(
             TypedPattern::Ident(name.clone()),
@@ -162,7 +182,10 @@ fn typecheck_pattern(
                 new_subpatterns.push(typed_ast);
             }
 
-            pattern.to_typed(TypedPattern::Tuple(new_subpatterns), Type::Tuple(new_types))
+            pattern.to_typed(
+                TypedPattern::Tuple(new_subpatterns),
+                EvaluatedType::Tuple(new_types),
+            )
         }
     })
 }
@@ -171,8 +194,8 @@ fn typecheck_pattern(
 mod is_sub_type {
     use super::*;
 
-    fn ast(t: Type) -> Ast<Type> {
-        Ast::<Type>::new(0, 0, t)
+    fn ast(t: EvaluatedType) -> Ast<EvaluatedType> {
+        Ast::<EvaluatedType>::new(0, 0, t)
     }
 
     #[test]
@@ -180,14 +203,14 @@ mod is_sub_type {
         // let x: [] <- []
         //   same ^^     ^^ same
         // Empty.is_sub_type(Empty) = true  -- so this typechecks (if [] were allowed)
-        assert!(ast(Type::Empty).is_sub_type(&ast(Type::Empty), &HashMap::new()));
+        assert!(ast(EvaluatedType::Empty).is_sub_type(&ast(EvaluatedType::Empty), &HashMap::new()));
 
-        assert!(ast(Type::Int).is_sub_type(&ast(Type::Int), &HashMap::new()));
-        assert!(ast(Type::Bool).is_sub_type(&ast(Type::Bool), &HashMap::new()));
-        assert!(ast(Type::Num).is_sub_type(&ast(Type::Num), &HashMap::new()));
-        assert!(ast(Type::Any).is_sub_type(&ast(Type::Any), &HashMap::new()));
+        assert!(ast(EvaluatedType::Int).is_sub_type(&ast(EvaluatedType::Int), &HashMap::new()));
+        assert!(ast(EvaluatedType::Bool).is_sub_type(&ast(EvaluatedType::Bool), &HashMap::new()));
+        assert!(ast(EvaluatedType::Num).is_sub_type(&ast(EvaluatedType::Num), &HashMap::new()));
+        assert!(ast(EvaluatedType::Any).is_sub_type(&ast(EvaluatedType::Any), &HashMap::new()));
 
-        assert!(Type::Int.is_sub_type(&Type::Int, &HashMap::new()));
+        assert!(EvaluatedType::Int.is_sub_type(&EvaluatedType::Int, &HashMap::new()));
     }
 
     #[test]
@@ -196,21 +219,21 @@ mod is_sub_type {
         // let x: [Int..] <- []
         //  super ^^^^^^^     ^^ subtype
         // Empty.is_sub_type(Int) = true  -- so this typechecks
-        assert!(ast(Type::Empty).is_sub_type(&ast(Type::Int), &HashMap::new()));
+        assert!(ast(EvaluatedType::Empty).is_sub_type(&ast(EvaluatedType::Int), &HashMap::new()));
 
         // let x: [] <- [5]
         //    sub ^^     ^^^ supertype
         // Int.is_sub_type(Empty) = false  -- so this does not typecheck
-        assert!(!ast(Type::Int).is_sub_type(&ast(Type::Empty), &HashMap::new()));
+        assert!(!ast(EvaluatedType::Int).is_sub_type(&ast(EvaluatedType::Empty), &HashMap::new()));
     }
 
     #[test]
     fn any() {
         // Any behaves opposite to empty
-        assert!(ast(Type::Int).is_sub_type(&ast(Type::Any), &HashMap::new()));
-        assert!(ast(Type::Empty).is_sub_type(&ast(Type::Any), &HashMap::new()));
-        assert!(!ast(Type::Any).is_sub_type(&ast(Type::Int), &HashMap::new()));
-        assert!(!ast(Type::Any).is_sub_type(&ast(Type::Empty), &HashMap::new()));
+        assert!(ast(EvaluatedType::Int).is_sub_type(&ast(EvaluatedType::Any), &HashMap::new()));
+        assert!(ast(EvaluatedType::Empty).is_sub_type(&ast(EvaluatedType::Any), &HashMap::new()));
+        assert!(!ast(EvaluatedType::Any).is_sub_type(&ast(EvaluatedType::Int), &HashMap::new()));
+        assert!(!ast(EvaluatedType::Any).is_sub_type(&ast(EvaluatedType::Empty), &HashMap::new()));
     }
 
     //
@@ -229,19 +252,29 @@ mod is_sub_type {
         //   <=> [].is_sub_type([Int..])
         //   <=> Empty.is_sub_type(Int)
         assert!(
-            ast(Type::Func(ast(Type::Int), ast(Type::Empty))).is_sub_type(
-                &ast(Type::Func(ast(Type::Int), ast(Type::Int))),
+            ast(EvaluatedType::Func(
+                ast(EvaluatedType::Int),
+                ast(EvaluatedType::Empty)
+            )).is_sub_type(
+                &ast(EvaluatedType::Func(
+                    ast(EvaluatedType::Int),
+                    ast(EvaluatedType::Int)
+                )),
                 &HashMap::new()
             )
         );
 
         // Reverse them, and it's false
-        assert!(
-            !ast(Type::Func(ast(Type::Int), ast(Type::Int))).is_sub_type(
-                &ast(Type::Func(ast(Type::Int), ast(Type::Empty))),
-                &HashMap::new()
-            )
-        );
+        assert!(!ast(EvaluatedType::Func(
+            ast(EvaluatedType::Int),
+            ast(EvaluatedType::Int)
+        )).is_sub_type(
+            &ast(EvaluatedType::Func(
+                ast(EvaluatedType::Int),
+                ast(EvaluatedType::Empty)
+            )),
+            &HashMap::new()
+        ));
 
         // let x: ([] -> Int) <- x: [Int..] -Int-> 1
         //  super ^^^^^^^^^^^     ^^^^^^^^^^^^^^^^^^^ subtype
@@ -250,49 +283,112 @@ mod is_sub_type {
         //   declared_in.is_sub_type(value_in)
         //   <=> [].is_sub_type([Int..])
         //   <=> Empty.is_sub_type(Int)
-        assert!(ast(Type::Func(ast(Type::Int), ast(Type::Int))).is_sub_type(
-            &ast(Type::Func(ast(Type::Empty), ast(Type::Int)),),
-            &HashMap::new()
-        ));
-
-        // Again, reverse them, and it's false
         assert!(
-            !ast(Type::Func(ast(Type::Empty), ast(Type::Int))).is_sub_type(
-                &ast(Type::Func(ast(Type::Int), ast(Type::Int))),
+            ast(EvaluatedType::Func(
+                ast(EvaluatedType::Int),
+                ast(EvaluatedType::Int)
+            )).is_sub_type(
+                &ast(EvaluatedType::Func(
+                    ast(EvaluatedType::Empty),
+                    ast(EvaluatedType::Int)
+                ),),
                 &HashMap::new()
             )
         );
+
+        // Again, reverse them, and it's false
+        assert!(!ast(EvaluatedType::Func(
+            ast(EvaluatedType::Empty),
+            ast(EvaluatedType::Int)
+        )).is_sub_type(
+            &ast(EvaluatedType::Func(
+                ast(EvaluatedType::Int),
+                ast(EvaluatedType::Int)
+            )),
+            &HashMap::new()
+        ));
     }
 }
 
-fn substitute_type(ast: &Ast<Type>, name: &str, value: &Ast<Type>) -> Ast<Type> {
+fn substitute_evaluated_type(
+    ast: &Ast<EvaluatedType>,
+    name: &str,
+    value: &Ast<EvaluatedType>,
+) -> Ast<EvaluatedType> {
+    match &*ast.expr {
+        &EvaluatedType::Func(ref input, ref output) => ast.replace_expr(EvaluatedType::Func(
+            substitute_evaluated_type(input, name, value),
+            substitute_evaluated_type(output, name, value),
+        )),
+        &EvaluatedType::GenericFunc(ref param_name, ref param_supertype, ref output) => {
+            ast.replace_expr(EvaluatedType::GenericFunc(
+                param_name.clone(),
+                substitute_evaluated_type(param_supertype, name, value),
+                if param_name == name {
+                    output.clone()
+                } else {
+                    substitute_evaluated_type(output, name, value)
+                },
+            ))
+        }
+        &EvaluatedType::Ident(ref ident_name, _) => if ident_name == name {
+            value.clone()
+        } else {
+            ast.clone()
+        },
+        &EvaluatedType::List(ref el_type) => ast.replace_expr(EvaluatedType::List(
+            substitute_evaluated_type(el_type, name, value),
+        )),
+        &EvaluatedType::Tuple(ref vec) => ast.replace_expr(EvaluatedType::Tuple(
+            vec.into_iter()
+                .map(|element| substitute_evaluated_type(element, name, value))
+                .collect(),
+        )),
+        &EvaluatedType::Record(ref map) => ast.replace_expr(EvaluatedType::Record(
+            map.iter()
+                .map(|(entry_name, entry_value)| {
+                    (
+                        entry_name.clone(),
+                        substitute_evaluated_type(entry_value, name, value),
+                    )
+                })
+                .collect(),
+        )),
+        &EvaluatedType::Ref(ref value_type) => ast.replace_expr(EvaluatedType::Ref(
+            substitute_evaluated_type(value_type, name, value),
+        )),
+        _ => ast.clone(),
+    }
+}
+
+fn substitute_raw_type(ast: &Ast<Type>, name: &str, value: &Ast<Type>) -> Ast<Type> {
     match &*ast.expr {
         &Type::Func(ref input, ref output) => ast.replace_expr(Type::Func(
-            substitute_type(input, name, value),
-            substitute_type(output, name, value),
+            substitute_raw_type(input, name, value),
+            substitute_raw_type(output, name, value),
         )),
         &Type::GenericFunc(ref param_name, ref param_supertype, ref output) => {
             ast.replace_expr(Type::GenericFunc(
                 param_name.clone(),
-                substitute_type(param_supertype, name, value),
+                substitute_raw_type(param_supertype, name, value),
                 if param_name == name {
                     output.clone()
                 } else {
-                    substitute_type(output, name, value)
+                    substitute_raw_type(output, name, value)
                 },
             ))
         }
-        &Type::Ident(ref ident_name, _) => if ident_name == name {
+        &Type::Ident(ref ident_name) => if ident_name == name {
             value.clone()
         } else {
             ast.clone()
         },
         &Type::List(ref el_type) => {
-            ast.replace_expr(Type::List(substitute_type(el_type, name, value)))
+            ast.replace_expr(Type::List(substitute_raw_type(el_type, name, value)))
         }
         &Type::Tuple(ref vec) => ast.replace_expr(Type::Tuple(
             vec.into_iter()
-                .map(|element| substitute_type(element, name, value))
+                .map(|element| substitute_raw_type(element, name, value))
                 .collect(),
         )),
         &Type::Record(ref map) => ast.replace_expr(Type::Record(
@@ -300,13 +396,13 @@ fn substitute_type(ast: &Ast<Type>, name: &str, value: &Ast<Type>) -> Ast<Type> 
                 .map(|(entry_name, entry_value)| {
                     (
                         entry_name.clone(),
-                        substitute_type(entry_value, name, value),
+                        substitute_raw_type(entry_value, name, value),
                     )
                 })
                 .collect(),
         )),
         &Type::Ref(ref value_type) => {
-            ast.replace_expr(Type::Ref(substitute_type(value_type, name, value)))
+            ast.replace_expr(Type::Ref(substitute_raw_type(value_type, name, value)))
         }
         _ => ast.clone(),
     }
@@ -316,7 +412,7 @@ fn substitute_pattern(ast: &Ast<Pattern>, name: &str, value: &Ast<Type>) -> Ast<
     match &*ast.expr {
         &Pattern::Ident(ref ident_name, ref ident_type) => ast.replace_expr(Pattern::Ident(
             ident_name.clone(),
-            substitute_type(ident_type, name, value),
+            substitute_raw_type(ident_type, name, value),
         )),
         &Pattern::Tuple(ref vec) => ast.replace_expr(Pattern::Tuple(
             vec.into_iter()
@@ -330,7 +426,7 @@ fn substitute_expr(ast: &Ast<Expression>, name: &str, value: &Ast<Type>) -> Ast<
     match &*ast.expr {
         &Expression::GenericCall(ref expr, ref arg) => ast.replace_expr(Expression::GenericCall(
             substitute_expr(expr, name, value),
-            substitute_type(arg, name, value),
+            substitute_raw_type(arg, name, value),
         )),
         &Expression::BinOp(ref op, ref left, ref right) => ast.replace_expr(Expression::BinOp(
             op.clone(),
@@ -364,7 +460,7 @@ fn substitute_expr(ast: &Ast<Expression>, name: &str, value: &Ast<Type>) -> Ast<
             } else {
                 ast.replace_expr(Expression::TypeLet(
                     bind_name.clone(),
-                    substitute_type(bind_value, name, value),
+                    substitute_raw_type(bind_value, name, value),
                     substitute_expr(body, name, value),
                 ))
             }
@@ -372,7 +468,7 @@ fn substitute_expr(ast: &Ast<Expression>, name: &str, value: &Ast<Type>) -> Ast<
         &Expression::Value(Value::Func(ref param_pattern, ref body_type, ref body)) => {
             ast.replace_expr(Expression::Value(Value::Func(
                 substitute_pattern(param_pattern, name, value),
-                substitute_type(body_type, name, value),
+                substitute_raw_type(body_type, name, value),
                 substitute_expr(body, name, value),
             )))
         }
@@ -383,8 +479,8 @@ fn substitute_expr(ast: &Ast<Expression>, name: &str, value: &Ast<Type>) -> Ast<
             ref body,
         )) => ast.replace_expr(Expression::Value(Value::GenericFunc(
             param_name.clone(),
-            substitute_type(param_supertype, name, value),
-            substitute_type(body_type, name, value),
+            substitute_raw_type(param_supertype, name, value),
+            substitute_raw_type(body_type, name, value),
             substitute_expr(body, name, value),
         ))),
         &Expression::Value(Value::Tuple(ref vec)) => {
@@ -417,9 +513,17 @@ fn substitute_expr(ast: &Ast<Expression>, name: &str, value: &Ast<Type>) -> Ast<
     }
 }
 
-fn evaluate_type(ast: &Ast<Type>, env: &HashMap<String, Type>) -> Result<Type, Error> {
+fn evaluate_type(
+    ast: &Ast<Type>,
+    env: &HashMap<String, EvaluatedType>,
+) -> Result<EvaluatedType, Error> {
     match &*ast.expr {
-        &Type::Func(ref input, ref output) => Ok(Type::Func(
+        &Type::Any => Ok(EvaluatedType::Any),
+        &Type::Empty => Ok(EvaluatedType::Empty),
+        &Type::Int => Ok(EvaluatedType::Int),
+        &Type::Num => Ok(EvaluatedType::Num),
+        &Type::Bool => Ok(EvaluatedType::Bool),
+        &Type::Func(ref input, ref output) => Ok(EvaluatedType::Func(
             input.replace_expr(evaluate_type(input, env)?),
             output.replace_expr(evaluate_type(output, env)?),
         )),
@@ -427,16 +531,16 @@ fn evaluate_type(ast: &Ast<Type>, env: &HashMap<String, Type>) -> Result<Type, E
             let param_supertype_type = evaluate_type(param_supertype, env)?;
             let env = &mut env.clone();
             env.insert(param_name.clone(), param_supertype_type.clone());
-            Ok(Type::GenericFunc(
+            Ok(EvaluatedType::GenericFunc(
                 param_name.clone(),
                 param_supertype.replace_expr(param_supertype_type),
                 output.replace_expr(evaluate_type(output, env)?),
             ))
         }
-        &Type::Ident(ref ident_name, _) => if let Some(ident_type) = env.get(ident_name) {
-            Ok(Type::Ident(
+        &Type::Ident(ref ident_name) => if let Some(ident_type) = env.get(ident_name) {
+            Ok(EvaluatedType::Ident(
                 ident_name.clone(),
-                Some(ast.replace_expr(ident_type.clone())),
+                ast.replace_expr(ident_type.clone()),
             ))
         } else {
             Err(Error::LRLocated {
@@ -445,10 +549,10 @@ fn evaluate_type(ast: &Ast<Type>, env: &HashMap<String, Type>) -> Result<Type, E
                 right_loc: ast.right_loc,
             })
         },
-        &Type::List(ref el_type) => Ok(Type::List(
+        &Type::List(ref el_type) => Ok(EvaluatedType::List(
             el_type.replace_expr(evaluate_type(el_type, env)?),
         )),
-        &Type::Tuple(ref vec) => Ok(Type::Tuple({
+        &Type::Tuple(ref vec) => Ok(EvaluatedType::Tuple({
             let mut new_vec = Vec::new();
             for element in vec {
                 new_vec.push(element.replace_expr(evaluate_type(element, env)?));
@@ -456,7 +560,7 @@ fn evaluate_type(ast: &Ast<Type>, env: &HashMap<String, Type>) -> Result<Type, E
 
             new_vec
         })),
-        &Type::Record(ref map) => Ok(Type::Record({
+        &Type::Record(ref map) => Ok(EvaluatedType::Record({
             let mut new_map = HashMap::new();
             for (name, value_type) in map {
                 new_map.insert(
@@ -467,10 +571,9 @@ fn evaluate_type(ast: &Ast<Type>, env: &HashMap<String, Type>) -> Result<Type, E
 
             new_map
         })),
-        &Type::Ref(ref value_type) => Ok(Type::Ref(
+        &Type::Ref(ref value_type) => Ok(EvaluatedType::Ref(
             value_type.replace_expr(evaluate_type(value_type, env)?),
         )),
-        expr => Ok(expr.clone()),
     }
 }
 
@@ -479,48 +582,51 @@ fn typecheck_numeric_bin_op<TypeGetter>(
     operation: &BinOp,
     left: &Ast<Expression>,
     right: &Ast<Expression>,
-    env: &HashMap<String, Type>,
+    env: &HashMap<String, EvaluatedType>,
     get_type: TypeGetter,
-) -> Result<TypedAst<TypedExpression, Type>, Error>
+) -> Result<TypedAst<TypedExpression>, Error>
 where
-    TypeGetter: Fn(Type, Type) -> Type,
+    TypeGetter: Fn(&EvaluatedType, &EvaluatedType) -> EvaluatedType,
 {
     let typechecked_left = typecheck_ast(left, env)?;
-    let left_type = *typechecked_left.expr_type.clone();
-
     let typechecked_right = typecheck_ast(right, env)?;
-    let right_type = *typechecked_right.expr_type.clone();
-
-    if !left_type.is_sub_type(&Type::Int, env) && !left_type.is_sub_type(&Type::Num, env) {
+    if !typechecked_left
+        .expr_type
+        .is_sub_type(&EvaluatedType::Num, env)
+    {
         Err(Error::LRLocated {
             message: format!(
                 "Did you think this was python?  You can't do math with `{}`s.",
-                left_type
+                typechecked_left.expr_type
             ),
             left_loc: left.left_loc,
             right_loc: left.right_loc,
         })
-    } else if !right_type.is_sub_type(&Type::Int, env) && !right_type.is_sub_type(&Type::Num, env) {
+    } else if !typechecked_right
+        .expr_type
+        .is_sub_type(&EvaluatedType::Num, env)
+    {
         Err(Error::LRLocated {
             message: format!(
                 "Did you think this was python?  You can't do math with `{}`s.",
-                right_type
+                typechecked_right.expr_type
             ),
             left_loc: right.left_loc,
             right_loc: right.right_loc,
         })
     } else {
+        let result_type = get_type(&typechecked_left.expr_type, &typechecked_right.expr_type);
         Ok(ast.to_typed(
             TypedExpression::BinOp(operation.clone(), typechecked_left, typechecked_right),
-            get_type(left_type, right_type),
+            result_type,
         ))
     }
 }
 
 pub fn typecheck_ast(
     ast: &Ast<Expression>,
-    env: &HashMap<String, Type>,
-) -> Result<TypedAst<TypedExpression, Type>, Error> {
+    env: &HashMap<String, EvaluatedType>,
+) -> Result<TypedAst<TypedExpression>, Error> {
     let left_loc = ast.left_loc;
     let right_loc = ast.right_loc;
 
@@ -530,15 +636,18 @@ pub fn typecheck_ast(
                 TypedExpression::Value(TypedValue::Hook(name.clone())),
                 evaluate_type(hook_type, env)?,
             )),
-            &Value::Int(value) => {
-                Ok(ast.to_typed(TypedExpression::Value(TypedValue::Int(value)), Type::Int))
-            }
-            &Value::Num(value) => {
-                Ok(ast.to_typed(TypedExpression::Value(TypedValue::Num(value)), Type::Num))
-            }
-            &Value::Bool(value) => {
-                Ok(ast.to_typed(TypedExpression::Value(TypedValue::Bool(value)), Type::Bool))
-            }
+            &Value::Int(value) => Ok(ast.to_typed(
+                TypedExpression::Value(TypedValue::Int(value)),
+                EvaluatedType::Int,
+            )),
+            &Value::Num(value) => Ok(ast.to_typed(
+                TypedExpression::Value(TypedValue::Num(value)),
+                EvaluatedType::Num,
+            )),
+            &Value::Bool(value) => Ok(ast.to_typed(
+                TypedExpression::Value(TypedValue::Bool(value)),
+                EvaluatedType::Bool,
+            )),
             &Value::Ref(_) => panic!("Cannot typecheck raw pointer"),
             &Value::Tuple(ref vec) => {
                 let mut type_vec = Vec::new();
@@ -552,7 +661,7 @@ pub fn typecheck_ast(
 
                 Ok(ast.to_typed(
                     TypedExpression::Value(TypedValue::Tuple(value_vec)),
-                    Type::Tuple(type_vec),
+                    EvaluatedType::Tuple(type_vec),
                 ))
             }
             &Value::Record(ref map) => {
@@ -567,11 +676,11 @@ pub fn typecheck_ast(
 
                 Ok(ast.to_typed(
                     TypedExpression::Value(TypedValue::Record(value_map)),
-                    Type::Record(type_map),
+                    EvaluatedType::Record(type_map),
                 ))
             }
             &Value::List(ref vec) => {
-                let mut union_type = Type::Empty;
+                let mut union_type = EvaluatedType::Empty;
                 let mut value_vec = Vec::new();
 
                 for item in vec {
@@ -582,7 +691,7 @@ pub fn typecheck_ast(
 
                 Ok(ast.to_typed(
                     TypedExpression::Value(TypedValue::List(value_vec)),
-                    Type::List(ast.replace_expr(union_type)),
+                    EvaluatedType::List(ast.replace_expr(union_type)),
                 ))
             }
             &Value::Func(ref pattern, ref body_type_ast, ref body) => {
@@ -611,7 +720,7 @@ pub fn typecheck_ast(
                             typechecked_param,
                             typechecked_body,
                         )),
-                        Type::Func(param_type_ast, declared_body_type_ast),
+                        EvaluatedType::Func(param_type_ast, declared_body_type_ast),
                     ))
                 }
             }
@@ -636,7 +745,7 @@ pub fn typecheck_ast(
                 } else {
                     Ok(ast.to_typed(
                         *typechecked_body.expr,
-                        Type::GenericFunc(
+                        EvaluatedType::GenericFunc(
                             type_name.clone(),
                             supertype.replace_expr(declared_supertype),
                             declared_body_type_ast,
@@ -656,11 +765,11 @@ pub fn typecheck_ast(
         }
         &Expression::RecordAccess(ref record, ref field) => {
             let typechecked_record = typecheck_ast(record, env)?;
-            if let Type::Record(ref map) = *typechecked_record.expr_type.clone() {
+            if let EvaluatedType::Record(ref map) = *typechecked_record.expr_type.clone() {
                 if let Some(field_type) = map.get(field) {
                     Ok(ast.to_typed(
                         TypedExpression::RecordAccess(typechecked_record, field.clone()),
-                        evaluate_type(field_type, env)?,
+                        *field_type.expr.clone(),
                     ))
                 } else {
                     Err(Error::LRLocated {
@@ -685,15 +794,14 @@ pub fn typecheck_ast(
         }
         &Expression::GenericCall(ref generic_func, ref arg) => {
             let typechecked_generic_func = typecheck_ast(generic_func, env)?;
-            if let Type::GenericFunc(ref param, ref supertype, ref body) =
+            if let EvaluatedType::GenericFunc(ref param, ref supertype, ref body) =
                 *typechecked_generic_func.expr_type.clone()
             {
                 let arg_type = evaluate_type(arg, env)?;
                 if arg_type.is_sub_type(&supertype.expr, env) {
-                    let evaluated_arg = arg.replace_expr(arg_type);
                     let return_type =
-                        evaluate_type(&substitute_type(body, param, &evaluated_arg), env)?;
-                    Ok(ast.to_typed(*typechecked_generic_func.expr, return_type))
+                        substitute_evaluated_type(body, param, &arg.replace_expr(arg_type));
+                    Ok(ast.to_typed(*typechecked_generic_func.expr, *return_type.expr))
                 } else {
                     Err(Error::type_error(
                         generic_func.left_loc,
@@ -726,11 +834,11 @@ pub fn typecheck_ast(
         },
         &Expression::If(ref condition, ref consequent, ref alternate) => {
             let typechecked_condition = typecheck_ast(condition, env)?;
-            if *typechecked_condition.expr_type != Type::Bool {
+            if *typechecked_condition.expr_type != EvaluatedType::Bool {
                 Err(Error::type_error(
                     alternate.left_loc,
                     alternate.right_loc,
-                    &Type::Bool,
+                    &EvaluatedType::Bool,
                     &typechecked_condition.expr_type,
                 ))
             } else {
@@ -777,24 +885,24 @@ pub fn typecheck_ast(
             }
         }
         &Expression::TypeLet(ref name, ref value, ref body) => {
-            let value = value.replace_expr(evaluate_type(value, env)?);
-            typecheck_ast(&substitute_expr(body, name, &value), env)
+            typecheck_ast(&substitute_expr(body, name, value), env)
         }
         &Expression::BinOp(ref operation, ref left, ref right) => match operation {
             &BinOp::Call => {
                 let typechecked_left = typecheck_ast(left, env)?;
                 let typechecked_right = typecheck_ast(right, env)?;
 
-                if let Type::Func(ref param_type, ref output_type) =
+                if let EvaluatedType::Func(ref param_type, ref output_type) =
                     *typechecked_left.expr_type.clone()
                 {
-                    let param_type = evaluate_type(param_type, env)?;
-                    let output_type = evaluate_type(output_type, env)?;
-                    if !typechecked_right.expr_type.is_sub_type(&param_type, env) {
+                    if !typechecked_right
+                        .expr_type
+                        .is_sub_type(&param_type.expr, env)
+                    {
                         Err(Error::type_error(
                             right.left_loc,
                             right.right_loc,
-                            &param_type,
+                            &param_type.expr,
                             &typechecked_right.expr_type,
                         ))
                     } else {
@@ -804,7 +912,7 @@ pub fn typecheck_ast(
                                 typechecked_left,
                                 typechecked_right,
                             ),
-                            output_type,
+                            *output_type.expr.clone(),
                         ))
                     }
                 } else {
@@ -819,24 +927,40 @@ pub fn typecheck_ast(
                     })
                 }
             }
-            &BinOp::LEq => {
-                typecheck_numeric_bin_op(ast, operation, left, right, env, |_, _| Type::Bool)
-            }
-            &BinOp::Div => {
-                typecheck_numeric_bin_op(ast, operation, left, right, env, |_, _| Type::Num)
-            }
+            &BinOp::LEq => typecheck_numeric_bin_op(ast, operation, left, right, env, |_, _| {
+                EvaluatedType::Bool
+            }),
+            &BinOp::Div => typecheck_numeric_bin_op(ast, operation, left, right, env, |_, _| {
+                EvaluatedType::Num
+            }),
             &BinOp::Add | &BinOp::Sub | &BinOp::Mul => typecheck_numeric_bin_op(
                 ast,
                 operation,
                 left,
                 right,
                 env,
-                |left_type, right_type| {
-                    if (left_type, right_type) == (Type::Int, Type::Int) {
-                        Type::Int
-                    } else {
-                        Type::Num
+                |left_type, right_type| match (left_type, right_type) {
+                    (&EvaluatedType::Int, &EvaluatedType::Int) => EvaluatedType::Int,
+                    (&EvaluatedType::Int, &EvaluatedType::Ident(ref name, ref supertype))
+                    | (&EvaluatedType::Ident(ref name, ref supertype), &EvaluatedType::Int) => {
+                        EvaluatedType::Ident(name.clone(), supertype.clone())
                     }
+                    (
+                        &EvaluatedType::Ident(ref left_name, ref left_supertype),
+                        &EvaluatedType::Ident(ref right_name, ref right_supertype),
+                    ) => {
+                        if left_name == right_name {
+                            assert!(left_supertype == right_supertype);
+                            left_type.clone()
+                        } else if &*left_supertype.expr == &EvaluatedType::Int
+                            && &*right_supertype.expr == &EvaluatedType::Int
+                        {
+                            EvaluatedType::Int
+                        } else {
+                            EvaluatedType::Num
+                        }
+                    }
+                    _ => EvaluatedType::Num,
                 },
             ),
         },
@@ -883,7 +1007,7 @@ mod typecheck_ast {
     #[test]
     fn checks_global_identifiers() {
         let mut globals = HashMap::new();
-        globals.insert(String::from("global_val"), Type::Int);
+        globals.insert(String::from("global_val"), EvaluatedType::Int);
 
         assert_eq!(
             format!(
@@ -1182,7 +1306,7 @@ mod typecheck_ast {
             let f: F <- T: I =(T => T)=> x: T =T=> x
             f
             ",
-            "(T: Int => ((T) => (T)))",
+            "(T: Int => ((T <: Int) => (T <: Int)))",
         );
     }
 
@@ -1195,7 +1319,7 @@ mod typecheck_ast {
             y: T =[T..]=>
                 [x  y]
             ",
-            "(T: Int => ((T) => ((T) => [(T)..])))",
+            "(T: Int => ((T <: Int) => ((T <: Int) => [(T <: Int)..])))",
         );
         assert_typecheck_eq(
             "
@@ -1204,7 +1328,7 @@ mod typecheck_ast {
             y: T =[T..]=>
                 [x  y]
             ",
-            "(T: Any => ((T) => ((T) => [(T)..])))",
+            "(T: Any => ((T <: Any) => ((T <: Any) => [(T <: Any)..])))",
         );
     }
 
@@ -1277,7 +1401,7 @@ mod typecheck_ast {
                     [x  y]
             )
             ",
-            "(T: Any => ((T) => ((T) => [(T)..])))",
+            "(T: Any => ((T <: Any) => ((T <: Any) => [(T <: Any)..])))",
         );
     }
 

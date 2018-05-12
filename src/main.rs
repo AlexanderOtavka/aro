@@ -98,10 +98,7 @@ mod evaluate_file {
 
     #[test]
     fn generics_expressions() {
-        assert_eq!(
-            evaluate_file("examples/generics.aro", false).unwrap(),
-            "[5 5 5]"
-        )
+        assert_eq!(evaluate_file("examples/generics.aro", false).unwrap(), "6")
     }
 
     #[test]
