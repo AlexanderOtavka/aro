@@ -49,6 +49,15 @@ pub enum TypedExpression {
         TypedAst<TypedExpression>,
         TypedAst<TypedExpression>,
     ),
+    GenericCall(
+        (
+            String,
+            Ast<EvaluatedType>,
+            Ast<EvaluatedType>,
+            TypedAst<TypedExpression>,
+        ),
+        Ast<EvaluatedType>,
+    ),
     Sequence(TypedAst<TypedExpression>, TypedAst<TypedExpression>),
     RecordAccess(TypedAst<TypedExpression>, String),
 }
@@ -83,6 +92,12 @@ pub enum TypedValue {
     Num(f64),
     Bool(bool),
     Func(TypedAst<TypedPattern>, TypedAst<TypedExpression>),
+    GenericFunc(
+        String,
+        Ast<EvaluatedType>,
+        Ast<EvaluatedType>,
+        TypedAst<TypedExpression>,
+    ),
     Tuple(Vec<TypedAst<TypedExpression>>),
     List(Vec<TypedAst<TypedExpression>>),
     Hook(Vec<String>),
@@ -167,6 +182,10 @@ pub enum CExpr {
         value: Ast<CExpr>,
         value_type: CType,
     },
+    Cast {
+        value: Ast<CExpr>,
+        to_type: CType,
+    },
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -187,7 +206,7 @@ pub enum CStatement {
     },
     ObjectInit {
         name: String,
-        data: Vec<Ast<CValue>>,
+        data: Vec<Ast<CExpr>>,
     },
     Block(Vec<Ast<CStatement>>),
     If(Ast<CExpr>, Ast<CStatement>, Ast<CStatement>),
@@ -280,8 +299,36 @@ impl<Expr> TypedAst<Expr> {
         }
     }
 
+    pub fn replace_expr<NewExpr>(&self, expr: NewExpr) -> TypedAst<NewExpr> {
+        TypedAst {
+            left_loc: self.left_loc,
+            right_loc: self.right_loc,
+            expr: Box::new(expr),
+            expr_type: self.expr_type.clone(),
+        }
+    }
+
+    pub fn replace_expr_and_type<NewExpr>(
+        &self,
+        expr: NewExpr,
+        expr_type: EvaluatedType,
+    ) -> TypedAst<NewExpr> {
+        TypedAst {
+            left_loc: self.left_loc,
+            right_loc: self.right_loc,
+            expr: Box::new(expr),
+            expr_type: Box::new(expr_type),
+        }
+    }
+
     pub fn to_type_ast(&self) -> Ast<EvaluatedType> {
         Ast::new(self.left_loc, self.right_loc, *self.expr_type.clone())
+    }
+}
+
+impl<Expr: Clone> TypedAst<Expr> {
+    pub fn to_untyped_ast(&self) -> Ast<Expr> {
+        Ast::new(self.left_loc, self.right_loc, *self.expr.clone())
     }
 }
 
@@ -471,25 +518,29 @@ impl Display for EvaluatedType {
     }
 }
 
-fn ctype_to_string(ctype: &CType, name: &str) -> String {
-    match ctype {
-        &CType::Any => format!("_Aro_Any {}", name),
-        &CType::Bool => format!("bool {}", name),
-        &CType::Float => format!("double {}", name),
-        &CType::Int => format!("int {}", name),
-        &CType::Object | &CType::Closure { .. } => format!("_Aro_Any* {}", name),
-        &CType::VoidPtr => format!("void* {}", name),
-        &CType::Ref(ref contained) => format!("{}* {}", ctype_to_string(contained, ""), name),
-    }
+pub trait WellCTyped {
+    fn get_ctype(&self) -> CType;
 }
 
-impl CValue {
-    pub fn get_ctype(&self) -> CType {
+impl WellCTyped for CValue {
+    fn get_ctype(&self) -> CType {
         match self {
             &CValue::Int(_) => CType::Int,
             &CValue::Float(_) => CType::Float,
             &CValue::Bool(_) => CType::Bool,
             &CValue::Ident(_, ref ctype) | &CValue::Deref(_, ref ctype) => ctype.clone(),
+        }
+    }
+}
+
+impl WellCTyped for CExpr {
+    fn get_ctype(&self) -> CType {
+        match self {
+            &CExpr::Value(ref value) => value.get_ctype(),
+            &CExpr::AnyAccess { ref value_type, .. } => value_type.clone(),
+            &CExpr::ObjectAccess { ref field_type, .. } => *field_type.expr.clone(),
+            &CExpr::Cast { ref to_type, .. } => to_type.clone(),
+            &CExpr::BinOp(ref op, ref left, ref right) => panic!(),
         }
     }
 }
@@ -510,6 +561,18 @@ impl Display for CValue {
     }
 }
 
+fn ctype_to_string(ctype: &CType, name: &str) -> String {
+    match ctype {
+        &CType::Any => format!("_Aro_Any {}", name),
+        &CType::Bool => format!("bool {}", name),
+        &CType::Float => format!("double {}", name),
+        &CType::Int => format!("int {}", name),
+        &CType::Object | &CType::Closure { .. } => format!("_Aro_Any* {}", name),
+        &CType::VoidPtr => format!("void* {}", name),
+        &CType::Ref(ref contained) => format!("{}* {}", ctype_to_string(contained, ""), name),
+    }
+}
+
 fn ctype_to_union_field(ctype: &CType) -> &'static str {
     match ctype {
         &CType::Int => "Int",
@@ -518,6 +581,12 @@ fn ctype_to_union_field(ctype: &CType) -> &'static str {
         &CType::Object | &CType::Closure { .. } => "Any_Ptr",
         &CType::VoidPtr | &CType::Ref(_) => "Void_Ptr",
         &CType::Any => panic!("Can't pull Any out of a union"),
+    }
+}
+
+impl Display for CType {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}", ctype_to_string(self, ""))
     }
 }
 
@@ -533,7 +602,7 @@ impl Display for CExpr {
                     ref field_type,
                 } => format!(
                     "(({}){}[{}].{})",
-                    ctype_to_string(&field_type.expr, ""),
+                    field_type,
                     object,
                     index,
                     ctype_to_union_field(&field_type.expr)
@@ -578,12 +647,20 @@ impl Display for CExpr {
                     }
                     &BinOp::LEq => format!("({} <= {})", left, right),
                 },
+                &CExpr::Cast {
+                    ref value,
+                    ref to_type,
+                } => format!("(({}){})", to_type, value),
             }
         )
     }
 }
 
-fn init_array(name: &str, elements: &Vec<Ast<CValue>>, start_index: usize) -> String {
+fn init_array<Element: WellCTyped + Display>(
+    name: &str,
+    elements: &Vec<Ast<Element>>,
+    start_index: usize,
+) -> String {
     let mut assignments = Vec::new();
     for (i, element) in elements.iter().enumerate() {
         assignments.push(format!(

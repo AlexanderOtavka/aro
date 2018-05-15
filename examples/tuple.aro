@@ -1,9 +1,9 @@
 let x: Num <- 2.3
-let tup: (Int Num Bool) <- (1 + (3 * 2)  x * x  #true())
-let (a: Int  b: Num  c: Bool) <- tup
+let tup: (Num Num Bool) <- (1 + (3 * 2)  x * x  #true())
+let (a: Num  b: Num  c: Bool) <- tup
 
-let add_or_multiply: (((Int Num) Bool) => Num) <-
-    fn ((first: Int  second: Num)  should_add: Bool) =Num=>
+let add_or_multiply: (((Num Num) Bool) => Num) <-
+    fn ((first: Num  second: Num)  should_add: Bool) =Num=>
         if should_add then
             first + second
         else

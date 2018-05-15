@@ -1,5 +1,5 @@
 use ast::{Ast, BinOp, CExpr, CFunc, CStatement, CType, CValue, EvaluatedType, TypedAst,
-          TypedExpression, TypedPattern, TypedValue};
+          TypedExpression, TypedPattern, TypedValue, WellCTyped};
 use std::collections::{HashMap, HashSet};
 
 fn get_expr_name(expr_index: &mut i32) -> String {
@@ -35,6 +35,97 @@ fn type_to_ctype(t: &EvaluatedType) -> CType {
     }
 }
 
+fn maybe_cast_representation(
+    from: &TypedAst<CExpr>,
+    to_type: &EvaluatedType,
+    scope: &mut Vec<Ast<CStatement>>,
+    expr_index: &mut i32,
+    functions: &mut Vec<Ast<CFunc>>,
+    function_index: &mut i32,
+) -> (TypedAst<CExpr>, bool) {
+    match (&*from.expr_type, to_type) {
+        (&EvaluatedType::Int, &EvaluatedType::Num) => (
+            from.replace_expr_and_type(
+                CExpr::Cast {
+                    value: from.to_untyped_ast(),
+                    to_type: CType::Float,
+                },
+                to_type.clone(),
+            ),
+            true,
+        ),
+        (&EvaluatedType::Num, &EvaluatedType::Int) => (
+            from.replace_expr_and_type(
+                CExpr::Cast {
+                    value: from.to_untyped_ast(),
+                    to_type: CType::Int,
+                },
+                to_type.clone(),
+            ),
+            true,
+        ),
+        (&EvaluatedType::Tuple(ref from_elements), &EvaluatedType::Tuple(ref to_elements)) => {
+            let mut casted_elements = Vec::new();
+            let mut something_was_casted = false;
+            for (index, (from_element, to_element)) in from_elements
+                .into_iter()
+                .zip(to_elements.into_iter())
+                .enumerate()
+            {
+                let from_element_ctype =
+                    from_element.replace_expr(type_to_ctype(&from_element.expr));
+                let (c_element, was_casted) = maybe_cast_representation(
+                    &from.replace_expr_and_type(
+                        CExpr::ObjectAccess {
+                            object: from.to_untyped_ast(),
+                            index,
+                            field_type: from_element_ctype,
+                        },
+                        *from_element.expr.clone(),
+                    ),
+                    &to_element.expr,
+                    scope,
+                    expr_index,
+                    functions,
+                    function_index,
+                );
+                casted_elements.push(c_element.to_untyped_ast());
+                if was_casted {
+                    something_was_casted = true;
+                }
+            }
+
+            if something_was_casted {
+                let copy_name = get_expr_name(expr_index);
+                scope.push(from.replace_untyped(CStatement::VarDecl(
+                    CType::Object,
+                    copy_name.clone(),
+                )));
+                scope.push(from.replace_untyped(CStatement::ObjectInit {
+                    name: copy_name.clone(),
+                    data: casted_elements,
+                }));
+                (
+                    from.replace_expr_and_type(
+                        CExpr::Value(CValue::Ident(copy_name, CType::Object)),
+                        to_type.clone(),
+                    ),
+                    true,
+                )
+            } else {
+                (
+                    from.replace_expr_and_type(*from.expr.clone(), to_type.clone()),
+                    false,
+                )
+            }
+        }
+        _ => (
+            from.replace_expr_and_type(*from.expr.clone(), to_type.clone()),
+            false,
+        ),
+    }
+}
+
 fn find_names_in_pattern(pattern: &TypedAst<TypedPattern>, names: &mut HashSet<String>) {
     match &*pattern.expr {
         &TypedPattern::Ident(ref name) => {
@@ -55,6 +146,9 @@ fn find_captures(
         &TypedExpression::BinOp(_, ref left, ref right) => {
             find_captures(left, locals, captures);
             find_captures(right, locals, captures);
+        }
+        &TypedExpression::GenericCall((_, _, _, ref generic_func), _) => {
+            find_captures(generic_func, locals, captures);
         }
         &TypedExpression::Ident(ref name) => {
             if !locals.contains(name) {
@@ -88,6 +182,9 @@ fn find_captures(
                 let mut locals = locals.clone();
                 find_names_in_pattern(pattern, &mut locals);
                 find_captures(body, &locals, captures);
+            }
+            &TypedValue::GenericFunc(_, _, _, ref body) => {
+                find_captures(body, locals, captures);
             }
             &TypedValue::List(ref vec) => for element in vec {
                 find_captures(element, locals, captures);
@@ -124,21 +221,45 @@ fn make_declarations(pattern: &TypedAst<TypedPattern>, scope: &mut Vec<Ast<CStat
 
 fn bind_declarations(
     pattern: &TypedAst<TypedPattern>,
-    value: Ast<CExpr>,
+    value: &TypedAst<CExpr>,
     scope: &mut Vec<Ast<CStatement>>,
+    expr_index: &mut i32,
+    functions: &mut Vec<Ast<CFunc>>,
+    function_index: &mut i32,
 ) {
     match &*pattern.expr {
         &TypedPattern::Ident(ref name) => {
             let value_name = get_ident_name(name);
-            scope.push(pattern.replace_untyped(CStatement::RefAssign(value_name, value)));
+            let (casted_value, _) = maybe_cast_representation(
+                value,
+                &pattern.expr_type,
+                scope,
+                expr_index,
+                functions,
+                function_index,
+            );
+            scope.push(pattern.replace_untyped(CStatement::RefAssign(
+                value_name,
+                casted_value.to_untyped_ast(),
+            )));
         }
         &TypedPattern::Tuple(ref vec) => for (index, element) in vec.iter().enumerate() {
-            let inner_value = value.replace_expr(CExpr::ObjectAccess {
-                object: value.clone(),
-                index,
-                field_type: element.replace_untyped(type_to_ctype(&element.expr_type)),
-            });
-            bind_declarations(element, inner_value, scope);
+            let inner_value = value.replace_expr_and_type(
+                CExpr::ObjectAccess {
+                    object: value.to_untyped_ast(),
+                    index,
+                    field_type: element.replace_untyped(type_to_ctype(&element.expr_type)),
+                },
+                *element.expr_type.clone(),
+            );
+            bind_declarations(
+                element,
+                &inner_value,
+                scope,
+                expr_index,
+                functions,
+                function_index,
+            );
         },
     }
 }
@@ -166,12 +287,19 @@ pub fn lift_expr(
                 let mut func_expr_index = 0;
 
                 let param_ctype = type_to_ctype(&pattern.expr_type);
-                let param_value = pattern.replace_untyped(CExpr::Value(CValue::Ident(
+                let param_value = pattern.replace_expr(CExpr::Value(CValue::Ident(
                     String::from("_aro_arg"),
                     param_ctype.clone(),
                 )));
                 make_declarations(pattern, &mut func_scope);
-                bind_declarations(pattern, param_value, &mut func_scope);
+                bind_declarations(
+                    pattern,
+                    &param_value,
+                    &mut func_scope,
+                    &mut func_expr_index,
+                    functions,
+                    function_index,
+                );
 
                 for (index, (name, var_type)) in captures_map.iter().enumerate() {
                     let ident_name = get_ident_name(name);
@@ -239,13 +367,10 @@ pub fn lift_expr(
             &TypedValue::Tuple(ref vec) => {
                 let mut data = Vec::new();
                 for element in vec {
-                    data.push(lift_expr(
-                        element,
-                        scope,
-                        expr_index,
-                        functions,
-                        function_index,
-                    ));
+                    data.push(
+                        lift_expr(element, scope, expr_index, functions, function_index)
+                            .to_c_expr(),
+                    );
                 }
 
                 let expr_name = get_expr_name(expr_index);
@@ -394,7 +519,14 @@ pub fn lift_expr(
                 functions,
                 function_index,
             );
-            bind_declarations(pattern, value_c_ast.to_c_expr(), &mut body_scope);
+            bind_declarations(
+                pattern,
+                &value.replace_expr(CExpr::Value(*value_c_ast.expr)),
+                &mut body_scope,
+                expr_index,
+                functions,
+                function_index,
+            );
 
             let body_c_ast =
                 lift_expr(body, &mut body_scope, expr_index, functions, function_index);
@@ -406,6 +538,13 @@ pub fn lift_expr(
             scope.push(ast.replace_untyped(CStatement::Block(body_scope)));
 
             ast.replace_untyped(CValue::Ident(body_name, body_type))
+        }
+        &TypedExpression::GenericCall(
+            (ref name, ref supertype, ref body, ref generic_func),
+            ref type_arg,
+        ) => {
+            // TODO: generate adaptor code and adaptor functions
+            panic!()
         }
         _ => panic!(),
     }
@@ -647,6 +786,38 @@ mod lift_expr {
              *aro_b = ((double )_aro_expr_1[1].Float); \
              double _aro_expr_2; \
              _aro_expr_2 = ((*aro_a) + (*aro_b)); \
+             _aro_expr_0 = _aro_expr_2; \
+             } ",
+            "",
+            "_aro_expr_0",
+        );
+        assert_lift(
+            "
+            let my_tuple: (Int Num) <- (1 2.3)
+            let (a: Num  b: Num) <- my_tuple
+            a + b
+            ",
+            "double _aro_expr_0; \
+             { \
+             _Aro_Any* * aro_my_tuple; \
+             aro_my_tuple = malloc(sizeof(_Aro_Any* )); \
+             _Aro_Any* _aro_expr_1; \
+             _aro_expr_1 = malloc(sizeof(_Aro_Any) * 2); \
+             _aro_expr_1[0].Int = 1; \
+             _aro_expr_1[1].Float = 2.3; \
+             *aro_my_tuple = _aro_expr_1; \
+             double _aro_expr_2; \
+             { \
+             double * aro_a; \
+             aro_a = malloc(sizeof(double )); \
+             double * aro_b; \
+             aro_b = malloc(sizeof(double )); \
+             *aro_a = ((double )(*aro_my_tuple)[0].Int); \
+             *aro_b = ((double )(*aro_my_tuple)[1].Float); \
+             double _aro_expr_3; \
+             _aro_expr_3 = ((*aro_a) + (*aro_b)); \
+             _aro_expr_2 = _aro_expr_3; \
+             } \
              _aro_expr_0 = _aro_expr_2; \
              } ",
             "",

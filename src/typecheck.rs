@@ -43,6 +43,11 @@ fn build_env(
 
 fn rename_type(ast: &Ast<EvaluatedType>, name: &str, new_name: &str) -> Ast<EvaluatedType> {
     match &*ast.expr {
+        &EvaluatedType::Any
+        | &EvaluatedType::Bool
+        | &EvaluatedType::Empty
+        | &EvaluatedType::Int
+        | &EvaluatedType::Num => ast.clone(),
         &EvaluatedType::Func(ref input, ref output) => ast.replace_expr(EvaluatedType::Func(
             rename_type(input, name, new_name),
             rename_type(output, name, new_name),
@@ -74,10 +79,14 @@ fn rename_type(ast: &Ast<EvaluatedType>, name: &str, new_name: &str) -> Ast<Eval
                 .map(|element| rename_type(element, name, new_name))
                 .collect(),
         )),
+        &EvaluatedType::Record(ref map) => ast.replace_expr(EvaluatedType::Record(
+            map.into_iter()
+                .map(|(name, element)| (name.clone(), rename_type(element, name, new_name)))
+                .collect(),
+        )),
         &EvaluatedType::Ref(ref value_type) => {
             ast.replace_expr(EvaluatedType::Ref(rename_type(value_type, name, new_name)))
         }
-        _ => ast.clone(),
     }
 }
 
@@ -204,7 +213,7 @@ mod is_sub_type {
     // value.is_sub_type(declared) <=> it typechecks
     //
 
-    // It's wierder with functions:
+    // It's weirder with functions:
     #[test]
     fn with_functions() {
         // let x: (Int -> [Int..]) <- x: Int -[]-> []
@@ -293,6 +302,11 @@ fn substitute_evaluated_type(
     value: &Ast<EvaluatedType>,
 ) -> Ast<EvaluatedType> {
     match &*ast.expr {
+        &EvaluatedType::Any
+        | &EvaluatedType::Bool
+        | &EvaluatedType::Empty
+        | &EvaluatedType::Int
+        | &EvaluatedType::Num => ast.clone(),
         &EvaluatedType::Func(ref input, ref output) => ast.replace_expr(EvaluatedType::Func(
             substitute_evaluated_type(input, name, value),
             substitute_evaluated_type(output, name, value),
@@ -334,12 +348,12 @@ fn substitute_evaluated_type(
         &EvaluatedType::Ref(ref value_type) => ast.replace_expr(EvaluatedType::Ref(
             substitute_evaluated_type(value_type, name, value),
         )),
-        _ => ast.clone(),
     }
 }
 
 fn substitute_raw_type(ast: &Ast<Type>, name: &str, value: &Ast<Type>) -> Ast<Type> {
     match &*ast.expr {
+        &Type::Any | &Type::Bool | &Type::Empty | &Type::Int | &Type::Num => ast.clone(),
         &Type::Func(ref input, ref output) => ast.replace_expr(Type::Func(
             substitute_raw_type(input, name, value),
             substitute_raw_type(output, name, value),
@@ -381,7 +395,6 @@ fn substitute_raw_type(ast: &Ast<Type>, name: &str, value: &Ast<Type>) -> Ast<Ty
         &Type::Ref(ref value_type) => {
             ast.replace_expr(Type::Ref(substitute_raw_type(value_type, name, value)))
         }
-        _ => ast.clone(),
     }
 }
 
@@ -442,33 +455,31 @@ fn substitute_expr(ast: &Ast<Expression>, name: &str, value: &Ast<Type>) -> Ast<
                 ))
             }
         }
-        &Expression::Value(Value::Func(ref param_pattern, ref body_type, ref body)) => {
-            ast.replace_expr(Expression::Value(Value::Func(
+        &Expression::Value(ref ast_value) => ast.replace_expr(Expression::Value(match ast_value {
+            &Value::Bool(_)
+            | &Value::Int(_)
+            | &Value::Num(_)
+            | &Value::Hook(_, _)
+            | &Value::Ref(_) => ast_value.clone(),
+            &Value::Func(ref param_pattern, ref body_type, ref body) => Value::Func(
                 substitute_pattern(param_pattern, name, value),
                 substitute_raw_type(body_type, name, value),
                 substitute_expr(body, name, value),
-            )))
-        }
-        &Expression::Value(Value::GenericFunc(
-            ref param_name,
-            ref param_supertype,
-            ref body_type,
-            ref body,
-        )) => ast.replace_expr(Expression::Value(Value::GenericFunc(
-            param_name.clone(),
-            substitute_raw_type(param_supertype, name, value),
-            substitute_raw_type(body_type, name, value),
-            substitute_expr(body, name, value),
-        ))),
-        &Expression::Value(Value::Tuple(ref vec)) => {
-            ast.replace_expr(Expression::Value(Value::Tuple(
+            ),
+            &Value::GenericFunc(ref param_name, ref param_supertype, ref body_type, ref body) => {
+                Value::GenericFunc(
+                    param_name.clone(),
+                    substitute_raw_type(param_supertype, name, value),
+                    substitute_raw_type(body_type, name, value),
+                    substitute_expr(body, name, value),
+                )
+            }
+            &Value::Tuple(ref vec) => Value::Tuple(
                 vec.into_iter()
                     .map(|element| substitute_expr(element, name, value))
                     .collect(),
-            )))
-        }
-        &Expression::Value(Value::Record(ref map)) => {
-            ast.replace_expr(Expression::Value(Value::Record(
+            ),
+            &Value::Record(ref map) => Value::Record(
                 map.iter()
                     .map(|(entry_name, entry_value)| {
                         (
@@ -477,16 +488,14 @@ fn substitute_expr(ast: &Ast<Expression>, name: &str, value: &Ast<Type>) -> Ast<
                         )
                     })
                     .collect(),
-            )))
-        }
-        &Expression::Value(Value::List(ref vec)) => {
-            ast.replace_expr(Expression::Value(Value::List(
+            ),
+            &Value::List(ref vec) => Value::List(
                 vec.into_iter()
                     .map(|element| substitute_expr(element, name, value))
                     .collect(),
-            )))
-        }
-        &Expression::Value(_) | &Expression::Ident(_) => ast.clone(),
+            ),
+        })),
+        &Expression::Ident(_) => ast.clone(),
     }
 }
 
@@ -697,8 +706,8 @@ pub fn typecheck_ast(
             }
             &Value::GenericFunc(ref type_name, ref supertype, ref body_type_ast, ref body) => {
                 let env = &mut env.clone();
-                let declared_supertype = evaluate_type(supertype, env)?;
-                env.insert(type_name.clone(), declared_supertype.clone());
+                let evaluated_supertype = evaluate_type(supertype, env)?;
+                env.insert(type_name.clone(), evaluated_supertype.clone());
 
                 let declared_body_type = evaluate_type(body_type_ast, env)?;
                 let declared_body_type_ast = body_type_ast.replace_expr(declared_body_type.clone());
@@ -715,10 +724,15 @@ pub fn typecheck_ast(
                     ))
                 } else {
                     Ok(ast.to_typed(
-                        *typechecked_body.expr,
+                        TypedExpression::Value(TypedValue::GenericFunc(
+                            type_name.clone(),
+                            supertype.replace_expr(evaluated_supertype.clone()),
+                            declared_body_type_ast.clone(),
+                            typechecked_body,
+                        )),
                         EvaluatedType::GenericFunc(
                             type_name.clone(),
-                            supertype.replace_expr(declared_supertype),
+                            supertype.replace_expr(evaluated_supertype),
                             declared_body_type_ast,
                         ),
                     ))
@@ -779,9 +793,20 @@ pub fn typecheck_ast(
             {
                 let arg_type = evaluate_type(arg, env)?;
                 if arg_type.is_sub_type(&supertype.expr) {
-                    let return_type =
-                        substitute_evaluated_type(body, param, &arg.replace_expr(arg_type));
-                    Ok(ast.to_typed(*typechecked_generic_func.expr, *return_type.expr))
+                    let evaluated_arg = arg.replace_expr(arg_type);
+                    let return_type = substitute_evaluated_type(body, param, &evaluated_arg);
+                    Ok(ast.to_typed(
+                        TypedExpression::GenericCall(
+                            (
+                                param.clone(),
+                                supertype.clone(),
+                                body.clone(),
+                                typechecked_generic_func,
+                            ),
+                            evaluated_arg,
+                        ),
+                        *return_type.expr,
+                    ))
                 } else {
                     Err(Error::type_error(
                         generic_func.left_loc,
@@ -1467,6 +1492,40 @@ mod typecheck_ast {
 
             add <| type Num
             ",
+        );
+    }
+
+    #[test]
+    fn generic_functions_can_return_data_structures() {
+        assert_typecheck_eq(
+            "
+            let math: (T: Num => {
+                plus: T => T => T
+                minus: T => T => T
+            }) <-
+                T: Num ={
+                    plus: T => T => T
+                    minus: T => T => T
+                }=> {
+                    plus <-
+                        x: T =(T => T)=>
+                        y: T =T=>
+                            x + y
+                    minus <-
+                        x: T =(T => T)=>
+                        y: T =T=>
+                            x - y
+                }
+
+            let int_math: {
+                plus: Int => Int => Int
+                minus: Int => Int => Int
+            } <-
+                math <| type Int
+
+            (2 |> int_math.plus <| 3) |> int_math.minus <| 1
+            ",
+            "Int",
         );
     }
 
