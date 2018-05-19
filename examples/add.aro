@@ -1,1 +1,2 @@
-1.0 + 1.0
+let increment_num: (Int => Num) <- x: Num =Num=> x + 1
+increment_num <| 1
