@@ -15,6 +15,70 @@ will run all unit tests inside the docker container.
 
 ## Changelog
 
+### +2 Final Project (5/18/18)
+
+#### Running Examples
+
+To compile to C:
+`$ cargo run -- -c examples/the_example.aro | clang-format >! the_example.c`
+
+The following examples work with C compilation:
+
+* `add.aro`
+* `function_calls.aro`
+* `let.aro`
+* `parse_error.aro` (it never actually gets to c compilation step)
+* `recursion.aro`
+* `right_pipe.aro`
+* `tuple.aro`
+
+Although `generics.aro` doesn't work due to the numeric representation bug,
+this slightly modified source will work and demonstrate generics and type
+level let.
+
+```
+let increment: (El: Num => El => El) <-
+    T: Num =(T => T)=>
+    el: T =T=>
+        el + 1
+
+let Value <- Num
+
+increment <| type Value <| 5
+```
+
+#### New Features
+
+* Switched fat and thin arrows in syntax: `=>` is now for functions, `<-` for assignment
+* Translation to C
+  * Integer, float, boolean, and tuple expressions
+  * Function expressions with lambda lifting captures
+  * Let expressions (recursion supported)
+  * If expressions
+  * Operators (+, -, /, \*, <=)
+  * Function calls (<|, |>)
+  * Type level let
+  * Generics
+
+#### Changed Features
+
+* Fixed a few subtle bugs with type checking
+* Removed covariance of ref cells (they are now invariant, because that is sound)
+
+#### Known Bugs
+
+* Implicit casts across numeric types reinterpret bits instead of converting representation.
+
+  For example:
+
+  ```
+  let integer: Num <- 5
+  integer + 1
+  ```
+
+  The bug isn't actually with generics as I first thought, it's just that I
+  first encountered it there.
+
 ### Final Project (3/16/18)
 
 For the mastery component, I added generics in assignment 5. See that
