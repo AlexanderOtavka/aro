@@ -119,6 +119,114 @@ fn maybe_cast_representation(
                 )
             }
         }
+        (
+            &EvaluatedType::Func(ref from_in, ref from_out),
+            &EvaluatedType::Func(ref to_in, ref to_out),
+        ) => {
+            let mut adaptor_func_scope = Vec::new();
+            let mut adaptor_func_expr_index = 0;
+
+            let arg = to_in.to_typed(
+                CExpr::Value(CValue::Ident(
+                    String::from("_aro_arg"),
+                    type_to_ctype(&to_in.expr),
+                )),
+                *to_in.expr.clone(),
+            );
+            let (arg, arg_was_casted) = maybe_cast_representation(
+                &arg,
+                &from_in.expr,
+                &mut adaptor_func_scope,
+                &mut adaptor_func_expr_index,
+                functions,
+                function_index,
+            );
+
+            let arg_name = get_expr_name(&mut adaptor_func_expr_index);
+            let arg_ctype = type_to_ctype(&arg.expr_type);
+            adaptor_func_scope.push(arg.replace_untyped(CStatement::VarDecl(
+                arg_ctype.clone(),
+                arg_name.clone(),
+            )));
+            adaptor_func_scope.push(arg.replace_untyped(CStatement::VarAssign(
+                arg_name.clone(),
+                arg.to_untyped_ast(),
+            )));
+
+            let inner_func_name = get_expr_name(&mut adaptor_func_expr_index);
+            let inner_func_ctype = type_to_ctype(&from.expr_type);
+            adaptor_func_scope.push(from.replace_untyped(CStatement::VarDecl(
+                inner_func_ctype.clone(),
+                inner_func_name.clone(),
+            )));
+            adaptor_func_scope.push(from.replace_untyped(CStatement::VarAssign(
+                inner_func_name.clone(),
+                from.replace_untyped(CExpr::ObjectAccess {
+                    index: 0,
+                    object: from.replace_untyped(CExpr::Value(CValue::Ident(
+                        String::from("_aro_captures"),
+                        CType::Object,
+                    ))),
+                    field_type: from.replace_untyped(inner_func_ctype.clone()),
+                }),
+            )));
+
+            let ret = from_out.to_typed(
+                CExpr::BinOp(
+                    BinOp::Call,
+                    from.replace_untyped(CValue::Ident(inner_func_name, inner_func_ctype)),
+                    arg.replace_untyped(CValue::Ident(arg_name, arg_ctype)),
+                    type_to_ctype(&from_out.expr),
+                ),
+                *from_out.expr.clone(),
+            );
+            let (ret, ret_was_casted) = maybe_cast_representation(
+                &ret,
+                &to_out.expr,
+                &mut adaptor_func_scope,
+                &mut adaptor_func_expr_index,
+                functions,
+                function_index,
+            );
+
+            if arg_was_casted || ret_was_casted {
+                let adaptor_func_name = get_func_name(function_index);
+                functions.push(from.replace_untyped(CFunc {
+                    name: adaptor_func_name.clone(),
+                    param: to_in.replace_expr(type_to_ctype(&to_in.expr)),
+                    body: adaptor_func_scope,
+                    ret: ret.to_untyped_ast(),
+                }));
+
+                let adaptor_closure_name = get_expr_name(expr_index);
+                let adaptor_closure_type = type_to_ctype(to_type);
+                scope.push(from.replace_untyped(CStatement::VarDecl(
+                    adaptor_closure_type.clone(),
+                    adaptor_closure_name.clone(),
+                )));
+                scope.push(from.replace_untyped(CStatement::ClosureInit {
+                    name: adaptor_closure_name.clone(),
+                    function: from.replace_untyped(CValue::Ident(
+                        adaptor_func_name,
+                        CType::VoidPtr,
+                    )),
+                    captures: vec![from.to_untyped_ast()],
+                }));
+
+                (
+                    from.replace_expr_and_type(
+                        CExpr::Value(CValue::Ident(adaptor_closure_name, adaptor_closure_type)),
+                        to_type.clone(),
+                    ),
+                    true,
+                )
+            } else {
+                (
+                    from.replace_expr_and_type(*from.expr.clone(), to_type.clone()),
+                    false,
+                )
+            }
+        }
         _ => (
             from.replace_expr_and_type(*from.expr.clone(), to_type.clone()),
             false,
@@ -346,10 +454,10 @@ pub fn lift_expr(
                         captures: captures_map
                             .into_iter()
                             .map(|(name, var_type)| {
-                                ast.replace_untyped(CValue::Ident(
+                                ast.replace_untyped(CExpr::Value(CValue::Ident(
                                     get_ident_name(&name),
                                     CType::Ref(Box::new(var_type.clone())),
-                                ))
+                                )))
                             })
                             .collect(),
                     }),
@@ -359,7 +467,7 @@ pub fn lift_expr(
                     name: func_name,
                     param: pattern.replace_untyped(param_ctype),
                     body: func_scope,
-                    ret,
+                    ret: ret.to_c_expr(),
                 }));
 
                 ast.replace_untyped(CValue::Ident(closure_name, closure_type))
@@ -432,7 +540,12 @@ pub fn lift_expr(
             scope.push(ast.replace_untyped(CStatement::VarAssign(
                 expr_name.clone(),
                 ast.replace_untyped({
-                    let bin_op_ast = CExpr::BinOp(op.clone(), left_c_ast.clone(), right_c_ast);
+                    let bin_op_ast = CExpr::BinOp(
+                        op.clone(),
+                        left_c_ast.clone(),
+                        right_c_ast,
+                        type_to_ctype(&ast.expr_type),
+                    );
                     match op {
                         &BinOp::Call => {
                             if let CType::Closure { ret, .. } = left_c_ast.expr.get_ctype() {

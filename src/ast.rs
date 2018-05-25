@@ -172,7 +172,7 @@ pub enum CValue {
 #[derive(Debug, PartialEq, Clone)]
 pub enum CExpr {
     Value(CValue),
-    BinOp(BinOp, Ast<CValue>, Ast<CValue>),
+    BinOp(BinOp, Ast<CValue>, Ast<CValue>, CType),
     ObjectAccess {
         object: Ast<CExpr>,
         index: usize,
@@ -202,7 +202,7 @@ pub enum CStatement {
     ClosureInit {
         name: String,
         function: Ast<CValue>,
-        captures: Vec<Ast<CValue>>,
+        captures: Vec<Ast<CExpr>>,
     },
     ObjectInit {
         name: String,
@@ -217,7 +217,7 @@ pub struct CFunc {
     pub name: String,
     pub param: Ast<CType>,
     pub body: Vec<Ast<CStatement>>,
-    pub ret: Ast<CValue>,
+    pub ret: Ast<CExpr>,
 }
 
 impl<T> Ast<T> {
@@ -540,7 +540,7 @@ impl WellCTyped for CExpr {
             &CExpr::AnyAccess { ref value_type, .. } => value_type.clone(),
             &CExpr::ObjectAccess { ref field_type, .. } => *field_type.expr.clone(),
             &CExpr::Cast { ref to_type, .. } => to_type.clone(),
-            &CExpr::BinOp(ref op, ref left, ref right) => panic!(),
+            &CExpr::BinOp(_, _, _, ref result_type) => result_type.clone(),
         }
     }
 }
@@ -612,7 +612,7 @@ impl Display for CExpr {
                     ref value_type,
                 } => format!("({}.{})", value, ctype_to_union_field(value_type)),
                 &CExpr::Value(ref value) => format!("{}", value),
-                &CExpr::BinOp(ref op, ref left, ref right) => match op {
+                &CExpr::BinOp(ref op, ref left, ref right, _) => match op {
                     &BinOp::Add => format!("({} + {})", left, right),
                     &BinOp::Sub => format!("({} - {})", left, right),
                     &BinOp::Mul => format!("({} * {})", left, right),
