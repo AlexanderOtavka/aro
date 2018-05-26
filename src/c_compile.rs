@@ -35,6 +35,7 @@ fn type_to_ctype(t: &EvaluatedType) -> CType {
     }
 }
 
+// TODO: return Ast<CValue> instead
 fn maybe_cast_representation(
     from: &TypedAst<CExpr>,
     to_type: &EvaluatedType,
@@ -59,6 +60,26 @@ fn maybe_cast_representation(
                 CExpr::Cast {
                     value: from.to_untyped_ast(),
                     to_type: CType::Int,
+                },
+                to_type.clone(),
+            ),
+            true,
+        ),
+        (&EvaluatedType::Any, to_type) => (
+            from.replace_expr_and_type(
+                CExpr::AnyAccess {
+                    value: from.to_untyped_ast(),
+                    value_type: type_to_ctype(to_type),
+                },
+                to_type.clone(),
+            ),
+            true,
+        ),
+        (ref from_type, &EvaluatedType::Any) => (
+            from.replace_expr_and_type(
+                CExpr::Cast {
+                    value: from.to_untyped_ast(),
+                    to_type: CType::Any,
                 },
                 to_type.clone(),
             ),
@@ -505,29 +526,63 @@ pub fn lift_expr(
                 let right_c_ast = lift_expr(right, scope, expr_index, functions, function_index);
                 match op {
                     &BinOp::Call => {
-                        if let CType::Closure { param, .. } = left_c_ast.expr.get_ctype() {
-                            let right_ctype = type_to_ctype(&right.expr_type);
-                            if *param.expr == CType::Any && right_ctype != CType::Any {
-                                let any_name = get_expr_name(expr_index);
-                                scope.push(right.replace_untyped(CStatement::VarDecl(
-                                    CType::Any,
-                                    any_name.clone(),
-                                )));
-                                scope.push(right.replace_untyped(CStatement::AnyAssign {
-                                    name: any_name.clone(),
-                                    value: right_c_ast.to_c_expr(),
-                                    value_type: right_ctype,
-                                }));
+                        if let &EvaluatedType::Func(ref param_type, _) = &*left.expr_type {
+                            let (casted_ast, was_casted) = maybe_cast_representation(
+                                &right.replace_expr(CExpr::Value(*right_c_ast.expr.clone())),
+                                &param_type.expr,
+                                scope,
+                                expr_index,
+                                functions,
+                                function_index,
+                            );
 
-                                right.replace_untyped(CValue::Ident(any_name, CType::Any))
+                            if was_casted {
+                                let expr_name = get_expr_name(expr_index);
+                                let expr_ctype = type_to_ctype(&param_type.expr);
+                                scope.push(right.replace_untyped(CStatement::VarDecl(
+                                    expr_ctype.clone(),
+                                    expr_name.clone(),
+                                )));
+                                scope.push(right.replace_untyped(CStatement::VarAssign(
+                                    expr_name.clone(),
+                                    casted_ast.to_untyped_ast(),
+                                )));
+                                right.replace_untyped(CValue::Ident(expr_name, expr_ctype))
                             } else {
                                 right_c_ast
                             }
                         } else {
-                            panic!()
+                            panic!("Calling non-function `{}`", left.expr_type)
                         }
                     }
                     _ => right_c_ast,
+                }
+            };
+
+            let result_ast = {
+                let bin_op_expr = CExpr::BinOp(
+                    op.clone(),
+                    left_c_ast.clone(),
+                    right_c_ast,
+                    type_to_ctype(&ast.expr_type),
+                );
+                match op {
+                    &BinOp::Call => {
+                        if let &EvaluatedType::Func(_, ref ret_type) = &*left.expr_type {
+                            let (casted, _) = maybe_cast_representation(
+                                &ast.replace_expr_and_type(bin_op_expr, *ret_type.expr.clone()),
+                                &ast.expr_type,
+                                scope,
+                                expr_index,
+                                functions,
+                                function_index,
+                            );
+                            casted.to_untyped_ast()
+                        } else {
+                            panic!("Calling non-function `{}`", left.expr_type)
+                        }
+                    }
+                    _ => ast.replace_untyped(bin_op_expr),
                 }
             };
 
@@ -537,34 +592,7 @@ pub fn lift_expr(
                 expr_type.clone(),
                 expr_name.clone(),
             )));
-            scope.push(ast.replace_untyped(CStatement::VarAssign(
-                expr_name.clone(),
-                ast.replace_untyped({
-                    let bin_op_ast = CExpr::BinOp(
-                        op.clone(),
-                        left_c_ast.clone(),
-                        right_c_ast,
-                        type_to_ctype(&ast.expr_type),
-                    );
-                    match op {
-                        &BinOp::Call => {
-                            if let CType::Closure { ret, .. } = left_c_ast.expr.get_ctype() {
-                                if *ret.expr == CType::Any && expr_type != CType::Any {
-                                    CExpr::AnyAccess {
-                                        value: ast.replace_untyped(bin_op_ast),
-                                        value_type: expr_type.clone(),
-                                    }
-                                } else {
-                                    bin_op_ast
-                                }
-                            } else {
-                                panic!()
-                            }
-                        }
-                        _ => bin_op_ast,
-                    }
-                }),
-            )));
+            scope.push(ast.replace_untyped(CStatement::VarAssign(expr_name.clone(), result_ast)));
 
             ast.replace_untyped(CValue::Ident(expr_name, expr_type))
         }
