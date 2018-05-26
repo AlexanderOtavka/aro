@@ -35,54 +35,42 @@ fn type_to_ctype(t: &EvaluatedType) -> CType {
     }
 }
 
-// TODO: return Ast<CValue> instead
 fn maybe_cast_representation(
-    from: &TypedAst<CExpr>,
+    from: Ast<CExpr>,
+    from_type: &EvaluatedType,
     to_type: &EvaluatedType,
     scope: &mut Vec<Ast<CStatement>>,
     expr_index: &mut i32,
     functions: &mut Vec<Ast<CFunc>>,
     function_index: &mut i32,
-) -> (TypedAst<CExpr>, bool) {
-    match (&*from.expr_type, to_type) {
+) -> (Ast<CExpr>, bool) {
+    match (from_type, to_type) {
         (&EvaluatedType::Int, &EvaluatedType::Num) => (
-            from.replace_expr_and_type(
-                CExpr::Cast {
-                    value: from.to_untyped_ast(),
-                    to_type: CType::Float,
-                },
-                to_type.clone(),
-            ),
+            from.replace_expr(CExpr::Cast {
+                value: from.clone(),
+                to_type: CType::Float,
+            }),
             true,
         ),
         (&EvaluatedType::Num, &EvaluatedType::Int) => (
-            from.replace_expr_and_type(
-                CExpr::Cast {
-                    value: from.to_untyped_ast(),
-                    to_type: CType::Int,
-                },
-                to_type.clone(),
-            ),
+            from.replace_expr(CExpr::Cast {
+                value: from.clone(),
+                to_type: CType::Int,
+            }),
             true,
         ),
         (&EvaluatedType::Any, to_type) => (
-            from.replace_expr_and_type(
-                CExpr::AnyAccess {
-                    value: from.to_untyped_ast(),
-                    value_type: type_to_ctype(to_type),
-                },
-                to_type.clone(),
-            ),
+            from.replace_expr(CExpr::AnyAccess {
+                value: from.clone(),
+                value_type: type_to_ctype(to_type),
+            }),
             true,
         ),
         (ref from_type, &EvaluatedType::Any) => (
-            from.replace_expr_and_type(
-                CExpr::Cast {
-                    value: from.to_untyped_ast(),
-                    to_type: CType::Any,
-                },
-                to_type.clone(),
-            ),
+            from.replace_expr(CExpr::Cast {
+                value: from.clone(),
+                to_type: CType::Any,
+            }),
             true,
         ),
         (&EvaluatedType::Tuple(ref from_elements), &EvaluatedType::Tuple(ref to_elements)) => {
@@ -96,21 +84,19 @@ fn maybe_cast_representation(
                 let from_element_ctype =
                     from_element.replace_expr(type_to_ctype(&from_element.expr));
                 let (c_element, was_casted) = maybe_cast_representation(
-                    &from.replace_expr_and_type(
-                        CExpr::ObjectAccess {
-                            object: from.to_untyped_ast(),
-                            index,
-                            field_type: from_element_ctype,
-                        },
-                        *from_element.expr.clone(),
-                    ),
+                    from.replace_expr(CExpr::ObjectAccess {
+                        object: from.clone(),
+                        index,
+                        field_type: from_element_ctype,
+                    }),
+                    &from_element.expr,
                     &to_element.expr,
                     scope,
                     expr_index,
                     functions,
                     function_index,
                 );
-                casted_elements.push(c_element.to_untyped_ast());
+                casted_elements.push(c_element);
                 if was_casted {
                     something_was_casted = true;
                 }
@@ -118,26 +104,18 @@ fn maybe_cast_representation(
 
             if something_was_casted {
                 let copy_name = get_expr_name(expr_index);
-                scope.push(from.replace_untyped(CStatement::VarDecl(
-                    CType::Object,
-                    copy_name.clone(),
-                )));
-                scope.push(from.replace_untyped(CStatement::ObjectInit {
+                scope
+                    .push(from.replace_expr(CStatement::VarDecl(CType::Object, copy_name.clone())));
+                scope.push(from.replace_expr(CStatement::ObjectInit {
                     name: copy_name.clone(),
                     data: casted_elements,
                 }));
                 (
-                    from.replace_expr_and_type(
-                        CExpr::Value(CValue::Ident(copy_name, CType::Object)),
-                        to_type.clone(),
-                    ),
+                    from.replace_expr(CExpr::Value(CValue::Ident(copy_name, CType::Object))),
                     true,
                 )
             } else {
-                (
-                    from.replace_expr_and_type(*from.expr.clone(), to_type.clone()),
-                    false,
-                )
+                (from.clone(), false)
             }
         }
         (
@@ -147,15 +125,13 @@ fn maybe_cast_representation(
             let mut adaptor_func_scope = Vec::new();
             let mut adaptor_func_expr_index = 0;
 
-            let arg = to_in.to_typed(
-                CExpr::Value(CValue::Ident(
-                    String::from("_aro_arg"),
-                    type_to_ctype(&to_in.expr),
-                )),
-                *to_in.expr.clone(),
-            );
+            let arg = to_in.replace_expr(CExpr::Value(CValue::Ident(
+                String::from("_aro_arg"),
+                type_to_ctype(&to_in.expr),
+            )));
             let (arg, arg_was_casted) = maybe_cast_representation(
-                &arg,
+                arg,
+                &to_in.expr,
                 &from_in.expr,
                 &mut adaptor_func_scope,
                 &mut adaptor_func_expr_index,
@@ -164,45 +140,39 @@ fn maybe_cast_representation(
             );
 
             let arg_name = get_expr_name(&mut adaptor_func_expr_index);
-            let arg_ctype = type_to_ctype(&arg.expr_type);
-            adaptor_func_scope.push(arg.replace_untyped(CStatement::VarDecl(
-                arg_ctype.clone(),
-                arg_name.clone(),
-            )));
-            adaptor_func_scope.push(arg.replace_untyped(CStatement::VarAssign(
-                arg_name.clone(),
-                arg.to_untyped_ast(),
-            )));
+            let arg_ctype = type_to_ctype(&from_in.expr);
+            adaptor_func_scope
+                .push(arg.replace_expr(CStatement::VarDecl(arg_ctype.clone(), arg_name.clone())));
+            adaptor_func_scope
+                .push(arg.replace_expr(CStatement::VarAssign(arg_name.clone(), arg.clone())));
 
             let inner_func_name = get_expr_name(&mut adaptor_func_expr_index);
-            let inner_func_ctype = type_to_ctype(&from.expr_type);
-            adaptor_func_scope.push(from.replace_untyped(CStatement::VarDecl(
+            let inner_func_ctype = type_to_ctype(from_type);
+            adaptor_func_scope.push(from.replace_expr(CStatement::VarDecl(
                 inner_func_ctype.clone(),
                 inner_func_name.clone(),
             )));
-            adaptor_func_scope.push(from.replace_untyped(CStatement::VarAssign(
+            adaptor_func_scope.push(from.replace_expr(CStatement::VarAssign(
                 inner_func_name.clone(),
-                from.replace_untyped(CExpr::ObjectAccess {
+                from.replace_expr(CExpr::ObjectAccess {
                     index: 0,
-                    object: from.replace_untyped(CExpr::Value(CValue::Ident(
+                    object: from.replace_expr(CExpr::Value(CValue::Ident(
                         String::from("_aro_captures"),
                         CType::Object,
                     ))),
-                    field_type: from.replace_untyped(inner_func_ctype.clone()),
+                    field_type: from.replace_expr(inner_func_ctype.clone()),
                 }),
             )));
 
-            let ret = from_out.to_typed(
-                CExpr::BinOp(
-                    BinOp::Call,
-                    from.replace_untyped(CValue::Ident(inner_func_name, inner_func_ctype)),
-                    arg.replace_untyped(CValue::Ident(arg_name, arg_ctype)),
-                    type_to_ctype(&from_out.expr),
-                ),
-                *from_out.expr.clone(),
-            );
+            let ret = from_out.replace_expr(CExpr::BinOp(
+                BinOp::Call,
+                from.replace_expr(CValue::Ident(inner_func_name, inner_func_ctype)),
+                arg.replace_expr(CValue::Ident(arg_name, arg_ctype)),
+                type_to_ctype(&from_out.expr),
+            ));
             let (ret, ret_was_casted) = maybe_cast_representation(
-                &ret,
+                ret,
+                &from_out.expr,
                 &to_out.expr,
                 &mut adaptor_func_scope,
                 &mut adaptor_func_expr_index,
@@ -212,46 +182,37 @@ fn maybe_cast_representation(
 
             if arg_was_casted || ret_was_casted {
                 let adaptor_func_name = get_func_name(function_index);
-                functions.push(from.replace_untyped(CFunc {
+                functions.push(from.replace_expr(CFunc {
                     name: adaptor_func_name.clone(),
                     param: to_in.replace_expr(type_to_ctype(&to_in.expr)),
                     body: adaptor_func_scope,
-                    ret: ret.to_untyped_ast(),
+                    ret,
                 }));
 
                 let adaptor_closure_name = get_expr_name(expr_index);
                 let adaptor_closure_type = type_to_ctype(to_type);
-                scope.push(from.replace_untyped(CStatement::VarDecl(
+                scope.push(from.replace_expr(CStatement::VarDecl(
                     adaptor_closure_type.clone(),
                     adaptor_closure_name.clone(),
                 )));
-                scope.push(from.replace_untyped(CStatement::ClosureInit {
+                scope.push(from.replace_expr(CStatement::ClosureInit {
                     name: adaptor_closure_name.clone(),
-                    function: from.replace_untyped(CValue::Ident(
-                        adaptor_func_name,
-                        CType::VoidPtr,
-                    )),
-                    captures: vec![from.to_untyped_ast()],
+                    function: from.replace_expr(CValue::Ident(adaptor_func_name, CType::VoidPtr)),
+                    captures: vec![from.clone()],
                 }));
 
                 (
-                    from.replace_expr_and_type(
-                        CExpr::Value(CValue::Ident(adaptor_closure_name, adaptor_closure_type)),
-                        to_type.clone(),
-                    ),
+                    from.replace_expr(CExpr::Value(CValue::Ident(
+                        adaptor_closure_name,
+                        adaptor_closure_type,
+                    ))),
                     true,
                 )
             } else {
-                (
-                    from.replace_expr_and_type(*from.expr.clone(), to_type.clone()),
-                    false,
-                )
+                (from, false)
             }
         }
-        _ => (
-            from.replace_expr_and_type(*from.expr.clone(), to_type.clone()),
-            false,
-        ),
+        _ => (from, false),
     }
 }
 
@@ -360,17 +321,15 @@ fn bind_declarations(
         &TypedPattern::Ident(ref name) => {
             let value_name = get_ident_name(name);
             let (casted_value, _) = maybe_cast_representation(
-                value,
+                value.to_untyped_ast(),
+                &value.expr_type,
                 &pattern.expr_type,
                 scope,
                 expr_index,
                 functions,
                 function_index,
             );
-            scope.push(pattern.replace_untyped(CStatement::RefAssign(
-                value_name,
-                casted_value.to_untyped_ast(),
-            )));
+            scope.push(pattern.replace_untyped(CStatement::RefAssign(value_name, casted_value)));
         }
         &TypedPattern::Tuple(ref vec) => for (index, element) in vec.iter().enumerate() {
             let inner_value = value.replace_expr_and_type(
@@ -528,7 +487,8 @@ pub fn lift_expr(
                     &BinOp::Call => {
                         if let &EvaluatedType::Func(ref param_type, _) = &*left.expr_type {
                             let (casted_ast, was_casted) = maybe_cast_representation(
-                                &right.replace_expr(CExpr::Value(*right_c_ast.expr.clone())),
+                                right.replace_untyped(CExpr::Value(*right_c_ast.expr.clone())),
+                                &right.expr_type,
                                 &param_type.expr,
                                 scope,
                                 expr_index,
@@ -545,7 +505,7 @@ pub fn lift_expr(
                                 )));
                                 scope.push(right.replace_untyped(CStatement::VarAssign(
                                     expr_name.clone(),
-                                    casted_ast.to_untyped_ast(),
+                                    casted_ast,
                                 )));
                                 right.replace_untyped(CValue::Ident(expr_name, expr_ctype))
                             } else {
@@ -570,14 +530,15 @@ pub fn lift_expr(
                     &BinOp::Call => {
                         if let &EvaluatedType::Func(_, ref ret_type) = &*left.expr_type {
                             let (casted, _) = maybe_cast_representation(
-                                &ast.replace_expr_and_type(bin_op_expr, *ret_type.expr.clone()),
+                                ast.replace_untyped(bin_op_expr),
+                                &ret_type.expr,
                                 &ast.expr_type,
                                 scope,
                                 expr_index,
                                 functions,
                                 function_index,
                             );
-                            casted.to_untyped_ast()
+                            casted
                         } else {
                             panic!("Calling non-function `{}`", left.expr_type)
                         }
