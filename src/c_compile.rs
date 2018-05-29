@@ -14,6 +14,12 @@ fn get_func_name(func_index: &mut i32) -> String {
     format!("_aro_func_{}", old_i)
 }
 
+fn get_adaptor_func_name(func_index: &mut i32) -> String {
+    let old_i = *func_index;
+    *func_index += 1;
+    format!("_aro_adaptor_func_{}", old_i)
+}
+
 fn get_ident_name(name: &str) -> String {
     format!("aro_{}", name)
 }
@@ -182,7 +188,7 @@ fn maybe_cast_representation(
             );
 
             if arg_was_casted || ret_was_casted {
-                let adaptor_func_name = get_func_name(function_index);
+                let adaptor_func_name = get_adaptor_func_name(function_index);
                 functions.push(from.replace_expr(CFunc {
                     name: adaptor_func_name.clone(),
                     param: to_in.replace_expr(type_to_ctype(&to_in.expr)),
