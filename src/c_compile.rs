@@ -332,14 +332,21 @@ fn bind_declarations(
             scope.push(pattern.replace_untyped(CStatement::RefAssign(value_name, casted_value)));
         }
         &TypedPattern::Tuple(ref vec) => for (index, element) in vec.iter().enumerate() {
+            let inner_value_type =
+                if let &EvaluatedType::Tuple(ref value_element_types) = &*value.expr_type {
+                    *value_element_types[index].expr.clone()
+                } else {
+                    panic!("Cannot unpack non-tuple `{}`", value.expr_type)
+                };
             let inner_value = value.replace_expr_and_type(
                 CExpr::ObjectAccess {
                     object: value.to_untyped_ast(),
                     index,
-                    field_type: element.replace_untyped(type_to_ctype(&element.expr_type)),
+                    field_type: element.replace_untyped(type_to_ctype(&inner_value_type)),
                 },
-                *element.expr_type.clone(),
+                inner_value_type,
             );
+
             bind_declarations(
                 element,
                 &inner_value,
