@@ -197,9 +197,10 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
          \n  bool Bool;\
          \n  int Int;\
          \n  double Float;\
+         \n  union _Aro_Any* Object;\
+         \n  union _Aro_Any* Closure;\
          \n  void* Void_Ptr;\
-         \n  union _Aro_Any* Any_Ptr;\
-         \n}} _Aro_Any;\
+         \n}} _Aro_Any, *_Aro_Object, *_Aro_Closure;\
          \n\
          \n{}\
          \n\

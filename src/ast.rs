@@ -567,7 +567,8 @@ fn ctype_to_string(ctype: &CType, name: &str) -> String {
         &CType::Bool => format!("bool {}", name),
         &CType::Float => format!("double {}", name),
         &CType::Int => format!("int {}", name),
-        &CType::Object | &CType::Closure { .. } => format!("_Aro_Any* {}", name),
+        &CType::Object => format!("_Aro_Object {}", name),
+        &CType::Closure { .. } => format!("_Aro_Closure {}", name),
         &CType::VoidPtr => format!("void* {}", name),
         &CType::Ref(ref contained) => format!("{}* {}", ctype_to_string(contained, ""), name),
     }
@@ -578,7 +579,8 @@ fn ctype_to_union_field(ctype: &CType) -> &'static str {
         &CType::Int => "Int",
         &CType::Float => "Float",
         &CType::Bool => "Bool",
-        &CType::Object | &CType::Closure { .. } => "Any_Ptr",
+        &CType::Object => "Object",
+        &CType::Closure { .. } => "Closure",
         &CType::VoidPtr | &CType::Ref(_) => "Void_Ptr",
         &CType::Any => panic!("Can't pull Any out of a union"),
     }
