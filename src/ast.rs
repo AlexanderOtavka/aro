@@ -189,8 +189,10 @@ pub enum CExpr {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct CDeclaration(pub CType, pub String);
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum CStatement {
-    VarDecl(CType, String),
     VarAssign(String, Ast<CExpr>),
     AnyAssign {
         name: String,
@@ -208,7 +210,7 @@ pub enum CStatement {
         name: String,
         data: Vec<Ast<CExpr>>,
     },
-    Block(Vec<Ast<CStatement>>),
+    Block(Vec<CDeclaration>, Vec<Ast<CStatement>>),
     If(Ast<CExpr>, Ast<CStatement>, Ast<CStatement>),
 }
 
@@ -216,6 +218,7 @@ pub enum CStatement {
 pub struct CFunc {
     pub name: String,
     pub param: Ast<CType>,
+    pub declarations: Vec<CDeclaration>,
     pub body: Vec<Ast<CStatement>>,
     pub ret: Ast<CExpr>,
 }
@@ -690,15 +693,20 @@ fn init_array<Element: WellCTyped + Display>(
     assignments.join(" ")
 }
 
+impl Display for CDeclaration {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{};", ctype_to_string(&self.0, &self.1))
+    }
+}
+
 impl Display for CStatement {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
             "{}",
             match self {
-                &CStatement::Block(ref statements) => sequence_to_str("{ ", statements, " }"),
-                &CStatement::VarDecl(ref var_type, ref name) => {
-                    format!("{};", ctype_to_string(var_type, name))
+                &CStatement::Block(ref declarations, ref statements) => {
+                    sequence_to_str(&sequence_to_str("{ ", declarations, " "), statements, " }")
                 }
                 &CStatement::VarAssign(ref name, ref value) => format!("{} = {};", name, value),
                 &CStatement::AnyAssign {
@@ -758,11 +766,15 @@ impl Display for CFunc {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
-            "{} {{ {} return {}; }}",
+            "{} {{ {} {} return {}; }}",
             self.get_signature_string(),
+            self.declarations
+                .iter()
+                .map(|statement| format!("{}", statement))
+                .collect::<Vec<String>>()
+                .join(" "),
             self.body
-                .clone()
-                .into_iter()
+                .iter()
                 .map(|statement| format!("{}", statement))
                 .collect::<Vec<String>>()
                 .join(" "),

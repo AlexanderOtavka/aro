@@ -176,12 +176,14 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
             .collect(),
     )?;
 
+    let mut declarations = Vec::new();
     let mut scope = Vec::new();
     let mut expr_index = 0;
     let mut functions = Vec::new();
     let mut function_index = 0;
     let expr = c_compile::lift_expr(
         &typechecked_ast,
+        &mut declarations,
         &mut scope,
         &mut expr_index,
         &mut functions,
@@ -209,6 +211,7 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
          \n\
          \nint main(void) {{\
          \n  {}\
+         \n  {}\
          \n\
          \n  printf(\"%f\\n\", (double) {});\
          \n  return 0;\
@@ -223,6 +226,11 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
             .map(|function| format!("{}", function))
             .collect::<Vec<String>>()
             .join("\n\n"),
+        declarations
+            .into_iter()
+            .map(|statement| format!("{}", statement))
+            .collect::<Vec<String>>()
+            .join(" "),
         scope
             .into_iter()
             .map(|statement| format!("{}", statement))

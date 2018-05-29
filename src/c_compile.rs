@@ -1,5 +1,5 @@
-use ast::{Ast, BinOp, CExpr, CFunc, CStatement, CType, CValue, EvaluatedType, TypedAst,
-          TypedExpression, TypedPattern, TypedValue, WellCTyped};
+use ast::{Ast, BinOp, CDeclaration, CExpr, CFunc, CStatement, CType, CValue, EvaluatedType,
+          TypedAst, TypedExpression, TypedPattern, TypedValue, WellCTyped};
 use std::collections::{HashMap, HashSet};
 
 fn get_expr_name(expr_index: &mut i32) -> String {
@@ -39,6 +39,7 @@ fn maybe_cast_representation(
     from: Ast<CExpr>,
     from_type: &EvaluatedType,
     to_type: &EvaluatedType,
+    declarations: &mut Vec<CDeclaration>,
     scope: &mut Vec<Ast<CStatement>>,
     expr_index: &mut i32,
     functions: &mut Vec<Ast<CFunc>>,
@@ -89,6 +90,7 @@ fn maybe_cast_representation(
                     }),
                     &from_element.expr,
                     &to_element.expr,
+                    declarations,
                     scope,
                     expr_index,
                     functions,
@@ -102,8 +104,7 @@ fn maybe_cast_representation(
 
             if something_was_casted {
                 let copy_name = get_expr_name(expr_index);
-                scope
-                    .push(from.replace_expr(CStatement::VarDecl(CType::Object, copy_name.clone())));
+                declarations.push(CDeclaration(CType::Object, copy_name.clone()));
                 scope.push(from.replace_expr(CStatement::ObjectInit {
                     name: copy_name.clone(),
                     data: casted_elements,
@@ -120,6 +121,7 @@ fn maybe_cast_representation(
             &EvaluatedType::Func(ref from_in, ref from_out),
             &EvaluatedType::Func(ref to_in, ref to_out),
         ) => {
+            let mut adaptor_func_declarations = Vec::new();
             let mut adaptor_func_scope = Vec::new();
             let mut adaptor_func_expr_index = 0;
 
@@ -131,6 +133,7 @@ fn maybe_cast_representation(
                 arg,
                 &to_in.expr,
                 &from_in.expr,
+                &mut adaptor_func_declarations,
                 &mut adaptor_func_scope,
                 &mut adaptor_func_expr_index,
                 functions,
@@ -139,17 +142,16 @@ fn maybe_cast_representation(
 
             let arg_name = get_expr_name(&mut adaptor_func_expr_index);
             let arg_ctype = type_to_ctype(&from_in.expr);
-            adaptor_func_scope
-                .push(arg.replace_expr(CStatement::VarDecl(arg_ctype.clone(), arg_name.clone())));
+            adaptor_func_declarations.push(CDeclaration(arg_ctype.clone(), arg_name.clone()));
             adaptor_func_scope
                 .push(arg.replace_expr(CStatement::VarAssign(arg_name.clone(), arg.clone())));
 
             let inner_func_name = get_expr_name(&mut adaptor_func_expr_index);
             let inner_func_ctype = type_to_ctype(from_type);
-            adaptor_func_scope.push(from.replace_expr(CStatement::VarDecl(
+            adaptor_func_declarations.push(CDeclaration(
                 inner_func_ctype.clone(),
                 inner_func_name.clone(),
-            )));
+            ));
             adaptor_func_scope.push(from.replace_expr(CStatement::VarAssign(
                 inner_func_name.clone(),
                 from.replace_expr(CExpr::ObjectAccess {
@@ -172,6 +174,7 @@ fn maybe_cast_representation(
                 ret,
                 &from_out.expr,
                 &to_out.expr,
+                &mut adaptor_func_declarations,
                 &mut adaptor_func_scope,
                 &mut adaptor_func_expr_index,
                 functions,
@@ -183,16 +186,17 @@ fn maybe_cast_representation(
                 functions.push(from.replace_expr(CFunc {
                     name: adaptor_func_name.clone(),
                     param: to_in.replace_expr(type_to_ctype(&to_in.expr)),
+                    declarations: adaptor_func_declarations,
                     body: adaptor_func_scope,
                     ret,
                 }));
 
                 let adaptor_closure_name = get_expr_name(expr_index);
                 let adaptor_closure_type = type_to_ctype(to_type);
-                scope.push(from.replace_expr(CStatement::VarDecl(
+                declarations.push(CDeclaration(
                     adaptor_closure_type.clone(),
                     adaptor_closure_name.clone(),
-                )));
+                ));
                 scope.push(from.replace_expr(CStatement::ClosureInit {
                     name: adaptor_closure_name.clone(),
                     function: from.replace_expr(CValue::Ident(adaptor_func_name, CType::VoidPtr)),
@@ -287,22 +291,24 @@ fn find_captures(
     }
 }
 
-fn make_declarations(pattern: &TypedAst<TypedPattern>, scope: &mut Vec<Ast<CStatement>>) {
+fn make_declarations(
+    pattern: &TypedAst<TypedPattern>,
+    declarations: &mut Vec<CDeclaration>,
+    scope: &mut Vec<Ast<CStatement>>,
+) {
     match &*pattern.expr {
         &TypedPattern::Ident(ref name) => {
             let value_name = get_ident_name(name);
             let value_ctype = type_to_ctype(&pattern.expr_type);
             let value_ref_type = CType::Ref(Box::new(value_ctype.clone()));
 
-            scope.push(
-                pattern.replace_untyped(CStatement::VarDecl(value_ref_type, value_name.clone())),
-            );
+            declarations.push(CDeclaration(value_ref_type, value_name.clone()));
             scope.push(
                 pattern.replace_untyped(CStatement::RefAlloc(value_name.clone(), value_ctype)),
             );
         }
         &TypedPattern::Tuple(ref vec) => for element in vec {
-            make_declarations(element, scope);
+            make_declarations(element, declarations, scope);
         },
     }
 }
@@ -310,6 +316,7 @@ fn make_declarations(pattern: &TypedAst<TypedPattern>, scope: &mut Vec<Ast<CStat
 fn bind_declarations(
     pattern: &TypedAst<TypedPattern>,
     value: &TypedAst<CExpr>,
+    declarations: &mut Vec<CDeclaration>,
     scope: &mut Vec<Ast<CStatement>>,
     expr_index: &mut i32,
     functions: &mut Vec<Ast<CFunc>>,
@@ -322,6 +329,7 @@ fn bind_declarations(
                 value.to_untyped_ast(),
                 &value.expr_type,
                 &pattern.expr_type,
+                declarations,
                 scope,
                 expr_index,
                 functions,
@@ -348,6 +356,7 @@ fn bind_declarations(
             bind_declarations(
                 element,
                 &inner_value,
+                declarations,
                 scope,
                 expr_index,
                 functions,
@@ -359,6 +368,7 @@ fn bind_declarations(
 
 pub fn lift_expr(
     ast: &TypedAst<TypedExpression>,
+    declarations: &mut Vec<CDeclaration>,
     scope: &mut Vec<Ast<CStatement>>,
     expr_index: &mut i32,
     functions: &mut Vec<Ast<CFunc>>,
@@ -376,6 +386,7 @@ pub fn lift_expr(
                 find_captures(body, &locals, &mut captures_map);
 
                 let func_name = get_func_name(function_index);
+                let mut func_declarations = Vec::new();
                 let mut func_scope = Vec::new();
                 let mut func_expr_index = 0;
 
@@ -384,10 +395,11 @@ pub fn lift_expr(
                     String::from("_aro_arg"),
                     param_ctype.clone(),
                 )));
-                make_declarations(pattern, &mut func_scope);
+                make_declarations(pattern, &mut func_declarations, &mut func_scope);
                 bind_declarations(
                     pattern,
                     &param_value,
+                    &mut func_declarations,
                     &mut func_scope,
                     &mut func_expr_index,
                     functions,
@@ -396,10 +408,10 @@ pub fn lift_expr(
 
                 for (index, (name, var_type)) in captures_map.iter().enumerate() {
                     let ident_name = get_ident_name(name);
-                    func_scope.push(ast.replace_untyped(CStatement::VarDecl(
+                    func_declarations.push(CDeclaration(
                         CType::Ref(Box::new(var_type.clone())),
                         ident_name.clone(),
-                    )));
+                    ));
 
                     let captures_object = ast.replace_untyped(CExpr::Value(CValue::Ident(
                         String::from("_aro_captures"),
@@ -417,6 +429,7 @@ pub fn lift_expr(
 
                 let ret = lift_expr(
                     body,
+                    &mut func_declarations,
                     &mut func_scope,
                     &mut func_expr_index,
                     functions,
@@ -425,10 +438,7 @@ pub fn lift_expr(
 
                 let closure_name = get_expr_name(expr_index);
                 let closure_type = type_to_ctype(&ast.expr_type);
-                scope.push(ast.replace_untyped(CStatement::VarDecl(
-                    closure_type.clone(),
-                    closure_name.clone(),
-                )));
+                declarations.push(CDeclaration(closure_type.clone(), closure_name.clone()));
                 scope.push(
                     ast.replace_untyped(CStatement::ClosureInit {
                         name: closure_name.clone(),
@@ -451,6 +461,7 @@ pub fn lift_expr(
                 functions.push(ast.replace_untyped(CFunc {
                     name: func_name,
                     param: pattern.replace_untyped(param_ctype),
+                    declarations: func_declarations,
                     body: func_scope,
                     ret: ret.to_c_expr(),
                 }));
@@ -461,16 +472,19 @@ pub fn lift_expr(
                 let mut data = Vec::new();
                 for element in vec {
                     data.push(
-                        lift_expr(element, scope, expr_index, functions, function_index)
-                            .to_c_expr(),
+                        lift_expr(
+                            element,
+                            declarations,
+                            scope,
+                            expr_index,
+                            functions,
+                            function_index,
+                        ).to_c_expr(),
                     );
                 }
 
                 let expr_name = get_expr_name(expr_index);
-                scope.push(ast.replace_untyped(CStatement::VarDecl(
-                    CType::Object,
-                    expr_name.clone(),
-                )));
+                declarations.push(CDeclaration(CType::Object, expr_name.clone()));
                 scope.push(ast.replace_untyped(CStatement::ObjectInit {
                     name: expr_name.clone(),
                     data,
@@ -485,9 +499,23 @@ pub fn lift_expr(
             type_to_ctype(&ast.expr_type),
         )),
         &TypedExpression::BinOp(ref op, ref left, ref right) => {
-            let left_c_ast = lift_expr(left, scope, expr_index, functions, function_index);
+            let left_c_ast = lift_expr(
+                left,
+                declarations,
+                scope,
+                expr_index,
+                functions,
+                function_index,
+            );
             let right_c_ast = {
-                let right_c_ast = lift_expr(right, scope, expr_index, functions, function_index);
+                let right_c_ast = lift_expr(
+                    right,
+                    declarations,
+                    scope,
+                    expr_index,
+                    functions,
+                    function_index,
+                );
                 match op {
                     &BinOp::Call => {
                         if let &EvaluatedType::Func(ref param_type, _) = &*left.expr_type {
@@ -495,6 +523,7 @@ pub fn lift_expr(
                                 right.replace_untyped(CExpr::Value(*right_c_ast.expr.clone())),
                                 &right.expr_type,
                                 &param_type.expr,
+                                declarations,
                                 scope,
                                 expr_index,
                                 functions,
@@ -504,10 +533,8 @@ pub fn lift_expr(
                             if was_casted {
                                 let expr_name = get_expr_name(expr_index);
                                 let expr_ctype = type_to_ctype(&param_type.expr);
-                                scope.push(right.replace_untyped(CStatement::VarDecl(
-                                    expr_ctype.clone(),
-                                    expr_name.clone(),
-                                )));
+                                declarations
+                                    .push(CDeclaration(expr_ctype.clone(), expr_name.clone()));
                                 scope.push(right.replace_untyped(CStatement::VarAssign(
                                     expr_name.clone(),
                                     casted_ast,
@@ -538,6 +565,7 @@ pub fn lift_expr(
                                 ast.replace_untyped(bin_op_expr),
                                 &ret_type.expr,
                                 &ast.expr_type,
+                                declarations,
                                 scope,
                                 expr_index,
                                 functions,
@@ -554,24 +582,29 @@ pub fn lift_expr(
 
             let expr_name = get_expr_name(expr_index);
             let expr_type = type_to_ctype(&ast.expr_type);
-            scope.push(ast.replace_untyped(CStatement::VarDecl(
-                expr_type.clone(),
-                expr_name.clone(),
-            )));
+            declarations.push(CDeclaration(expr_type.clone(), expr_name.clone()));
             scope.push(ast.replace_untyped(CStatement::VarAssign(expr_name.clone(), result_ast)));
 
             ast.replace_untyped(CValue::Ident(expr_name, expr_type))
         }
         &TypedExpression::If(ref condition, ref consequent, ref alternate) => {
-            let condition_c_ast =
-                lift_expr(condition, scope, expr_index, functions, function_index);
+            let condition_c_ast = lift_expr(
+                condition,
+                declarations,
+                scope,
+                expr_index,
+                functions,
+                function_index,
+            );
 
             let expr_name = get_expr_name(expr_index);
             let expr_type = type_to_ctype(&ast.expr_type);
 
+            let mut consequent_declarations = Vec::new();
             let mut consequent_scope = Vec::new();
             let consequent_c_ast = lift_expr(
                 consequent,
+                &mut consequent_declarations,
                 &mut consequent_scope,
                 expr_index,
                 functions,
@@ -581,11 +614,14 @@ pub fn lift_expr(
                 expr_name.clone(),
                 consequent_c_ast.to_c_expr(),
             )));
-            let consequent_block = consequent.replace_untyped(CStatement::Block(consequent_scope));
+            let consequent_block = consequent
+                .replace_untyped(CStatement::Block(consequent_declarations, consequent_scope));
 
+            let mut alternate_declarations = Vec::new();
             let mut alternate_scope = Vec::new();
             let alternate_c_ast = lift_expr(
                 alternate,
+                &mut alternate_declarations,
                 &mut alternate_scope,
                 expr_index,
                 functions,
@@ -595,12 +631,10 @@ pub fn lift_expr(
                 expr_name.clone(),
                 alternate_c_ast.to_c_expr(),
             )));
-            let alternate_block = alternate.replace_untyped(CStatement::Block(alternate_scope));
+            let alternate_block = alternate
+                .replace_untyped(CStatement::Block(alternate_declarations, alternate_scope));
 
-            scope.push(ast.replace_untyped(CStatement::VarDecl(
-                expr_type.clone(),
-                expr_name.clone(),
-            )));
+            declarations.push(CDeclaration(expr_type.clone(), expr_name.clone()));
             scope.push(ast.replace_untyped(CStatement::If(
                 condition_c_ast.to_c_expr(),
                 consequent_block,
@@ -612,15 +646,14 @@ pub fn lift_expr(
         &TypedExpression::Let(ref pattern, ref value, ref body) => {
             let body_name = get_expr_name(expr_index);
             let body_type = type_to_ctype(&body.expr_type);
-            scope.push(body.replace_untyped(CStatement::VarDecl(
-                body_type.clone(),
-                body_name.clone(),
-            )));
+            declarations.push(CDeclaration(body_type.clone(), body_name.clone()));
 
+            let mut body_declarations = Vec::new();
             let mut body_scope = Vec::new();
-            make_declarations(pattern, &mut body_scope);
+            make_declarations(pattern, &mut body_declarations, &mut body_scope);
             let value_c_ast = lift_expr(
                 value,
+                &mut body_declarations,
                 &mut body_scope,
                 expr_index,
                 functions,
@@ -629,20 +662,27 @@ pub fn lift_expr(
             bind_declarations(
                 pattern,
                 &value.replace_expr(CExpr::Value(*value_c_ast.expr)),
+                &mut body_declarations,
                 &mut body_scope,
                 expr_index,
                 functions,
                 function_index,
             );
 
-            let body_c_ast =
-                lift_expr(body, &mut body_scope, expr_index, functions, function_index);
+            let body_c_ast = lift_expr(
+                body,
+                &mut body_declarations,
+                &mut body_scope,
+                expr_index,
+                functions,
+                function_index,
+            );
             body_scope.push(body.replace_untyped(CStatement::VarAssign(
                 body_name.clone(),
                 body_c_ast.to_c_expr(),
             )));
 
-            scope.push(ast.replace_untyped(CStatement::Block(body_scope)));
+            scope.push(ast.replace_untyped(CStatement::Block(body_declarations, body_scope)));
 
             ast.replace_untyped(CValue::Ident(body_name, body_type))
         }
@@ -673,12 +713,14 @@ mod lift_expr {
         let ast = source_to_ast(aro_code).unwrap();
         let typechecked_ast = typecheck_ast(&ast, &HashMap::new()).unwrap();
 
+        let mut declarations = Vec::new();
         let mut scope = Vec::new();
         let mut expr_index = 0;
         let mut functions = Vec::new();
         let mut function_index = 0;
         let actual_expr = lift_expr(
             &typechecked_ast,
+            &mut declarations,
             &mut scope,
             &mut expr_index,
             &mut functions,
@@ -686,6 +728,9 @@ mod lift_expr {
         );
 
         let mut actual_scope = String::new();
+        for statement in declarations {
+            actual_scope += &format!("{} ", statement);
+        }
         for statement in scope {
             actual_scope += &format!("{} ", statement);
         }
@@ -762,12 +807,12 @@ mod lift_expr {
         assert_lift(
             "1 - 1 <= 1.3 + 8 * 3",
             "int _aro_expr_0; \
-             _aro_expr_0 = (1 - 1); \
              int _aro_expr_1; \
-             _aro_expr_1 = (8 * 3); \
              double _aro_expr_2; \
-             _aro_expr_2 = (1.3 + _aro_expr_1); \
              bool _aro_expr_3; \
+             _aro_expr_0 = (1 - 1); \
+             _aro_expr_1 = (8 * 3); \
+             _aro_expr_2 = (1.3 + _aro_expr_1); \
              _aro_expr_3 = (_aro_expr_0 <= _aro_expr_2); ",
             "",
             "_aro_expr_3",
@@ -784,9 +829,9 @@ mod lift_expr {
                 8 * 2
             ",
             "bool _aro_expr_0; \
-             _aro_expr_0 = (1 <= 2); \
              double _aro_expr_1; \
-             if (_aro_expr_0) { \
+             _aro_expr_0 = (1 <= 2); \
+             if (_aro_expr_0) {  \
              _aro_expr_1 = 5.3; \
              } else { \
              int _aro_expr_2; \
@@ -808,11 +853,11 @@ mod lift_expr {
             "double _aro_expr_0; \
              { \
              double * aro_x; \
-             aro_x = malloc(sizeof(double )); \
              int _aro_expr_1; \
+             double _aro_expr_2; \
+             aro_x = malloc(sizeof(double )); \
              _aro_expr_1 = (5 + 2); \
              *aro_x = _aro_expr_1; \
-             double _aro_expr_2; \
              _aro_expr_2 = ((*aro_x) + 3); \
              _aro_expr_0 = _aro_expr_2; \
              } ",
@@ -832,14 +877,14 @@ mod lift_expr {
             "int _aro_expr_0; \
              { \
              double * aro_x; \
+             int _aro_expr_1; \
              aro_x = malloc(sizeof(double )); \
              *aro_x = 5; \
-             int _aro_expr_1; \
              { \
              int * aro_x; \
+             int _aro_expr_2; \
              aro_x = malloc(sizeof(int )); \
              *aro_x = 4; \
-             int _aro_expr_2; \
              _aro_expr_2 = ((*aro_x) + 3); \
              _aro_expr_1 = _aro_expr_2; \
              } \
