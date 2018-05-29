@@ -81,13 +81,11 @@ fn maybe_cast_representation(
                 .zip(to_elements.into_iter())
                 .enumerate()
             {
-                let from_element_ctype =
-                    from_element.replace_expr(type_to_ctype(&from_element.expr));
                 let (c_element, was_casted) = maybe_cast_representation(
                     from.replace_expr(CExpr::ObjectAccess {
                         object: from.clone(),
                         index,
-                        field_type: from_element_ctype,
+                        field_type: type_to_ctype(&from_element.expr),
                     }),
                     &from_element.expr,
                     &to_element.expr,
@@ -160,7 +158,7 @@ fn maybe_cast_representation(
                         String::from("_aro_captures"),
                         CType::Object,
                     ))),
-                    field_type: from.replace_expr(inner_func_ctype.clone()),
+                    field_type: inner_func_ctype.clone(),
                 }),
             )));
 
@@ -342,7 +340,7 @@ fn bind_declarations(
                 CExpr::ObjectAccess {
                     object: value.to_untyped_ast(),
                     index,
-                    field_type: element.replace_untyped(type_to_ctype(&inner_value_type)),
+                    field_type: type_to_ctype(&inner_value_type),
                 },
                 inner_value_type,
             );
@@ -412,7 +410,7 @@ pub fn lift_expr(
                         ast.replace_untyped(CExpr::ObjectAccess {
                             object: captures_object,
                             index,
-                            field_type: ast.replace_untyped(CType::Ref(Box::new(var_type.clone()))),
+                            field_type: CType::Ref(Box::new(var_type.clone())),
                         }),
                     )))
                 }

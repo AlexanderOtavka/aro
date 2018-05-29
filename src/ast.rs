@@ -176,7 +176,7 @@ pub enum CExpr {
     ObjectAccess {
         object: Ast<CExpr>,
         index: usize,
-        field_type: Ast<CType>,
+        field_type: CType,
     },
     AnyAccess {
         value: Ast<CExpr>,
@@ -537,10 +537,19 @@ impl WellCTyped for CExpr {
     fn get_ctype(&self) -> CType {
         match self {
             &CExpr::Value(ref value) => value.get_ctype(),
-            &CExpr::AnyAccess { ref value_type, .. } => value_type.clone(),
-            &CExpr::ObjectAccess { ref field_type, .. } => *field_type.expr.clone(),
-            &CExpr::Cast { ref to_type, .. } => to_type.clone(),
-            &CExpr::BinOp(_, _, _, ref result_type) => result_type.clone(),
+            &CExpr::AnyAccess {
+                value_type: ref expr_type,
+                ..
+            }
+            | &CExpr::ObjectAccess {
+                field_type: ref expr_type,
+                ..
+            }
+            | &CExpr::Cast {
+                to_type: ref expr_type,
+                ..
+            }
+            | &CExpr::BinOp(_, _, _, ref expr_type) => expr_type.clone(),
         }
     }
 }
@@ -581,7 +590,8 @@ fn ctype_to_union_field(ctype: &CType) -> &'static str {
         &CType::Bool => "Bool",
         &CType::Object => "Object",
         &CType::Closure { .. } => "Closure",
-        &CType::VoidPtr | &CType::Ref(_) => "Void_Ptr",
+        &CType::VoidPtr => "Void_Ptr",
+        &CType::Ref(_) => "Ref",
         &CType::Any => panic!("Can't pull Any out of a union"),
     }
 }
@@ -603,11 +613,14 @@ impl Display for CExpr {
                     ref index,
                     ref field_type,
                 } => format!(
-                    "(({}){}[{}].{})",
-                    field_type,
+                    "({}{}[{}].{})",
+                    match field_type {
+                        &CType::Ref(_) => format!("({})", field_type),
+                        _ => String::from(""),
+                    },
                     object,
                     index,
-                    ctype_to_union_field(&field_type.expr)
+                    ctype_to_union_field(field_type)
                 ),
                 &CExpr::AnyAccess {
                     ref value,

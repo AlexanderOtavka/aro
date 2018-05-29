@@ -199,6 +199,7 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
          \n  double Float;\
          \n  union _Aro_Any* Object;\
          \n  union _Aro_Any* Closure;\
+         \n  void* Ref;\
          \n  void* Void_Ptr;\
          \n}} _Aro_Any, *_Aro_Object, *_Aro_Closure;\
          \n\
