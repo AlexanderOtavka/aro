@@ -177,14 +177,14 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
     )?;
 
     let mut declarations = Vec::new();
-    let mut scope = Vec::new();
+    let mut statements = Vec::new();
     let mut expr_index = 0;
     let mut functions = Vec::new();
     let mut function_index = 0;
     let expr = c_compile::lift_expr(
         &typechecked_ast,
         &mut declarations,
-        &mut scope,
+        &mut statements,
         &mut expr_index,
         &mut functions,
         &mut function_index,
@@ -231,7 +231,7 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
             .map(|statement| format!("{}", statement))
             .collect::<Vec<String>>()
             .join(" "),
-        scope
+        statements
             .into_iter()
             .map(|statement| format!("{}", statement))
             .collect::<Vec<String>>()
