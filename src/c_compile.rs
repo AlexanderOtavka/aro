@@ -2,10 +2,10 @@ use ast::{Ast, BinOp, CDeclaration, CExpr, CFunc, CStatement, CType, CValue, Eva
           TypedAst, TypedExpression, TypedPattern, TypedValue, WellCTyped};
 use std::collections::{HashMap, HashSet};
 
-fn get_expr_name(expr_index: &mut i32) -> String {
+fn get_expr_name(name: &str, expr_index: &mut i32) -> String {
     let old_i = *expr_index;
     *expr_index += 1;
-    format!("_aro_expr_{}", old_i)
+    format!("_aro_expr_{}_{}", name, old_i)
 }
 
 fn get_func_name(func_index: &mut i32) -> String {
@@ -17,7 +17,7 @@ fn get_func_name(func_index: &mut i32) -> String {
 fn get_adaptor_func_name(func_index: &mut i32) -> String {
     let old_i = *func_index;
     *func_index += 1;
-    format!("_aro_adaptor_func_{}", old_i)
+    format!("_aro_func_adaptor_{}", old_i)
 }
 
 fn get_ident_name(name: &str) -> String {
@@ -109,7 +109,7 @@ fn maybe_cast_representation(
             }
 
             if something_was_casted {
-                let copy_name = get_expr_name(expr_index);
+                let copy_name = get_expr_name("casted_copy", expr_index);
                 declarations.push(CDeclaration(CType::Object, copy_name.clone()));
                 scope.push(from.replace_expr(CStatement::ObjectInit {
                     name: copy_name.clone(),
@@ -146,13 +146,13 @@ fn maybe_cast_representation(
                 function_index,
             );
 
-            let arg_name = get_expr_name(&mut adaptor_func_expr_index);
+            let arg_name = get_expr_name("casted_arg", &mut adaptor_func_expr_index);
             let arg_ctype = type_to_ctype(&from_in.expr);
             adaptor_func_declarations.push(CDeclaration(arg_ctype.clone(), arg_name.clone()));
             adaptor_func_scope
                 .push(arg.replace_expr(CStatement::VarAssign(arg_name.clone(), arg.clone())));
 
-            let inner_func_name = get_expr_name(&mut adaptor_func_expr_index);
+            let inner_func_name = get_expr_name("inner_closure", &mut adaptor_func_expr_index);
             let inner_func_ctype = type_to_ctype(from_type);
             adaptor_func_declarations.push(CDeclaration(
                 inner_func_ctype.clone(),
@@ -197,7 +197,7 @@ fn maybe_cast_representation(
                     ret,
                 }));
 
-                let adaptor_closure_name = get_expr_name(expr_index);
+                let adaptor_closure_name = get_expr_name("adaptor_closure", expr_index);
                 let adaptor_closure_type = type_to_ctype(to_type);
                 declarations.push(CDeclaration(
                     adaptor_closure_type.clone(),
@@ -442,7 +442,7 @@ pub fn lift_expr(
                     function_index,
                 );
 
-                let closure_name = get_expr_name(expr_index);
+                let closure_name = get_expr_name("closure", expr_index);
                 let closure_type = type_to_ctype(&ast.expr_type);
                 declarations.push(CDeclaration(closure_type.clone(), closure_name.clone()));
                 scope.push(
@@ -489,7 +489,7 @@ pub fn lift_expr(
                     );
                 }
 
-                let expr_name = get_expr_name(expr_index);
+                let expr_name = get_expr_name("tuple", expr_index);
                 declarations.push(CDeclaration(CType::Object, expr_name.clone()));
                 scope.push(ast.replace_untyped(CStatement::ObjectInit {
                     name: expr_name.clone(),
@@ -537,7 +537,7 @@ pub fn lift_expr(
                             );
 
                             if was_casted {
-                                let expr_name = get_expr_name(expr_index);
+                                let expr_name = get_expr_name("casted", expr_index);
                                 let expr_ctype = type_to_ctype(&param_type.expr);
                                 declarations
                                     .push(CDeclaration(expr_ctype.clone(), expr_name.clone()));
@@ -586,7 +586,7 @@ pub fn lift_expr(
                 }
             };
 
-            let expr_name = get_expr_name(expr_index);
+            let expr_name = get_expr_name("op_result", expr_index);
             let expr_type = type_to_ctype(&ast.expr_type);
             declarations.push(CDeclaration(expr_type.clone(), expr_name.clone()));
             scope.push(ast.replace_untyped(CStatement::VarAssign(expr_name.clone(), result_ast)));
@@ -603,7 +603,7 @@ pub fn lift_expr(
                 function_index,
             );
 
-            let expr_name = get_expr_name(expr_index);
+            let expr_name = get_expr_name("if_result", expr_index);
             let expr_type = type_to_ctype(&ast.expr_type);
 
             let mut consequent_declarations = Vec::new();
@@ -650,7 +650,7 @@ pub fn lift_expr(
             ast.replace_untyped(CValue::Ident(expr_name, expr_type))
         }
         &TypedExpression::Let(ref pattern, ref value, ref body) => {
-            let body_name = get_expr_name(expr_index);
+            let body_name = get_expr_name("let_body", expr_index);
             let body_type = type_to_ctype(&body.expr_type);
             declarations.push(CDeclaration(body_type.clone(), body_name.clone()));
 
