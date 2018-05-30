@@ -66,6 +66,7 @@ fn maybe_cast_representation(
             }),
             true,
         ),
+        (&EvaluatedType::Any, &EvaluatedType::Any) => (from, false),
         (&EvaluatedType::Any, to_type) => (
             from.replace_expr(CExpr::AnyAccess {
                 value: from.clone(),
@@ -357,7 +358,8 @@ fn bind_declarations(
                 functions,
                 function_index,
             );
-            statements.push(pattern.replace_untyped(CStatement::RefAssign(value_name, casted_value)));
+            statements
+                .push(pattern.replace_untyped(CStatement::RefAssign(value_name, casted_value)));
         }
         &TypedPattern::Tuple(ref vec) => for (index, element) in vec.iter().enumerate() {
             let inner_value_type =
@@ -616,7 +618,8 @@ pub fn lift_expr(
             let expr_name = get_expr_name("op_result", expr_index);
             let expr_type = type_to_ctype(&ast.expr_type);
             declarations.push(CDeclaration(expr_type.clone(), expr_name.clone()));
-            statements.push(ast.replace_untyped(CStatement::VarAssign(expr_name.clone(), result_ast)));
+            statements
+                .push(ast.replace_untyped(CStatement::VarAssign(expr_name.clone(), result_ast)));
 
             ast.replace_untyped(CValue::Ident(expr_name, expr_type))
         }
@@ -647,8 +650,10 @@ pub fn lift_expr(
                 expr_name.clone(),
                 consequent_c_ast.to_c_expr(),
             )));
-            let consequent_block = consequent
-                .replace_untyped(CStatement::Block(consequent_declarations, consequent_statements));
+            let consequent_block = consequent.replace_untyped(CStatement::Block(
+                consequent_declarations,
+                consequent_statements,
+            ));
 
             let mut alternate_declarations = Vec::new();
             let mut alternate_statements = Vec::new();
@@ -664,8 +669,10 @@ pub fn lift_expr(
                 expr_name.clone(),
                 alternate_c_ast.to_c_expr(),
             )));
-            let alternate_block = alternate
-                .replace_untyped(CStatement::Block(alternate_declarations, alternate_statements));
+            let alternate_block = alternate.replace_untyped(CStatement::Block(
+                alternate_declarations,
+                alternate_statements,
+            ));
 
             declarations.push(CDeclaration(expr_type.clone(), expr_name.clone()));
             statements.push(ast.replace_untyped(CStatement::If(
@@ -715,7 +722,8 @@ pub fn lift_expr(
                 body_c_ast.to_c_expr(),
             )));
 
-            statements.push(ast.replace_untyped(CStatement::Block(body_declarations, body_statements)));
+            statements
+                .push(ast.replace_untyped(CStatement::Block(body_declarations, body_statements)));
 
             ast.replace_untyped(CValue::Ident(body_name, body_type))
         }
@@ -743,7 +751,8 @@ pub fn lift_expr(
                 let casted_name = get_expr_name("casted", expr_index);
                 let casted_ctype = type_to_ctype(&to_type.expr);
                 declarations.push(CDeclaration(casted_ctype.clone(), casted_name.clone()));
-                statements.push(ast.replace_untyped(CStatement::VarAssign(casted_name.clone(), casted)));
+                statements
+                    .push(ast.replace_untyped(CStatement::VarAssign(casted_name.clone(), casted)));
 
                 ast.replace_untyped(CValue::Ident(casted_name, casted_ctype))
             } else {

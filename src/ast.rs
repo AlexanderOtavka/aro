@@ -590,14 +590,14 @@ fn ctype_to_string(ctype: &CType, name: &str) -> String {
 
 fn ctype_to_union_field(ctype: &CType) -> &'static str {
     match ctype {
-        &CType::Int => "Int",
-        &CType::Float => "Float",
-        &CType::Bool => "Bool",
-        &CType::Object => "Object",
-        &CType::Closure { .. } => "Closure",
-        &CType::VoidPtr => "Void_Ptr",
-        &CType::Ref(_) => "Ref",
-        &CType::Any => panic!("Can't pull Any out of a union"),
+        &CType::Int => ".Int",
+        &CType::Float => ".Float",
+        &CType::Bool => ".Bool",
+        &CType::Object => ".Object",
+        &CType::Closure { .. } => ".Closure",
+        &CType::VoidPtr => ".Void_Ptr",
+        &CType::Ref(_) => ".Ref",
+        &CType::Any => "",
     }
 }
 
@@ -618,7 +618,7 @@ impl Display for CExpr {
                     ref index,
                     ref field_type,
                 } => format!(
-                    "({}{}[{}].{})",
+                    "({}{}[{}]{})",
                     match field_type {
                         &CType::Ref(_) => format!("({})", field_type),
                         _ => String::from(""),
@@ -630,7 +630,7 @@ impl Display for CExpr {
                 &CExpr::AnyAccess {
                     ref value,
                     ref value_type,
-                } => format!("({}.{})", value, ctype_to_union_field(value_type)),
+                } => format!("({}{})", value, ctype_to_union_field(value_type)),
                 &CExpr::Value(ref value) => format!("{}", value),
                 &CExpr::BinOp(ref op, ref left, ref right, _) => match op {
                     &BinOp::Add => format!("({} + {})", left, right),
@@ -684,7 +684,7 @@ fn init_array<Element: WellCTyped + Display>(
     let mut assignments = Vec::new();
     for (i, element) in elements.iter().enumerate() {
         assignments.push(format!(
-            "{}[{}].{} = {};",
+            "{}[{}]{} = {};",
             name,
             i + start_index,
             ctype_to_union_field(&element.expr.get_ctype()),
