@@ -49,15 +49,7 @@ pub enum TypedExpression {
         TypedAst<TypedExpression>,
         TypedAst<TypedExpression>,
     ),
-    GenericCall(
-        (
-            String,
-            Ast<EvaluatedType>,
-            Ast<EvaluatedType>,
-            TypedAst<TypedExpression>,
-        ),
-        Ast<EvaluatedType>,
-    ),
+    Cast(TypedAst<TypedExpression>, Ast<EvaluatedType>),
     Sequence(TypedAst<TypedExpression>, TypedAst<TypedExpression>),
     RecordAccess(TypedAst<TypedExpression>, String),
 }
@@ -92,12 +84,6 @@ pub enum TypedValue {
     Num(f64),
     Bool(bool),
     Func(TypedAst<TypedPattern>, TypedAst<TypedExpression>),
-    GenericFunc(
-        String,
-        Ast<EvaluatedType>,
-        Ast<EvaluatedType>,
-        TypedAst<TypedExpression>,
-    ),
     Tuple(Vec<TypedAst<TypedExpression>>),
     List(Vec<TypedAst<TypedExpression>>),
     Hook(Vec<String>),
@@ -141,7 +127,12 @@ pub enum EvaluatedType {
     Empty,
     Ident(String, Ast<EvaluatedType>),
     Func(Ast<EvaluatedType>, Ast<EvaluatedType>),
-    GenericFunc(String, Ast<EvaluatedType>, Ast<EvaluatedType>),
+    GenericFunc {
+        param_name: String,
+        param_supertype: Ast<EvaluatedType>,
+        body: Ast<EvaluatedType>,
+        substituted_body: Ast<EvaluatedType>,
+    },
     Tuple(Vec<Ast<EvaluatedType>>),
     List(Ast<EvaluatedType>),
     Ref(Ast<EvaluatedType>),
@@ -333,6 +324,15 @@ impl<Expr: Clone> TypedAst<Expr> {
     pub fn to_untyped_ast(&self) -> Ast<Expr> {
         Ast::new(self.left_loc, self.right_loc, *self.expr.clone())
     }
+
+    pub fn replace_type(&self, expr_type: EvaluatedType) -> TypedAst<Expr> {
+        TypedAst {
+            left_loc: self.left_loc,
+            right_loc: self.right_loc,
+            expr: self.expr.clone(),
+            expr_type: Box::new(expr_type),
+        }
+    }
 }
 
 impl<T: PartialEq> PartialEq for Ast<T> {
@@ -499,9 +499,12 @@ impl Display for EvaluatedType {
                     format!("({} <: {})", name, supertype)
                 }
                 &EvaluatedType::Func(ref input, ref output) => format!("({} => {})", input, output),
-                &EvaluatedType::GenericFunc(ref name, ref supertype, ref output) => {
-                    format!("({}: {} => {})", name, supertype, output)
-                }
+                &EvaluatedType::GenericFunc {
+                    ref param_name,
+                    ref param_supertype,
+                    ref body,
+                    ..
+                } => format!("({}: {} => {})", param_name, param_supertype, body),
                 &EvaluatedType::Tuple(ref vec) => sequence_to_str("(", vec, ")"),
                 &EvaluatedType::List(ref element_type) => format!("[{}..]", element_type),
                 &EvaluatedType::Ref(ref value_type) => format!("(Ref <| {})", value_type),

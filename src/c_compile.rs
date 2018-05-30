@@ -35,7 +35,7 @@ fn type_to_ctype(t: &EvaluatedType) -> CType {
             ret: ret.replace_expr(type_to_ctype(&ret.expr)),
         },
         &EvaluatedType::Tuple(_) => CType::Object,
-        &EvaluatedType::GenericFunc(_, _, ref body) => type_to_ctype(&body.expr),
+        &EvaluatedType::GenericFunc { ref body, .. } => type_to_ctype(&body.expr),
         &EvaluatedType::Ident(_, ref supertype) => type_to_ctype(&supertype.expr),
         _ => panic!("Unhandled type: {}", t),
     }
@@ -220,6 +220,25 @@ fn maybe_cast_representation(
                 (from, false)
             }
         }
+        (
+            &EvaluatedType::GenericFunc {
+                substituted_body: ref from_type_ast,
+                ..
+            },
+            &EvaluatedType::GenericFunc {
+                substituted_body: ref to_type_ast,
+                ..
+            },
+        ) => maybe_cast_representation(
+            from,
+            &from_type_ast.expr,
+            &to_type_ast.expr,
+            declarations,
+            scope,
+            expr_index,
+            functions,
+            function_index,
+        ),
         _ => (from, false),
     }
 }
@@ -245,8 +264,8 @@ fn find_captures(
             find_captures(left, locals, captures);
             find_captures(right, locals, captures);
         }
-        &TypedExpression::GenericCall((_, _, _, ref generic_func), _) => {
-            find_captures(generic_func, locals, captures);
+        &TypedExpression::Cast(ref from, _) => {
+            find_captures(from, locals, captures);
         }
         &TypedExpression::Ident(ref name) => {
             if !locals.contains(name) {
@@ -280,9 +299,6 @@ fn find_captures(
                 let mut locals = locals.clone();
                 find_names_in_pattern(pattern, &mut locals);
                 find_captures(body, &locals, captures);
-            }
-            &TypedValue::GenericFunc(_, _, _, ref body) => {
-                find_captures(body, locals, captures);
             }
             &TypedValue::List(ref vec) => for element in vec {
                 find_captures(element, locals, captures);
@@ -692,12 +708,36 @@ pub fn lift_expr(
 
             ast.replace_untyped(CValue::Ident(body_name, body_type))
         }
-        &TypedExpression::GenericCall(
-            (ref name, ref supertype, ref body, ref generic_func),
-            ref type_arg,
-        ) => {
-            // TODO: generate adaptor code and adaptor functions
-            panic!()
+        &TypedExpression::Cast(ref from, ref to_type) => {
+            let from_cvalue = lift_expr(
+                from,
+                declarations,
+                scope,
+                expr_index,
+                functions,
+                function_index,
+            );
+            let (casted, was_casted) = maybe_cast_representation(
+                from_cvalue.to_c_expr(),
+                &from.expr_type,
+                &to_type.expr,
+                declarations,
+                scope,
+                expr_index,
+                functions,
+                function_index,
+            );
+
+            if was_casted {
+                let casted_name = get_expr_name("casted", expr_index);
+                let casted_ctype = type_to_ctype(&to_type.expr);
+                declarations.push(CDeclaration(casted_ctype.clone(), casted_name.clone()));
+                scope.push(ast.replace_untyped(CStatement::VarAssign(casted_name.clone(), casted)));
+
+                ast.replace_untyped(CValue::Ident(casted_name, casted_ctype))
+            } else {
+                from_cvalue
+            }
         }
         _ => panic!(),
     }
