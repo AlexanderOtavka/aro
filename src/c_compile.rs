@@ -295,7 +295,7 @@ fn find_captures(
             | &TypedValue::Hook(_)
             | &TypedValue::Int(_)
             | &TypedValue::Num(_) => {}
-            &TypedValue::Func(ref pattern, ref body) => {
+            &TypedValue::Func(ref pattern, _, ref body) => {
                 let mut locals = locals.clone();
                 find_names_in_pattern(pattern, &mut locals);
                 find_captures(body, &locals, captures);
@@ -401,7 +401,7 @@ pub fn lift_expr(
             &TypedValue::Num(value) => ast.replace_untyped(CValue::Float(value)),
             &TypedValue::Bool(value) => ast.replace_untyped(CValue::Bool(value)),
             &TypedValue::Int(value) => ast.replace_untyped(CValue::Int(value)),
-            &TypedValue::Func(ref pattern, ref body) => {
+            &TypedValue::Func(ref pattern, ref declared_body_type, ref body) => {
                 let mut captures_map = HashMap::new();
                 let mut locals = HashSet::new();
                 find_names_in_pattern(pattern, &mut locals);
@@ -458,6 +458,17 @@ pub fn lift_expr(
                     function_index,
                 );
 
+                let (ret, _) = maybe_cast_representation(
+                    ret.to_c_expr(),
+                    &body.expr_type,
+                    &declared_body_type.expr,
+                    &mut func_declarations,
+                    &mut func_scope,
+                    &mut func_expr_index,
+                    functions,
+                    function_index,
+                );
+
                 let closure_name = get_expr_name("closure", expr_index);
                 let closure_type = type_to_ctype(&ast.expr_type);
                 declarations.push(CDeclaration(closure_type.clone(), closure_name.clone()));
@@ -485,7 +496,7 @@ pub fn lift_expr(
                     param: pattern.replace_untyped(param_ctype),
                     declarations: func_declarations,
                     body: func_scope,
-                    ret: ret.to_c_expr(),
+                    ret,
                 }));
 
                 ast.replace_untyped(CValue::Ident(closure_name, closure_type))

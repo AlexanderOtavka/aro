@@ -723,6 +723,7 @@ pub fn typecheck_ast(
                     Ok(ast.to_typed(
                         TypedExpression::Value(TypedValue::Func(
                             typechecked_param,
+                            declared_body_type_ast.clone(),
                             typechecked_body,
                         )),
                         EvaluatedType::Func(param_type_ast, declared_body_type_ast),

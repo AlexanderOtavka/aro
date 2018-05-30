@@ -83,7 +83,11 @@ pub enum TypedValue {
     Int(i32),
     Num(f64),
     Bool(bool),
-    Func(TypedAst<TypedPattern>, TypedAst<TypedExpression>),
+    Func(
+        TypedAst<TypedPattern>,
+        Ast<EvaluatedType>,
+        TypedAst<TypedExpression>,
+    ),
     Tuple(Vec<TypedAst<TypedExpression>>),
     List(Vec<TypedAst<TypedExpression>>),
     Hook(Vec<String>),
