@@ -189,11 +189,6 @@ pub struct CDeclaration(pub CType, pub String);
 #[derive(Debug, PartialEq, Clone)]
 pub enum CStatement {
     VarAssign(String, Ast<CExpr>),
-    AnyAssign {
-        name: String,
-        value_type: CType,
-        value: Ast<CExpr>,
-    },
     RefAlloc(String, CType),
     RefAssign(String, Ast<CExpr>),
     ClosureInit {
@@ -716,11 +711,6 @@ impl Display for CStatement {
                     sequence_to_str(&sequence_to_str("{ ", declarations, " "), statements, " }")
                 }
                 &CStatement::VarAssign(ref name, ref value) => format!("{} = {};", name, value),
-                &CStatement::AnyAssign {
-                    ref name,
-                    ref value,
-                    ref value_type,
-                } => format!("{}.{} = {};", name, ctype_to_union_field(value_type), value),
                 &CStatement::RefAlloc(ref name, ref value_type) => format!(
                     "{} = malloc(sizeof({}));",
                     name,

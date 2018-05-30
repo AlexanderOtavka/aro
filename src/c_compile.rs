@@ -1,5 +1,5 @@
 use ast::{Ast, BinOp, CDeclaration, CExpr, CFunc, CStatement, CType, CValue, EvaluatedType,
-          TypedAst, TypedExpression, TypedPattern, TypedValue, WellCTyped};
+          TypedAst, TypedExpression, TypedPattern, TypedValue};
 use std::collections::{HashMap, HashSet};
 
 fn get_expr_name(name: &str, expr_index: &mut i32) -> String {
@@ -73,7 +73,7 @@ fn maybe_cast_representation(
             }),
             true,
         ),
-        (ref from_type, &EvaluatedType::Any) => (
+        (_, &EvaluatedType::Any) => (
             from.replace_expr(CExpr::Cast {
                 value: from.clone(),
                 to_type: CType::Any,
