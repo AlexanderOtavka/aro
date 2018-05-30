@@ -159,7 +159,7 @@ mod evaluate_file {
 
     #[test]
     fn tuple() {
-        assert_eq!(evaluate_file("examples/tuple.aro", false).unwrap(), "12.29")
+        assert_eq!(evaluate_file("examples/tuple.aro", false).unwrap(), "11")
     }
 }
 
@@ -265,20 +265,23 @@ mod c_compile_file {
              \n\
              \ntypedef union _Aro_Any {\
              \n  bool Bool;\
-             \n  double Int;\
+             \n  int Int;\
              \n  double Float;\
+             \n  union _Aro_Any* Object;\
+             \n  union _Aro_Any* Closure;\
+             \n  void* Ref;\
              \n  void* Void_Ptr;\
-             \n  union _Aro_Any* Any_Ptr;\
-             \n} _Aro_Any;\
+             \n} _Aro_Any, *_Aro_Object, *_Aro_Closure;\
              \n\
              \n\
              \n\
              \n\
              \n\
              \nint main(void) {\
-             \n  double _aro_expr_0; _aro_expr_0 = (1 + 1);\
+             \n  double _aro_expr_op_result_0;\
+             \n  _aro_expr_op_result_0 = (1 + 1);\
              \n\
-             \n  printf(\"%f\\n\", (double) _aro_expr_0);\
+             \n  printf(\"%f\\n\", (double) _aro_expr_op_result_0);\
              \n  return 0;\
              \n}",
         )

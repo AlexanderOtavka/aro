@@ -755,45 +755,45 @@ mod lift_expr {
     fn handles_arithmatic() {
         assert_lift(
             "1 + 1",
-            "int _aro_expr_0; \
-             _aro_expr_0 = (1 + 1); ",
+            "int _aro_expr_op_result_0; \
+             _aro_expr_op_result_0 = (1 + 1); ",
             "",
-            "_aro_expr_0",
+            "_aro_expr_op_result_0",
         );
         assert_lift(
             "1.0 + 1.0",
-            "double _aro_expr_0; \
-             _aro_expr_0 = (1 + 1); ",
+            "double _aro_expr_op_result_0; \
+             _aro_expr_op_result_0 = (1 + 1); ",
             "",
-            "_aro_expr_0",
+            "_aro_expr_op_result_0",
         );
         assert_lift(
             "1.1 - 1",
-            "double _aro_expr_0; \
-             _aro_expr_0 = (1.1 - 1); ",
+            "double _aro_expr_op_result_0; \
+             _aro_expr_op_result_0 = (1.1 - 1); ",
             "",
-            "_aro_expr_0",
+            "_aro_expr_op_result_0",
         );
         assert_lift(
             "1 * 1.1",
-            "double _aro_expr_0; \
-             _aro_expr_0 = (1 * 1.1); ",
+            "double _aro_expr_op_result_0; \
+             _aro_expr_op_result_0 = (1 * 1.1); ",
             "",
-            "_aro_expr_0",
+            "_aro_expr_op_result_0",
         );
         assert_lift(
             "1.3 / 1.1",
-            "double _aro_expr_0; \
-             _aro_expr_0 = ((double ) 1.3 / 1.1); ",
+            "double _aro_expr_op_result_0; \
+             _aro_expr_op_result_0 = ((double ) 1.3 / 1.1); ",
             "",
-            "_aro_expr_0",
+            "_aro_expr_op_result_0",
         );
         assert_lift(
             "1 / 1",
-            "double _aro_expr_0; \
-             _aro_expr_0 = ((double ) 1 / 1); ",
+            "double _aro_expr_op_result_0; \
+             _aro_expr_op_result_0 = ((double ) 1 / 1); ",
             "",
-            "_aro_expr_0",
+            "_aro_expr_op_result_0",
         );
     }
 
@@ -801,10 +801,10 @@ mod lift_expr {
     fn handles_comparison() {
         assert_lift(
             "1.0 <= 1.0",
-            "bool _aro_expr_0; \
-             _aro_expr_0 = (1 <= 1); ",
+            "bool _aro_expr_op_result_0; \
+             _aro_expr_op_result_0 = (1 <= 1); ",
             "",
-            "_aro_expr_0",
+            "_aro_expr_op_result_0",
         );
     }
 
@@ -812,16 +812,16 @@ mod lift_expr {
     fn supports_nested_operations() {
         assert_lift(
             "1 - 1 <= 1.3 + 8 * 3",
-            "int _aro_expr_0; \
-             int _aro_expr_1; \
-             double _aro_expr_2; \
-             bool _aro_expr_3; \
-             _aro_expr_0 = (1 - 1); \
-             _aro_expr_1 = (8 * 3); \
-             _aro_expr_2 = (1.3 + _aro_expr_1); \
-             _aro_expr_3 = (_aro_expr_0 <= _aro_expr_2); ",
+            "int _aro_expr_op_result_0; \
+             int _aro_expr_op_result_1; \
+             double _aro_expr_op_result_2; \
+             bool _aro_expr_op_result_3; \
+             _aro_expr_op_result_0 = (1 - 1); \
+             _aro_expr_op_result_1 = (8 * 3); \
+             _aro_expr_op_result_2 = (1.3 + _aro_expr_op_result_1); \
+             _aro_expr_op_result_3 = (_aro_expr_op_result_0 <= _aro_expr_op_result_2); ",
             "",
-            "_aro_expr_3",
+            "_aro_expr_op_result_3",
         );
     }
 
@@ -834,18 +834,18 @@ mod lift_expr {
             else
                 8 * 2
             ",
-            "bool _aro_expr_0; \
-             double _aro_expr_1; \
-             _aro_expr_0 = (1 <= 2); \
-             if (_aro_expr_0) {  \
-             _aro_expr_1 = 5.3; \
+            "bool _aro_expr_op_result_0; \
+             double _aro_expr_if_result_1; \
+             _aro_expr_op_result_0 = (1 <= 2); \
+             if (_aro_expr_op_result_0) {  \
+             _aro_expr_if_result_1 = 5.3; \
              } else { \
-             int _aro_expr_2; \
-             _aro_expr_2 = (8 * 2); \
-             _aro_expr_1 = _aro_expr_2; \
+             int _aro_expr_op_result_2; \
+             _aro_expr_op_result_2 = (8 * 2); \
+             _aro_expr_if_result_1 = _aro_expr_op_result_2; \
              } ",
             "",
-            "_aro_expr_1",
+            "_aro_expr_if_result_1",
         );
     }
 
@@ -856,19 +856,19 @@ mod lift_expr {
             let x: Num <- 5 + 2
             x + 3
             ",
-            "double _aro_expr_0; \
+            "double _aro_expr_let_body_0; \
              { \
              double * aro_x; \
-             int _aro_expr_1; \
-             double _aro_expr_2; \
+             int _aro_expr_op_result_1; \
+             double _aro_expr_op_result_2; \
              aro_x = malloc(sizeof(double )); \
-             _aro_expr_1 = (5 + 2); \
-             *aro_x = _aro_expr_1; \
-             _aro_expr_2 = ((*aro_x) + 3); \
-             _aro_expr_0 = _aro_expr_2; \
+             _aro_expr_op_result_1 = (5 + 2); \
+             *aro_x = ((double )_aro_expr_op_result_1); \
+             _aro_expr_op_result_2 = ((*aro_x) + 3); \
+             _aro_expr_let_body_0 = _aro_expr_op_result_2; \
              } ",
             "",
-            "_aro_expr_0",
+            "_aro_expr_let_body_0",
         );
     }
 
@@ -880,24 +880,24 @@ mod lift_expr {
             let x: Int <- 4
             x + 3
             ",
-            "int _aro_expr_0; \
+            "int _aro_expr_let_body_0; \
              { \
              double * aro_x; \
-             int _aro_expr_1; \
+             int _aro_expr_let_body_1; \
              aro_x = malloc(sizeof(double )); \
-             *aro_x = 5; \
+             *aro_x = ((double )5); \
              { \
              int * aro_x; \
-             int _aro_expr_2; \
+             int _aro_expr_op_result_2; \
              aro_x = malloc(sizeof(int )); \
              *aro_x = 4; \
-             _aro_expr_2 = ((*aro_x) + 3); \
-             _aro_expr_1 = _aro_expr_2; \
+             _aro_expr_op_result_2 = ((*aro_x) + 3); \
+             _aro_expr_let_body_1 = _aro_expr_op_result_2; \
              } \
-             _aro_expr_0 = _aro_expr_1; \
+             _aro_expr_let_body_0 = _aro_expr_let_body_1; \
              } ",
             "",
-            "_aro_expr_0",
+            "_aro_expr_let_body_0",
         );
     }
 
@@ -905,21 +905,21 @@ mod lift_expr {
     fn handles_functions() {
         assert_lift(
             "2 |> (fn x: Int =Int=> x + 1)",
-            "_Aro_Any* _aro_expr_0; \
-             _aro_expr_0 = malloc(sizeof(_Aro_Any) * 1); \
-             _aro_expr_0[0].Void_Ptr = _aro_func_0;  \
-             int _aro_expr_1; \
-             _aro_expr_1 = (*(int (*)(int , _Aro_Any* ))_aro_expr_0[0].Void_Ptr)\
-             (2, &_aro_expr_0[1]); ",
-            "int _aro_func_0(int _aro_arg, _Aro_Any* _aro_captures) { \
+            "_Aro_Closure _aro_expr_closure_0; \
+             int _aro_expr_op_result_1; \
+             _aro_expr_closure_0 = malloc(sizeof(_Aro_Any) * 1); \
+             _aro_expr_closure_0[0].Void_Ptr = _aro_func_0;  \
+             _aro_expr_op_result_1 = (*(int (*)(int , _Aro_Object ))_aro_expr_closure_0[0].Void_Ptr)\
+             (2, &_aro_expr_closure_0[1]); ",
+            "int _aro_func_0(int _aro_arg, _Aro_Object _aro_captures) { \
              int * aro_x; \
+             int _aro_expr_op_result_0; \
              aro_x = malloc(sizeof(int )); \
              *aro_x = _aro_arg; \
-             int _aro_expr_0; \
-             _aro_expr_0 = ((*aro_x) + 1); \
-             return _aro_expr_0; \
+             _aro_expr_op_result_0 = ((*aro_x) + 1); \
+             return _aro_expr_op_result_0; \
              } ",
-            "_aro_expr_1",
+            "_aro_expr_op_result_1",
         );
     }
 
@@ -930,24 +930,24 @@ mod lift_expr {
             let (a: Int  b: Num) <- (1 2.3)
             a + b
             ",
-            "double _aro_expr_0; \
+            "double _aro_expr_let_body_0; \
              { \
              int * aro_a; \
-             aro_a = malloc(sizeof(int )); \
              double * aro_b; \
+             _Aro_Object _aro_expr_tuple_1; \
+             double _aro_expr_op_result_2; \
+             aro_a = malloc(sizeof(int )); \
              aro_b = malloc(sizeof(double )); \
-             _Aro_Any* _aro_expr_1; \
-             _aro_expr_1 = malloc(sizeof(_Aro_Any) * 2); \
-             _aro_expr_1[0].Int = 1; \
-             _aro_expr_1[1].Float = 2.3; \
-             *aro_a = ((int )_aro_expr_1[0].Int); \
-             *aro_b = ((double )_aro_expr_1[1].Float); \
-             double _aro_expr_2; \
-             _aro_expr_2 = ((*aro_a) + (*aro_b)); \
-             _aro_expr_0 = _aro_expr_2; \
+             _aro_expr_tuple_1 = malloc(sizeof(_Aro_Any) * 2); \
+             _aro_expr_tuple_1[0].Int = 1; \
+             _aro_expr_tuple_1[1].Float = 2.3; \
+             *aro_a = (_aro_expr_tuple_1[0].Int); \
+             *aro_b = (_aro_expr_tuple_1[1].Float); \
+             _aro_expr_op_result_2 = ((*aro_a) + (*aro_b)); \
+             _aro_expr_let_body_0 = _aro_expr_op_result_2; \
              } ",
             "",
-            "_aro_expr_0",
+            "_aro_expr_let_body_0",
         );
         assert_lift(
             "
@@ -955,58 +955,58 @@ mod lift_expr {
             let (a: Num  b: Num) <- my_tuple
             a + b
             ",
-            "double _aro_expr_0; \
+            "double _aro_expr_let_body_0; \
              { \
-             _Aro_Any* * aro_my_tuple; \
-             aro_my_tuple = malloc(sizeof(_Aro_Any* )); \
-             _Aro_Any* _aro_expr_1; \
-             _aro_expr_1 = malloc(sizeof(_Aro_Any) * 2); \
-             _aro_expr_1[0].Int = 1; \
-             _aro_expr_1[1].Float = 2.3; \
-             *aro_my_tuple = _aro_expr_1; \
-             double _aro_expr_2; \
+             _Aro_Object * aro_my_tuple; \
+             _Aro_Object _aro_expr_tuple_1; \
+             double _aro_expr_let_body_2; \
+             aro_my_tuple = malloc(sizeof(_Aro_Object )); \
+             _aro_expr_tuple_1 = malloc(sizeof(_Aro_Any) * 2); \
+             _aro_expr_tuple_1[0].Int = 1; \
+             _aro_expr_tuple_1[1].Float = 2.3; \
+             *aro_my_tuple = _aro_expr_tuple_1; \
              { \
              double * aro_a; \
-             aro_a = malloc(sizeof(double )); \
              double * aro_b; \
+             double _aro_expr_op_result_3; \
+             aro_a = malloc(sizeof(double )); \
              aro_b = malloc(sizeof(double )); \
-             *aro_a = ((double )(*aro_my_tuple)[0].Int); \
-             *aro_b = ((double )(*aro_my_tuple)[1].Float); \
-             double _aro_expr_3; \
-             _aro_expr_3 = ((*aro_a) + (*aro_b)); \
-             _aro_expr_2 = _aro_expr_3; \
+             *aro_a = ((double )((*aro_my_tuple)[0].Int)); \
+             *aro_b = ((*aro_my_tuple)[1].Float); \
+             _aro_expr_op_result_3 = ((*aro_a) + (*aro_b)); \
+             _aro_expr_let_body_2 = _aro_expr_op_result_3; \
              } \
-             _aro_expr_0 = _aro_expr_2; \
+             _aro_expr_let_body_0 = _aro_expr_let_body_2; \
              } ",
             "",
-            "_aro_expr_0",
+            "_aro_expr_let_body_0",
         );
         assert_lift(
             "
             (1 2.3) |> (fn (a: Int  b: Num) =Num=> a + b)
             ",
-            "_Aro_Any* _aro_expr_0; \
-             _aro_expr_0 = malloc(sizeof(_Aro_Any) * 1); \
-             _aro_expr_0[0].Void_Ptr = _aro_func_0;  \
-             _Aro_Any* _aro_expr_1; \
-             _aro_expr_1 = malloc(sizeof(_Aro_Any) * 2); \
-             _aro_expr_1[0].Int = 1; \
-             _aro_expr_1[1].Float = 2.3; \
-             double _aro_expr_2; \
-             _aro_expr_2 = (*(double (*)(_Aro_Any* , _Aro_Any* ))_aro_expr_0[0].Void_Ptr)\
-             (_aro_expr_1, &_aro_expr_0[1]); ",
-            "double _aro_func_0(_Aro_Any* _aro_arg, _Aro_Any* _aro_captures) { \
+            "_Aro_Closure _aro_expr_closure_0; \
+             _Aro_Object _aro_expr_tuple_1; \
+             double _aro_expr_op_result_2; \
+             _aro_expr_closure_0 = malloc(sizeof(_Aro_Any) * 1); \
+             _aro_expr_closure_0[0].Void_Ptr = _aro_func_0;  \
+             _aro_expr_tuple_1 = malloc(sizeof(_Aro_Any) * 2); \
+             _aro_expr_tuple_1[0].Int = 1; \
+             _aro_expr_tuple_1[1].Float = 2.3; \
+             _aro_expr_op_result_2 = (*(double (*)(_Aro_Object , _Aro_Object ))\
+             _aro_expr_closure_0[0].Void_Ptr)(_aro_expr_tuple_1, &_aro_expr_closure_0[1]); ",
+            "double _aro_func_0(_Aro_Object _aro_arg, _Aro_Object _aro_captures) { \
              int * aro_a; \
-             aro_a = malloc(sizeof(int )); \
              double * aro_b; \
+             double _aro_expr_op_result_0; \
+             aro_a = malloc(sizeof(int )); \
              aro_b = malloc(sizeof(double )); \
-             *aro_a = ((int )_aro_arg[0].Int); \
-             *aro_b = ((double )_aro_arg[1].Float); \
-             double _aro_expr_0; \
-             _aro_expr_0 = ((*aro_a) + (*aro_b)); \
-             return _aro_expr_0; \
+             *aro_a = (_aro_arg[0].Int); \
+             *aro_b = (_aro_arg[1].Float); \
+             _aro_expr_op_result_0 = ((*aro_a) + (*aro_b)); \
+             return _aro_expr_op_result_0; \
              } ",
-            "_aro_expr_2",
+            "_aro_expr_op_result_2",
         );
     }
 }
