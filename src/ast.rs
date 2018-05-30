@@ -130,8 +130,8 @@ pub enum EvaluatedType {
     GenericFunc {
         param_name: String,
         param_supertype: Ast<EvaluatedType>,
-        body: Ast<EvaluatedType>,
-        substituted_body: Ast<EvaluatedType>,
+        output: Ast<EvaluatedType>,
+        substituted_output: Ast<EvaluatedType>,
     },
     Tuple(Vec<Ast<EvaluatedType>>),
     List(Ast<EvaluatedType>),
@@ -502,9 +502,9 @@ impl Display for EvaluatedType {
                 &EvaluatedType::GenericFunc {
                     ref param_name,
                     ref param_supertype,
-                    ref body,
+                    ref output,
                     ..
-                } => format!("({}: {} => {})", param_name, param_supertype, body),
+                } => format!("({}: {} => {})", param_name, param_supertype, output),
                 &EvaluatedType::Tuple(ref vec) => sequence_to_str("(", vec, ")"),
                 &EvaluatedType::List(ref element_type) => format!("[{}..]", element_type),
                 &EvaluatedType::Ref(ref value_type) => format!("(Ref <| {})", value_type),

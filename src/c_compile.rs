@@ -35,7 +35,7 @@ fn type_to_ctype(t: &EvaluatedType) -> CType {
             ret: ret.replace_expr(type_to_ctype(&ret.expr)),
         },
         &EvaluatedType::Tuple(_) => CType::Object,
-        &EvaluatedType::GenericFunc { ref body, .. } => type_to_ctype(&body.expr),
+        &EvaluatedType::GenericFunc { ref output, .. } => type_to_ctype(&output.expr),
         &EvaluatedType::Ident(_, ref supertype) => type_to_ctype(&supertype.expr),
         _ => panic!("Unhandled type: {}", t),
     }
@@ -222,11 +222,11 @@ fn maybe_cast_representation(
         }
         (
             &EvaluatedType::GenericFunc {
-                substituted_body: ref from_type_ast,
+                substituted_output: ref from_type_ast,
                 ..
             },
             &EvaluatedType::GenericFunc {
-                substituted_body: ref to_type_ast,
+                substituted_output: ref to_type_ast,
                 ..
             },
         ) => maybe_cast_representation(

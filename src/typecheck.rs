@@ -55,8 +55,8 @@ fn rename_type(ast: &Ast<EvaluatedType>, name: &str, new_name: &str) -> Ast<Eval
         &EvaluatedType::GenericFunc {
             ref param_name,
             ref param_supertype,
-            ref body,
-            ref substituted_body,
+            ref output,
+            ref substituted_output,
         } => {
             if param_name == name {
                 ast.clone()
@@ -64,8 +64,8 @@ fn rename_type(ast: &Ast<EvaluatedType>, name: &str, new_name: &str) -> Ast<Eval
                 ast.replace_expr(EvaluatedType::GenericFunc {
                     param_name: param_name.clone(),
                     param_supertype: rename_type(param_supertype, name, new_name),
-                    body: rename_type(body, name, new_name),
-                    substituted_body: substituted_body.clone(),
+                    output: rename_type(output, name, new_name),
+                    substituted_output: substituted_output.clone(),
                 })
             }
         }
@@ -146,13 +146,13 @@ impl EvaluatedType {
                 &EvaluatedType::GenericFunc {
                     param_name: ref self_name,
                     param_supertype: ref self_super,
-                    body: ref self_out,
+                    output: ref self_out,
                     ..
                 },
                 &EvaluatedType::GenericFunc {
                     param_name: ref other_name,
                     param_supertype: ref other_super,
-                    body: ref other_out,
+                    output: ref other_out,
                     ..
                 },
             ) => {
@@ -330,17 +330,17 @@ fn substitute_evaluated_type(
         &EvaluatedType::GenericFunc {
             ref param_name,
             ref param_supertype,
-            ref body,
-            ref substituted_body,
+            ref output,
+            ref substituted_output,
         } => ast.replace_expr(EvaluatedType::GenericFunc {
             param_name: param_name.clone(),
             param_supertype: substitute_evaluated_type(param_supertype, name, value),
-            body: if param_name == name {
-                body.clone()
+            output: if param_name == name {
+                output.clone()
             } else {
-                substitute_evaluated_type(body, name, value)
+                substitute_evaluated_type(output, name, value)
             },
-            substituted_body: substitute_evaluated_type(substituted_body, name, value),
+            substituted_output: substitute_evaluated_type(substituted_output, name, value),
         }),
         &EvaluatedType::Ident(ref ident_name, _) => if ident_name == name {
             value.clone()
@@ -537,14 +537,15 @@ fn evaluate_type(
             let param_supertype_type = evaluate_type(param_supertype, env)?;
             let env = &mut env.clone();
             env.insert(param_name.clone(), param_supertype_type.clone());
-            let body = output.replace_expr(evaluate_type(output, env)?);
+            let output = output.replace_expr(evaluate_type(output, env)?);
             let param_supertype = param_supertype.replace_expr(param_supertype_type);
-            let substituted_body = substitute_evaluated_type(&body, param_name, &param_supertype);
+            let substituted_output =
+                substitute_evaluated_type(&output, param_name, &param_supertype);
             Ok(EvaluatedType::GenericFunc {
                 param_name: param_name.clone(),
                 param_supertype,
-                body,
-                substituted_body,
+                output,
+                substituted_output,
             })
         }
         &Type::Ident(ref ident_name) => if let Some(ident_type) = env.get(ident_name) {
@@ -753,7 +754,7 @@ pub fn typecheck_ast(
                     ))
                 } else {
                     let evaluated_supertype_ast = param_supertype.replace_expr(evaluated_supertype);
-                    let substituted_body = substitute_evaluated_type(
+                    let substituted_output = substitute_evaluated_type(
                         &declared_body_type_ast,
                         param_name,
                         &evaluated_supertype_ast,
@@ -767,13 +768,13 @@ pub fn typecheck_ast(
                                     &evaluated_supertype_ast,
                                 ).expr,
                             ),
-                            substituted_body.clone(),
+                            substituted_output.clone(),
                         ),
                         EvaluatedType::GenericFunc {
                             param_name: param_name.clone(),
                             param_supertype: evaluated_supertype_ast,
-                            body: declared_body_type_ast,
-                            substituted_body,
+                            output: declared_body_type_ast,
+                            substituted_output,
                         },
                     ))
                 }
@@ -831,17 +832,17 @@ pub fn typecheck_ast(
             if let EvaluatedType::GenericFunc {
                 ref param_name,
                 ref param_supertype,
-                ref body,
-                ref substituted_body,
+                ref output,
+                ref substituted_output,
             } = *typechecked_generic_func.expr_type.clone()
             {
                 let arg_type = evaluate_type(arg, env)?;
                 if arg_type.is_sub_type(&param_supertype.expr) {
                     let evaluated_arg = arg.replace_expr(arg_type);
-                    let return_type = substitute_evaluated_type(body, param_name, &evaluated_arg);
+                    let return_type = substitute_evaluated_type(output, param_name, &evaluated_arg);
                     Ok(ast.to_typed(
                         TypedExpression::Cast(
-                            typechecked_generic_func.replace_type(*substituted_body.expr.clone()),
+                            typechecked_generic_func.replace_type(*substituted_output.expr.clone()),
                             return_type.clone(),
                         ),
                         *return_type.expr,
