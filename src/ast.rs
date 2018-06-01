@@ -169,16 +169,16 @@ pub enum CExpr {
     Value(CValue),
     BinOp(BinOp, Ast<CValue>, Ast<CValue>, CType),
     ObjectAccess {
-        object: Ast<CExpr>,
+        object: Ast<CValue>,
         index: usize,
         field_type: CType,
     },
     AnyAccess {
-        value: Ast<CExpr>,
+        value: Ast<CValue>,
         value_type: CType,
     },
     Cast {
-        value: Ast<CExpr>,
+        value: Ast<CValue>,
         to_type: CType,
     },
 }
@@ -194,14 +194,14 @@ pub enum CStatement {
     ClosureInit {
         name: String,
         function: Ast<CValue>,
-        captures: Vec<Ast<CExpr>>,
+        captures: Vec<Ast<CValue>>,
     },
     ObjectInit {
         name: String,
-        data: Vec<Ast<CExpr>>,
+        data: Vec<Ast<CValue>>,
     },
     Block(Vec<CDeclaration>, Vec<Ast<CStatement>>),
-    If(Ast<CExpr>, Ast<CStatement>, Ast<CStatement>),
+    If(Ast<CValue>, Ast<CStatement>, Ast<CStatement>),
 }
 
 #[derive(Debug, Clone)]
@@ -210,7 +210,7 @@ pub struct CFunc {
     pub param: Ast<CType>,
     pub declarations: Vec<CDeclaration>,
     pub body: Vec<Ast<CStatement>>,
-    pub ret: Ast<CExpr>,
+    pub ret: Ast<CValue>,
 }
 
 impl<T> Ast<T> {
@@ -292,38 +292,12 @@ impl<Expr> TypedAst<Expr> {
         }
     }
 
-    pub fn replace_expr<NewExpr>(&self, expr: NewExpr) -> TypedAst<NewExpr> {
-        TypedAst {
-            left_loc: self.left_loc,
-            right_loc: self.right_loc,
-            expr: Box::new(expr),
-            expr_type: self.expr_type.clone(),
-        }
-    }
-
-    pub fn replace_expr_and_type<NewExpr>(
-        &self,
-        expr: NewExpr,
-        expr_type: EvaluatedType,
-    ) -> TypedAst<NewExpr> {
-        TypedAst {
-            left_loc: self.left_loc,
-            right_loc: self.right_loc,
-            expr: Box::new(expr),
-            expr_type: Box::new(expr_type),
-        }
-    }
-
     pub fn to_type_ast(&self) -> Ast<EvaluatedType> {
         Ast::new(self.left_loc, self.right_loc, *self.expr_type.clone())
     }
 }
 
 impl<Expr: Clone> TypedAst<Expr> {
-    pub fn to_untyped_ast(&self) -> Ast<Expr> {
-        Ast::new(self.left_loc, self.right_loc, *self.expr.clone())
-    }
-
     pub fn replace_type(&self, expr_type: EvaluatedType) -> TypedAst<Expr> {
         TypedAst {
             left_loc: self.left_loc,

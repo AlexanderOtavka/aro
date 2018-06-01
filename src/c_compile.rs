@@ -42,7 +42,7 @@ fn type_to_ctype(t: &EvaluatedType) -> CType {
 }
 
 fn maybe_cast_representation(
-    from: Ast<CExpr>,
+    from: Ast<CValue>,
     from_type: &EvaluatedType,
     to_type: &EvaluatedType,
     declarations: &mut Vec<CDeclaration>,
@@ -50,55 +50,102 @@ fn maybe_cast_representation(
     expr_index: &mut i32,
     functions: &mut Vec<Ast<CFunc>>,
     function_index: &mut i32,
-) -> (Ast<CExpr>, bool) {
+) -> (Ast<CValue>, bool) {
     match (from_type, to_type) {
-        (&EvaluatedType::Int, &EvaluatedType::Num) => (
-            from.replace_expr(CExpr::Cast {
-                value: from.clone(),
-                to_type: CType::Float,
-            }),
-            true,
-        ),
-        (&EvaluatedType::Num, &EvaluatedType::Int) => (
-            from.replace_expr(CExpr::Cast {
-                value: from.clone(),
-                to_type: CType::Int,
-            }),
-            true,
-        ),
+        (&EvaluatedType::Int, &EvaluatedType::Num) => {
+            let expr_name = get_expr_name("casted", expr_index);
+            let expr_ctype = CType::Float;
+            declarations.push(CDeclaration(expr_ctype.clone(), expr_name.clone()));
+            statements.push(from.replace_expr(CStatement::VarAssign(
+                expr_name.clone(),
+                from.replace_expr(CExpr::Cast {
+                    value: from.clone(),
+                    to_type: expr_ctype.clone(),
+                }),
+            )));
+            (
+                from.replace_expr(CValue::Ident(expr_name, expr_ctype)),
+                true,
+            )
+        }
+        (&EvaluatedType::Num, &EvaluatedType::Int) => {
+            let expr_name = get_expr_name("casted", expr_index);
+            let expr_ctype = CType::Int;
+            declarations.push(CDeclaration(expr_ctype.clone(), expr_name.clone()));
+            statements.push(from.replace_expr(CStatement::VarAssign(
+                expr_name.clone(),
+                from.replace_expr(CExpr::Cast {
+                    value: from.clone(),
+                    to_type: expr_ctype.clone(),
+                }),
+            )));
+            (
+                from.replace_expr(CValue::Ident(expr_name, expr_ctype)),
+                true,
+            )
+        }
         (&EvaluatedType::Any, &EvaluatedType::Any) => (from, false),
-        (&EvaluatedType::Any, to_type) => (
-            from.replace_expr(CExpr::AnyAccess {
-                value: from.clone(),
-                value_type: type_to_ctype(to_type),
-            }),
-            true,
-        ),
-        (_, &EvaluatedType::Any) => (
-            from.replace_expr(CExpr::Cast {
-                value: from.clone(),
-                to_type: CType::Any,
-            }),
-            true,
-        ),
+        (&EvaluatedType::Any, to_type) => {
+            let expr_name = get_expr_name("casted", expr_index);
+            let expr_ctype = type_to_ctype(to_type);
+            declarations.push(CDeclaration(expr_ctype.clone(), expr_name.clone()));
+            statements.push(from.replace_expr(CStatement::VarAssign(
+                expr_name.clone(),
+                from.replace_expr(CExpr::AnyAccess {
+                    value: from.clone(),
+                    value_type: expr_ctype.clone(),
+                }),
+            )));
+            (
+                from.replace_expr(CValue::Ident(expr_name, expr_ctype)),
+                true,
+            )
+        }
+        (_, &EvaluatedType::Any) => {
+            let expr_name = get_expr_name("casted", expr_index);
+            let expr_ctype = CType::Any;
+            declarations.push(CDeclaration(expr_ctype.clone(), expr_name.clone()));
+            statements.push(from.replace_expr(CStatement::VarAssign(
+                expr_name.clone(),
+                from.replace_expr(CExpr::Cast {
+                    value: from.clone(),
+                    to_type: expr_ctype.clone(),
+                }),
+            )));
+            (
+                from.replace_expr(CValue::Ident(expr_name, expr_ctype)),
+                true,
+            )
+        }
         (&EvaluatedType::Tuple(ref from_elements), &EvaluatedType::Tuple(ref to_elements)) => {
             let mut casted_elements = Vec::new();
             let mut something_was_casted = false;
+            let mut temp_declarations = Vec::new();
+            let mut temp_statements = Vec::new();
             for (index, (from_element, to_element)) in from_elements
                 .into_iter()
                 .zip(to_elements.into_iter())
                 .enumerate()
             {
-                let (c_element, was_casted) = maybe_cast_representation(
+                let expr_name = get_expr_name("object_access", expr_index);
+                let expr_ctype = type_to_ctype(&from_element.expr);
+                temp_declarations.push(CDeclaration(expr_ctype.clone(), expr_name.clone()));
+                temp_statements.push(from.replace_expr(CStatement::VarAssign(
+                    expr_name.clone(),
                     from.replace_expr(CExpr::ObjectAccess {
                         object: from.clone(),
                         index,
-                        field_type: type_to_ctype(&from_element.expr),
+                        field_type: expr_ctype.clone(),
                     }),
+                )));
+                let ident = from.replace_expr(CValue::Ident(expr_name, expr_ctype));
+
+                let (c_element, was_casted) = maybe_cast_representation(
+                    ident,
                     &from_element.expr,
                     &to_element.expr,
-                    declarations,
-                    statements,
+                    &mut temp_declarations,
+                    &mut temp_statements,
                     expr_index,
                     functions,
                     function_index,
@@ -110,14 +157,17 @@ fn maybe_cast_representation(
             }
 
             if something_was_casted {
-                let copy_name = get_expr_name("casted_copy", expr_index);
+                declarations.append(&mut temp_declarations);
+                statements.append(&mut temp_statements);
+
+                let copy_name = get_expr_name("casted_tuple", expr_index);
                 declarations.push(CDeclaration(CType::Object, copy_name.clone()));
                 statements.push(from.replace_expr(CStatement::ObjectInit {
                     name: copy_name.clone(),
                     data: casted_elements,
                 }));
                 (
-                    from.replace_expr(CExpr::Value(CValue::Ident(copy_name, CType::Object))),
+                    from.replace_expr(CValue::Ident(copy_name, CType::Object)),
                     true,
                 )
             } else {
@@ -132,10 +182,10 @@ fn maybe_cast_representation(
             let mut adaptor_func_statements = Vec::new();
             let mut adaptor_func_expr_index = 0;
 
-            let arg = to_in.replace_expr(CExpr::Value(CValue::Ident(
+            let arg = to_in.replace_expr(CValue::Ident(
                 String::from("_aro_arg"),
                 type_to_ctype(&to_in.expr),
-            )));
+            ));
             let (arg, arg_was_casted) = maybe_cast_representation(
                 arg,
                 &to_in.expr,
@@ -147,12 +197,6 @@ fn maybe_cast_representation(
                 function_index,
             );
 
-            let arg_name = get_expr_name("casted_arg", &mut adaptor_func_expr_index);
-            let arg_ctype = type_to_ctype(&from_in.expr);
-            adaptor_func_declarations.push(CDeclaration(arg_ctype.clone(), arg_name.clone()));
-            adaptor_func_statements
-                .push(arg.replace_expr(CStatement::VarAssign(arg_name.clone(), arg.clone())));
-
             let inner_func_name = get_expr_name("inner_closure", &mut adaptor_func_expr_index);
             let inner_func_ctype = type_to_ctype(from_type);
             adaptor_func_declarations.push(CDeclaration(
@@ -163,10 +207,10 @@ fn maybe_cast_representation(
                 inner_func_name.clone(),
                 from.replace_expr(CExpr::ObjectAccess {
                     index: 0,
-                    object: from.replace_expr(CExpr::Value(CValue::Ident(
+                    object: from.replace_expr(CValue::Ident(
                         String::from("_aro_captures"),
                         CType::Object,
-                    ))),
+                    )),
                     field_type: inner_func_ctype.clone(),
                 }),
             )));
@@ -174,11 +218,16 @@ fn maybe_cast_representation(
             let ret = from_out.replace_expr(CExpr::BinOp(
                 BinOp::Call,
                 from.replace_expr(CValue::Ident(inner_func_name, inner_func_ctype)),
-                arg.replace_expr(CValue::Ident(arg_name, arg_ctype)),
+                arg,
                 type_to_ctype(&from_out.expr),
             ));
+            let ret_name = get_expr_name("ret", &mut adaptor_func_expr_index);
+            let ret_ctype = type_to_ctype(&from_out.expr);
+            adaptor_func_declarations.push(CDeclaration(ret_ctype.clone(), ret_name.clone()));
+            adaptor_func_statements
+                .push(from_out.replace_expr(CStatement::VarAssign(ret_name.clone(), ret)));
             let (ret, ret_was_casted) = maybe_cast_representation(
-                ret,
+                from_out.replace_expr(CValue::Ident(ret_name, ret_ctype)),
                 &from_out.expr,
                 &to_out.expr,
                 &mut adaptor_func_declarations,
@@ -211,10 +260,7 @@ fn maybe_cast_representation(
                 }));
 
                 (
-                    from.replace_expr(CExpr::Value(CValue::Ident(
-                        adaptor_closure_name,
-                        adaptor_closure_type,
-                    ))),
+                    from.replace_expr(CValue::Ident(adaptor_closure_name, adaptor_closure_type)),
                     true,
                 )
             } else {
@@ -338,7 +384,8 @@ fn make_declarations(
 
 fn bind_declarations(
     pattern: &TypedAst<TypedPattern>,
-    value: &TypedAst<CExpr>,
+    value: &Ast<CValue>,
+    value_type: &EvaluatedType,
     declarations: &mut Vec<CDeclaration>,
     statements: &mut Vec<Ast<CStatement>>,
     expr_index: &mut i32,
@@ -349,8 +396,8 @@ fn bind_declarations(
         &TypedPattern::Ident(ref name) => {
             let value_name = get_ident_name(name);
             let (casted_value, _) = maybe_cast_representation(
-                value.to_untyped_ast(),
-                &value.expr_type,
+                value.clone(),
+                value_type,
                 &pattern.expr_type,
                 declarations,
                 statements,
@@ -358,28 +405,37 @@ fn bind_declarations(
                 functions,
                 function_index,
             );
-            statements
-                .push(pattern.replace_untyped(CStatement::RefAssign(value_name, casted_value)));
+            statements.push(
+                pattern
+                    .replace_untyped(CStatement::RefAssign(value_name, casted_value.to_c_expr())),
+            );
         }
         &TypedPattern::Tuple(ref vec) => for (index, element) in vec.iter().enumerate() {
             let inner_value_type =
-                if let &EvaluatedType::Tuple(ref value_element_types) = &*value.expr_type {
+                if let &EvaluatedType::Tuple(ref value_element_types) = value_type {
                     *value_element_types[index].expr.clone()
                 } else {
-                    panic!("Cannot unpack non-tuple `{}`", value.expr_type)
+                    panic!("Cannot unpack non-tuple `{}`", value_type)
                 };
-            let inner_value = value.replace_expr_and_type(
-                CExpr::ObjectAccess {
-                    object: value.to_untyped_ast(),
-                    index,
-                    field_type: type_to_ctype(&inner_value_type),
-                },
-                inner_value_type,
+            let inner_value = value.replace_expr(CExpr::ObjectAccess {
+                object: value.clone(),
+                index,
+                field_type: type_to_ctype(&inner_value_type),
+            });
+            let inner_value_name = get_expr_name("unpacked", expr_index);
+            let inner_value_ctype = type_to_ctype(&inner_value_type);
+            declarations.push(CDeclaration(
+                inner_value_ctype.clone(),
+                inner_value_name.clone(),
+            ));
+            statements.push(
+                value.replace_expr(CStatement::VarAssign(inner_value_name.clone(), inner_value)),
             );
 
             bind_declarations(
                 element,
-                &inner_value,
+                &value.replace_expr(CValue::Ident(inner_value_name, inner_value_ctype)),
+                &inner_value_type,
                 declarations,
                 statements,
                 expr_index,
@@ -415,14 +471,13 @@ pub fn lift_expr(
                 let mut func_expr_index = 0;
 
                 let param_ctype = type_to_ctype(&pattern.expr_type);
-                let param_value = pattern.replace_expr(CExpr::Value(CValue::Ident(
-                    String::from("_aro_arg"),
-                    param_ctype.clone(),
-                )));
+                let param_value = pattern
+                    .replace_untyped(CValue::Ident(String::from("_aro_arg"), param_ctype.clone()));
                 make_declarations(pattern, &mut func_declarations, &mut func_statements);
                 bind_declarations(
                     pattern,
                     &param_value,
+                    &pattern.expr_type,
                     &mut func_declarations,
                     &mut func_statements,
                     &mut func_expr_index,
@@ -437,10 +492,10 @@ pub fn lift_expr(
                         ident_name.clone(),
                     ));
 
-                    let captures_object = ast.replace_untyped(CExpr::Value(CValue::Ident(
+                    let captures_object = ast.replace_untyped(CValue::Ident(
                         String::from("_aro_captures"),
                         CType::Object,
-                    )));
+                    ));
                     func_statements.push(ast.replace_untyped(CStatement::VarAssign(
                         ident_name,
                         ast.replace_untyped(CExpr::ObjectAccess {
@@ -461,7 +516,7 @@ pub fn lift_expr(
                 );
 
                 let (ret, _) = maybe_cast_representation(
-                    ret.to_c_expr(),
+                    ret,
                     &body.expr_type,
                     &declared_body_type.expr,
                     &mut func_declarations,
@@ -484,10 +539,10 @@ pub fn lift_expr(
                         captures: captures_map
                             .into_iter()
                             .map(|(name, var_type)| {
-                                ast.replace_untyped(CExpr::Value(CValue::Ident(
+                                ast.replace_untyped(CValue::Ident(
                                     get_ident_name(&name),
                                     CType::Ref(Box::new(var_type.clone())),
-                                )))
+                                ))
                             })
                             .collect(),
                     }),
@@ -506,16 +561,14 @@ pub fn lift_expr(
             &TypedValue::Tuple(ref vec) => {
                 let mut data = Vec::new();
                 for element in vec {
-                    data.push(
-                        lift_expr(
-                            element,
-                            declarations,
-                            statements,
-                            expr_index,
-                            functions,
-                            function_index,
-                        ).to_c_expr(),
-                    );
+                    data.push(lift_expr(
+                        element,
+                        declarations,
+                        statements,
+                        expr_index,
+                        functions,
+                        function_index,
+                    ));
                 }
 
                 let expr_name = get_expr_name("tuple", expr_index);
@@ -554,8 +607,8 @@ pub fn lift_expr(
                 match op {
                     &BinOp::Call => {
                         if let &EvaluatedType::Func(ref param_type, _) = &*left.expr_type {
-                            let (casted_ast, was_casted) = maybe_cast_representation(
-                                right.replace_untyped(CExpr::Value(*right_c_ast.expr.clone())),
+                            let (casted_ast, _) = maybe_cast_representation(
+                                right_c_ast,
                                 &right.expr_type,
                                 &param_type.expr,
                                 declarations,
@@ -565,19 +618,7 @@ pub fn lift_expr(
                                 function_index,
                             );
 
-                            if was_casted {
-                                let expr_name = get_expr_name("casted", expr_index);
-                                let expr_ctype = type_to_ctype(&param_type.expr);
-                                declarations
-                                    .push(CDeclaration(expr_ctype.clone(), expr_name.clone()));
-                                statements.push(right.replace_untyped(CStatement::VarAssign(
-                                    expr_name.clone(),
-                                    casted_ast,
-                                )));
-                                right.replace_untyped(CValue::Ident(expr_name, expr_ctype))
-                            } else {
-                                right_c_ast
-                            }
+                            casted_ast
                         } else {
                             panic!("Calling non-function `{}`", left.expr_type)
                         }
@@ -586,42 +627,40 @@ pub fn lift_expr(
                 }
             };
 
-            let result_ast = {
-                let bin_op_expr = CExpr::BinOp(
+            let result_name = get_expr_name("op_result", expr_index);
+            let result_type = type_to_ctype(&ast.expr_type);
+            declarations.push(CDeclaration(result_type.clone(), result_name.clone()));
+            statements.push(ast.replace_untyped(CStatement::VarAssign(
+                result_name.clone(),
+                ast.replace_untyped(CExpr::BinOp(
                     op.clone(),
                     left_c_ast.clone(),
                     right_c_ast,
                     type_to_ctype(&ast.expr_type),
-                );
-                match op {
-                    &BinOp::Call => {
-                        if let &EvaluatedType::Func(_, ref ret_type) = &*left.expr_type {
-                            let (casted, _) = maybe_cast_representation(
-                                ast.replace_untyped(bin_op_expr),
-                                &ret_type.expr,
-                                &ast.expr_type,
-                                declarations,
-                                statements,
-                                expr_index,
-                                functions,
-                                function_index,
-                            );
-                            casted
-                        } else {
-                            panic!("Calling non-function `{}`", left.expr_type)
-                        }
+                )),
+            )));
+            let result = ast.replace_untyped(CValue::Ident(result_name, result_type));
+
+            match op {
+                &BinOp::Call => {
+                    if let &EvaluatedType::Func(_, ref ret_type) = &*left.expr_type {
+                        let (casted, _) = maybe_cast_representation(
+                            result,
+                            &ret_type.expr,
+                            &ast.expr_type,
+                            declarations,
+                            statements,
+                            expr_index,
+                            functions,
+                            function_index,
+                        );
+                        casted
+                    } else {
+                        panic!("Calling non-function `{}`", left.expr_type)
                     }
-                    _ => ast.replace_untyped(bin_op_expr),
                 }
-            };
-
-            let expr_name = get_expr_name("op_result", expr_index);
-            let expr_type = type_to_ctype(&ast.expr_type);
-            declarations.push(CDeclaration(expr_type.clone(), expr_name.clone()));
-            statements
-                .push(ast.replace_untyped(CStatement::VarAssign(expr_name.clone(), result_ast)));
-
-            ast.replace_untyped(CValue::Ident(expr_name, expr_type))
+                _ => result,
+            }
         }
         &TypedExpression::If(ref condition, ref consequent, ref alternate) => {
             let condition_c_ast = lift_expr(
@@ -676,7 +715,7 @@ pub fn lift_expr(
 
             declarations.push(CDeclaration(expr_type.clone(), expr_name.clone()));
             statements.push(ast.replace_untyped(CStatement::If(
-                condition_c_ast.to_c_expr(),
+                condition_c_ast,
                 consequent_block,
                 alternate_block,
             )));
@@ -701,7 +740,8 @@ pub fn lift_expr(
             );
             bind_declarations(
                 pattern,
-                &value.replace_expr(CExpr::Value(*value_c_ast.expr)),
+                &value_c_ast,
+                &value.expr_type,
                 &mut body_declarations,
                 &mut body_statements,
                 expr_index,
@@ -736,8 +776,8 @@ pub fn lift_expr(
                 functions,
                 function_index,
             );
-            let (casted, was_casted) = maybe_cast_representation(
-                from_cvalue.to_c_expr(),
+            let (casted, _) = maybe_cast_representation(
+                from_cvalue,
                 &from.expr_type,
                 &to_type.expr,
                 declarations,
@@ -747,17 +787,7 @@ pub fn lift_expr(
                 function_index,
             );
 
-            if was_casted {
-                let casted_name = get_expr_name("casted", expr_index);
-                let casted_ctype = type_to_ctype(&to_type.expr);
-                declarations.push(CDeclaration(casted_ctype.clone(), casted_name.clone()));
-                statements
-                    .push(ast.replace_untyped(CStatement::VarAssign(casted_name.clone(), casted)));
-
-                ast.replace_untyped(CValue::Ident(casted_name, casted_ctype))
-            } else {
-                from_cvalue
-            }
+            casted
         }
         _ => panic!(),
     }
@@ -920,12 +950,14 @@ mod lift_expr {
              { \
              double * aro_x; \
              int _aro_expr_op_result_1; \
-             double _aro_expr_op_result_2; \
+             double _aro_expr_casted_2; \
+             double _aro_expr_op_result_3; \
              aro_x = malloc(sizeof(double )); \
              _aro_expr_op_result_1 = (5 + 2); \
-             *aro_x = ((double )_aro_expr_op_result_1); \
-             _aro_expr_op_result_2 = ((*aro_x) + 3); \
-             _aro_expr_let_body_0 = _aro_expr_op_result_2; \
+             _aro_expr_casted_2 = ((double )_aro_expr_op_result_1); \
+             *aro_x = _aro_expr_casted_2; \
+             _aro_expr_op_result_3 = ((*aro_x) + 3); \
+             _aro_expr_let_body_0 = _aro_expr_op_result_3; \
              } ",
             "",
             "_aro_expr_let_body_0",
@@ -943,18 +975,20 @@ mod lift_expr {
             "int _aro_expr_let_body_0; \
              { \
              double * aro_x; \
-             int _aro_expr_let_body_1; \
+             double _aro_expr_casted_1; \
+             int _aro_expr_let_body_2; \
              aro_x = malloc(sizeof(double )); \
-             *aro_x = ((double )5); \
+             _aro_expr_casted_1 = ((double )5); \
+             *aro_x = _aro_expr_casted_1; \
              { \
              int * aro_x; \
-             int _aro_expr_op_result_2; \
+             int _aro_expr_op_result_3; \
              aro_x = malloc(sizeof(int )); \
              *aro_x = 4; \
-             _aro_expr_op_result_2 = ((*aro_x) + 3); \
-             _aro_expr_let_body_1 = _aro_expr_op_result_2; \
+             _aro_expr_op_result_3 = ((*aro_x) + 3); \
+             _aro_expr_let_body_2 = _aro_expr_op_result_3; \
              } \
-             _aro_expr_let_body_0 = _aro_expr_let_body_1; \
+             _aro_expr_let_body_0 = _aro_expr_let_body_2; \
              } ",
             "",
             "_aro_expr_let_body_0",
@@ -995,16 +1029,20 @@ mod lift_expr {
              int * aro_a; \
              double * aro_b; \
              _Aro_Object _aro_expr_tuple_1; \
-             double _aro_expr_op_result_2; \
+             int _aro_expr_unpacked_2; \
+             double _aro_expr_unpacked_3; \
+             double _aro_expr_op_result_4; \
              aro_a = malloc(sizeof(int )); \
              aro_b = malloc(sizeof(double )); \
              _aro_expr_tuple_1 = malloc(sizeof(_Aro_Any) * 2); \
              _aro_expr_tuple_1[0].Int = 1; \
              _aro_expr_tuple_1[1].Float = 2.3; \
-             *aro_a = (_aro_expr_tuple_1[0].Int); \
-             *aro_b = (_aro_expr_tuple_1[1].Float); \
-             _aro_expr_op_result_2 = ((*aro_a) + (*aro_b)); \
-             _aro_expr_let_body_0 = _aro_expr_op_result_2; \
+             _aro_expr_unpacked_2 = (_aro_expr_tuple_1[0].Int); \
+             *aro_a = _aro_expr_unpacked_2; \
+             _aro_expr_unpacked_3 = (_aro_expr_tuple_1[1].Float); \
+             *aro_b = _aro_expr_unpacked_3; \
+             _aro_expr_op_result_4 = ((*aro_a) + (*aro_b)); \
+             _aro_expr_let_body_0 = _aro_expr_op_result_4; \
              } ",
             "",
             "_aro_expr_let_body_0",
@@ -1019,7 +1057,7 @@ mod lift_expr {
              { \
              _Aro_Object * aro_my_tuple; \
              _Aro_Object _aro_expr_tuple_1; \
-             double _aro_expr_let_body_2; \
+             double _aro_expr_let_body_4; \
              aro_my_tuple = malloc(sizeof(_Aro_Object )); \
              _aro_expr_tuple_1 = malloc(sizeof(_Aro_Any) * 2); \
              _aro_expr_tuple_1[0].Int = 1; \
@@ -1028,15 +1066,21 @@ mod lift_expr {
              { \
              double * aro_a; \
              double * aro_b; \
-             double _aro_expr_op_result_3; \
+             int _aro_expr_unpacked_5; \
+             double _aro_expr_casted_6; \
+             double _aro_expr_unpacked_7; \
+             double _aro_expr_op_result_8; \
              aro_a = malloc(sizeof(double )); \
              aro_b = malloc(sizeof(double )); \
-             *aro_a = ((double )((*aro_my_tuple)[0].Int)); \
-             *aro_b = ((*aro_my_tuple)[1].Float); \
-             _aro_expr_op_result_3 = ((*aro_a) + (*aro_b)); \
-             _aro_expr_let_body_2 = _aro_expr_op_result_3; \
+             _aro_expr_unpacked_5 = ((*aro_my_tuple)[0].Int); \
+             _aro_expr_casted_6 = ((double )_aro_expr_unpacked_5); \
+             *aro_a = _aro_expr_casted_6; \
+             _aro_expr_unpacked_7 = ((*aro_my_tuple)[1].Float); \
+             *aro_b = _aro_expr_unpacked_7; \
+             _aro_expr_op_result_8 = ((*aro_a) + (*aro_b)); \
+             _aro_expr_let_body_4 = _aro_expr_op_result_8; \
              } \
-             _aro_expr_let_body_0 = _aro_expr_let_body_2; \
+             _aro_expr_let_body_0 = _aro_expr_let_body_4; \
              } ",
             "",
             "_aro_expr_let_body_0",
@@ -1047,26 +1091,30 @@ mod lift_expr {
             ",
             "_Aro_Closure _aro_expr_closure_0; \
              _Aro_Object _aro_expr_tuple_1; \
-             double _aro_expr_op_result_2; \
+             double _aro_expr_op_result_4; \
              _aro_expr_closure_0 = malloc(sizeof(_Aro_Any) * 1); \
              _aro_expr_closure_0[0].Void_Ptr = _aro_func_0;  \
              _aro_expr_tuple_1 = malloc(sizeof(_Aro_Any) * 2); \
              _aro_expr_tuple_1[0].Int = 1; \
              _aro_expr_tuple_1[1].Float = 2.3; \
-             _aro_expr_op_result_2 = (*(double (*)(_Aro_Object , _Aro_Object ))\
+             _aro_expr_op_result_4 = (*(double (*)(_Aro_Object , _Aro_Object ))\
              _aro_expr_closure_0[0].Void_Ptr)(_aro_expr_tuple_1, &_aro_expr_closure_0[1]); ",
             "double _aro_func_0(_Aro_Object _aro_arg, _Aro_Object _aro_captures) { \
              int * aro_a; \
              double * aro_b; \
-             double _aro_expr_op_result_0; \
+             int _aro_expr_unpacked_0; \
+             double _aro_expr_unpacked_1; \
+             double _aro_expr_op_result_2; \
              aro_a = malloc(sizeof(int )); \
              aro_b = malloc(sizeof(double )); \
-             *aro_a = (_aro_arg[0].Int); \
-             *aro_b = (_aro_arg[1].Float); \
-             _aro_expr_op_result_0 = ((*aro_a) + (*aro_b)); \
-             return _aro_expr_op_result_0; \
+             _aro_expr_unpacked_0 = (_aro_arg[0].Int); \
+             *aro_a = _aro_expr_unpacked_0; \
+             _aro_expr_unpacked_1 = (_aro_arg[1].Float); \
+             *aro_b = _aro_expr_unpacked_1; \
+             _aro_expr_op_result_2 = ((*aro_a) + (*aro_b)); \
+             return _aro_expr_op_result_2; \
              } ",
-            "_aro_expr_op_result_2",
+            "_aro_expr_op_result_4",
         );
     }
 }
