@@ -20,28 +20,28 @@ pub fn get_globals() -> HashMap<String, (Value, EvaluatedType)> {
     sources.insert(
         "push",
         r#"
-            T: Any =(T => [T..] => [T..])=>
-            el: T =([T..] => [T..])=>
-            list: [T..] =[T..]=>
-                (el list) |> @hook("std.list.push"  ((T  [T..]) => [T..]))
+            T: Any =(T => [T] => [T])=>
+            el: T =([T] => [T])=>
+            list: [T] =[T]=>
+                (el list) |> @hook("std.list.push"  ((T  [T]) => [T]))
         "#,
     );
     sources.insert(
         "is_empty",
         r#"
-            @hook("std.list.is_empty"  (T: Any => [T..] => Bool))
+            @hook("std.list.is_empty"  (T: Any => [T] => Bool))
         "#,
     );
     sources.insert(
         "head",
         r#"
-            @hook("std.list.head"  (T: Any => [T..] => T))
+            @hook("std.list.head"  (T: Any => [T] => T))
         "#,
     );
     sources.insert(
         "tail",
         r#"
-            @hook("std.list.tail"  (T: Any => [T..] => [T..]))
+            @hook("std.list.tail"  (T: Any => [T] => [T]))
         "#,
     );
     sources.insert(

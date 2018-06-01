@@ -112,7 +112,7 @@ pub enum Type {
     Num,
     Bool,
     Any,
-    Empty,
+    None,
     Ident(String),
     Func(Ast<Type>, Ast<Type>),
     GenericFunc(String, Ast<Type>, Ast<Type>),
@@ -128,7 +128,7 @@ pub enum EvaluatedType {
     Num,
     Bool,
     Any,
-    Empty,
+    None,
     Ident(String, Ast<EvaluatedType>),
     Func(Ast<EvaluatedType>, Ast<EvaluatedType>),
     GenericFunc {
@@ -432,14 +432,14 @@ impl Display for Type {
                 &Type::Num => String::from("Num"),
                 &Type::Bool => String::from("Bool"),
                 &Type::Any => String::from("Any"),
-                &Type::Empty => String::from("Empty"),
+                &Type::None => String::from("None"),
                 &Type::Ident(ref name) => format!("({})", name),
                 &Type::Func(ref input, ref output) => format!("({} => {})", input, output),
                 &Type::GenericFunc(ref name, ref supertype, ref output) => {
                     format!("({}: {} => {})", name, supertype, output)
                 }
                 &Type::Tuple(ref vec) => sequence_to_str("(", vec, ")"),
-                &Type::List(ref element_type) => format!("[{}..]", element_type),
+                &Type::List(ref element_type) => format!("[{}]", element_type),
                 &Type::Ref(ref value_type) => format!("(Ref <| {})", value_type),
                 &Type::Record(ref map) => sequence_to_str(
                     "{",
@@ -467,7 +467,7 @@ impl Display for EvaluatedType {
                 &EvaluatedType::Num => String::from("Num"),
                 &EvaluatedType::Bool => String::from("Bool"),
                 &EvaluatedType::Any => String::from("Any"),
-                &EvaluatedType::Empty => String::from("Empty"),
+                &EvaluatedType::None => String::from("None"),
                 &EvaluatedType::Ident(ref name, ref supertype) => {
                     format!("({} <: {})", name, supertype)
                 }
@@ -479,7 +479,7 @@ impl Display for EvaluatedType {
                     ..
                 } => format!("({}: {} => {})", param_name, param_supertype, output),
                 &EvaluatedType::Tuple(ref vec) => sequence_to_str("(", vec, ")"),
-                &EvaluatedType::List(ref element_type) => format!("[{}..]", element_type),
+                &EvaluatedType::List(ref element_type) => format!("[{}]", element_type),
                 &EvaluatedType::Ref(ref value_type) => format!("(Ref <| {})", value_type),
                 &EvaluatedType::Record(ref map) => sequence_to_str(
                     "{",

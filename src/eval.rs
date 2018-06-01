@@ -873,7 +873,7 @@ mod evaluate_ast {
         assert_eval_eq(
             "
             let x: Num <- 5.0
-            let list: [Num..] <- [x 2.3 x]
+            let list: [Num] <- [x 2.3 x]
             list
             ",
             "[5 2.3 5]",
@@ -965,19 +965,19 @@ mod evaluate_ast {
     fn list_push_hook() {
         assert_eval_eq(
             r#"
-            (1 [2 3]) |> @hook("std.list.push"  ((Int  [Int..]) => [Int..]))
+            (1 [2 3]) |> @hook("std.list.push"  ((Int  [Int]) => [Int]))
             "#,
             "[1 2 3]",
         );
         assert_eval_eq(
             r#"
-            (1 []) |> @hook("std.list.push"  ((Int  [Int..]) => [Int..]))
+            (1 []) |> @hook("std.list.push"  ((Int  [Int]) => [Int]))
             "#,
             "[1]",
         );
         assert_eval_eq(
             r#"
-            (1.6 [2.1 3.7]) |> @hook("std.list.push"  ((Num  [Num..]) => [Num..]))
+            (1.6 [2.1 3.7]) |> @hook("std.list.push"  ((Num  [Num]) => [Num]))
             "#,
             "[1.6 2.1 3.7]",
         );
@@ -987,25 +987,25 @@ mod evaluate_ast {
     fn list_is_empty_hook() {
         assert_eval_eq(
             r#"
-            [1 2 3] |> @hook("std.list.is_empty"  ([Int..] => Bool))
+            [1 2 3] |> @hook("std.list.is_empty"  ([Int] => Bool))
             "#,
             "#false ()",
         );
         assert_eval_eq(
             r#"
-            [] |> @hook("std.list.is_empty"  ([Int..] => Bool))
+            [] |> @hook("std.list.is_empty"  ([Int] => Bool))
             "#,
             "#true ()",
         );
         assert_eval_eq(
             r#"
-            [#true() #false()] |> @hook("std.list.is_empty"  ([Bool..] => Bool))
+            [#true() #false()] |> @hook("std.list.is_empty"  ([Bool] => Bool))
             "#,
             "#false ()",
         );
         assert_eval_eq(
             r#"
-            [] |> @hook("std.list.is_empty"  ([Num..] => Bool))
+            [] |> @hook("std.list.is_empty"  ([Num] => Bool))
             "#,
             "#true ()",
         );
@@ -1015,18 +1015,18 @@ mod evaluate_ast {
     fn list_head_hook() {
         assert_eval_eq(
             r#"
-            [1 2 3] |> @hook("std.list.head"  ([Int..] => Int))
+            [1 2 3] |> @hook("std.list.head"  ([Int] => Int))
             "#,
             "1",
         );
         assert_eval_err(
             r#"
-            [] |> @hook("std.list.head"  ([Int..] => Int))
+            [] |> @hook("std.list.head"  ([Int] => Int))
             "#,
         );
         assert_eval_eq(
             r#"
-            [#true() #false()] |> @hook("std.list.head"  ([Bool..] => Bool))
+            [#true() #false()] |> @hook("std.list.head"  ([Bool] => Bool))
             "#,
             "#true ()",
         );
@@ -1036,18 +1036,18 @@ mod evaluate_ast {
     fn list_tail_hook() {
         assert_eval_eq(
             r#"
-            [1 2 3] |> @hook("std.list.tail"  ([Int..] => Int))
+            [1 2 3] |> @hook("std.list.tail"  ([Int] => Int))
             "#,
             "[2 3]",
         );
         assert_eval_err(
             r#"
-            [] |> @hook("std.list.tail"  ([Int..] => Int))
+            [] |> @hook("std.list.tail"  ([Int] => Int))
             "#,
         );
         assert_eval_eq(
             r#"
-            [#true() #false()] |> @hook("std.list.tail"  ([Bool..] => Bool))
+            [#true() #false()] |> @hook("std.list.tail"  ([Bool] => Bool))
             "#,
             "[#false ()]",
         );

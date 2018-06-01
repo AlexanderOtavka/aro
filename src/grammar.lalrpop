@@ -95,7 +95,7 @@ ValueType = {
     <l:@L> "Num" <r:@R> => Ast::<Type>::new(l, r, Type::Num),
     <l:@L> "Bool" <r:@R> => Ast::<Type>::new(l, r, Type::Bool),
     <l:@L> "Any" <r:@R> => Ast::<Type>::new(l, r, Type::Any),
-    <l:@L> "Empty" <r:@R> => Ast::<Type>::new(l, r, Type::Empty),
+    <l:@L> "None" <r:@R> => Ast::<Type>::new(l, r, Type::None),
 
     <l:@L> "(" "Ref" "<|" <t:Type> ")" <r:@R> => Ast::<Type>::new(l, r, Type::Ref(t)),
     <l:@L> "(" <t:Type> "|>" "Ref" ")" <r:@R> => Ast::<Type>::new(l, r, Type::Ref(t)),
@@ -107,7 +107,7 @@ ValueType = {
         vec
     })),
 
-    <l:@L> "[" <t:Type> ".." "]" <r:@R> => Ast::<Type>::new(l, r, Type::List(t)),
+    <l:@L> "[" <t:Type> "]" <r:@R> => Ast::<Type>::new(l, r, Type::List(t)),
 
     <l:@L> "{" <e: RecordTypeEntry* > "}" <r:@R> =>
         Ast::<Type>::new(l, r, Type::Record(e.into_iter().collect())),
