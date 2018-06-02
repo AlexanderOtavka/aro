@@ -797,8 +797,8 @@ pub fn lift_expr(
 mod lift_expr {
     use super::*;
     use parse::source_to_ast;
-    use typecheck::typecheck_ast;
     use std::collections::HashMap;
+    use typecheck::typecheck_ast;
 
     fn assert_lift(
         aro_code: &str,

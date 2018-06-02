@@ -1,10 +1,10 @@
 use ast::{Ast, BinOp, EvaluatedType, Expression, Pattern, Type, Value};
-use util::Error;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::f64;
 use std::iter::Iterator;
 use std::rc::Rc;
-use std::cell::RefCell;
+use util::Error;
 
 fn evaluate_number_operator<F>(
     ast: &Ast<Expression>,
@@ -163,13 +163,11 @@ fn substitute(
             &Expression::RecordAccess(ref record, ref field) => ast.replace_expr(
                 Expression::RecordAccess(substitute(record, pattern, value), field.clone()),
             ),
-            &Expression::BinOp(ref op, ref left, ref right) => {
-                ast.replace_expr(Expression::BinOp(
-                    op.clone(),
-                    substitute(left, pattern, value),
-                    substitute(right, pattern, value),
-                ))
-            }
+            &Expression::BinOp(ref op, ref left, ref right) => ast.replace_expr(Expression::BinOp(
+                op.clone(),
+                substitute(left, pattern, value),
+                substitute(right, pattern, value),
+            )),
             &Expression::If(ref c, ref t, ref e) => ast.replace_expr(Expression::If(
                 substitute(c, pattern, value),
                 substitute(t, pattern, value),
@@ -332,8 +330,7 @@ fn handle_hook_call(
                             div_by_zero_error
                         }
                         _ => Ok(param_ast.replace_expr(Expression::Value(Value::Int(match (
-                            left,
-                            right,
+                            left, right,
                         ) {
                             (&Value::Int(left_value), &Value::Int(right_value)) => {
                                 left_value / right_value
@@ -518,8 +515,7 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
                         }
                     },
                     &BinOp::LEq => Ok(ast.replace_expr(Expression::Value(Value::Bool(match (
-                        left,
-                        right,
+                        left, right,
                     ) {
                         (&Value::Int(left_value), &Value::Int(right_value)) => {
                             Ok(left_value <= right_value)
@@ -570,7 +566,6 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
             ))),
         },
         &Expression::Let(ref bind_pattern, ref bind_value, ref body) => if bind_value.is_term() {
-            // TODO: improve error message when doing non-function recursion
             Ok(substitute(
                 body,
                 bind_pattern,

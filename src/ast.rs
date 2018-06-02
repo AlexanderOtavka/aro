@@ -1,10 +1,10 @@
-use std::fmt;
-use std::fmt::{Display, Formatter};
-use std::f64;
-use std::iter::Iterator;
-use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::f64;
+use std::fmt;
+use std::fmt::{Display, Formatter};
+use std::iter::Iterator;
+use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct Ast<T> {
@@ -400,7 +400,7 @@ impl Display for Value {
                         vec.sort();
                         vec
                     },
-                    "}"
+                    "}",
                 ),
             }
         )
@@ -450,7 +450,7 @@ impl Display for Type {
                         vec.sort();
                         vec
                     },
-                    "}"
+                    "}",
                 ),
             }
         )
@@ -490,7 +490,7 @@ impl Display for EvaluatedType {
                         vec.sort();
                         vec
                     },
-                    "}"
+                    "}",
                 ),
             }
         )

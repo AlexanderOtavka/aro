@@ -1,8 +1,8 @@
 use ast::{Ast, BinOp, EvaluatedType, Expression, Pattern, Type, TypedAst, TypedExpression,
           TypedPattern, TypedValue, Value};
-use util::Error;
 use std::collections::HashMap;
 use std::iter::Iterator;
+use util::Error;
 
 impl Error {
     pub fn type_error(

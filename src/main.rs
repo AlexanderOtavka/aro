@@ -9,18 +9,18 @@
 extern crate clap;
 extern crate lalrpop_util;
 mod ast;
+mod c_compile;
+mod eval;
+mod globals;
 mod grammar;
-mod util;
 mod parse;
 mod typecheck;
-mod eval;
-mod c_compile;
-mod globals;
+mod util;
 
+use globals::get_globals;
 use std::io::prelude::*;
 use std::process::exit;
 use util::Error;
-use globals::get_globals;
 
 fn evaluate_source(input: &str, small_step: bool) -> Result<String, Error> {
     let ast = parse::source_to_ast(input)?;

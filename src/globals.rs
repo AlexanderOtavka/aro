@@ -1,8 +1,8 @@
-use parse::source_to_ast;
-use eval::evaluate_ast;
-use typecheck::typecheck_ast;
 use ast::{EvaluatedType, Value};
+use eval::evaluate_ast;
+use parse::source_to_ast;
 use std::collections::HashMap;
+use typecheck::typecheck_ast;
 
 pub fn get_globals() -> HashMap<String, (Value, EvaluatedType)> {
     let mut sources = HashMap::new();
