@@ -160,8 +160,8 @@ pub enum CValue {
     Float(f64),
     Int(i32),
     Bool(bool),
-    Ident(String, CType),
-    DerefBound(String, CType),
+    Ident(CName, CType),
+    DerefBound(CName, CType),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -184,20 +184,31 @@ pub enum CExpr {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct CDeclaration(pub CType, pub String);
+pub enum CName {
+    Expr(String, i32),
+    Func(i32),
+    AdaptorFunc(i32),
+    Ident(String),
+    Hook(Vec<String>),
+    FuncArg,
+    FuncCaptures,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct CDeclaration(pub CType, pub CName);
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum CStatement {
-    VarAssign(String, Ast<CExpr>),
-    RefAlloc(String, CType),
-    RefAssign(String, Ast<CExpr>),
+    VarAssign(CName, Ast<CExpr>),
+    RefAlloc(CName, CType),
+    RefAssign(CName, Ast<CExpr>),
     ClosureInit {
-        name: String,
+        name: CName,
         function: Ast<CValue>,
         captures: Vec<Ast<CValue>>,
     },
     ObjectInit {
-        name: String,
+        name: CName,
         data: Vec<Ast<CValue>>,
     },
     Block(Vec<CDeclaration>, Vec<Ast<CStatement>>),
@@ -206,7 +217,7 @@ pub enum CStatement {
 
 #[derive(Debug, Clone)]
 pub struct CFunc {
-    pub name: String,
+    pub name: CName,
     pub param: Ast<CType>,
     pub declarations: Vec<CDeclaration>,
     pub body: Vec<Ast<CStatement>>,
@@ -533,6 +544,26 @@ impl WellCTyped for CExpr {
     }
 }
 
+fn get_hook_c_name(names: &Vec<String>) -> String {
+    let mut string = String::from("_aro_hook__");
+
+    for name in &names[..names.len() - 1] {
+        string += name;
+        string += "__";
+    }
+
+    // Replace trailing ! with __
+    let last_name = &names[names.len() - 1];
+    if &last_name[last_name.len() - 1..] == "!" {
+        string += &last_name[..last_name.len() - 1];
+        string += "__";
+    } else {
+        string += last_name;
+    }
+
+    string
+}
+
 impl Display for CValue {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
@@ -651,7 +682,7 @@ impl Display for CExpr {
 }
 
 fn init_array<Element: WellCTyped + Display>(
-    name: &str,
+    name: &CName,
     elements: &Vec<Ast<Element>>,
     start_index: usize,
 ) -> String {
@@ -669,9 +700,27 @@ fn init_array<Element: WellCTyped + Display>(
     assignments.join(" ")
 }
 
+impl Display for CName {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                &CName::Hook(ref names) => get_hook_c_name(names),
+                &CName::Expr(ref name, index) => format!("_aro_expr_{}_{}", name, index),
+                &CName::Func(index) => format!("_aro_func_{}", index),
+                &CName::AdaptorFunc(index) => format!("_aro_func_adaptor_{}", index),
+                &CName::Ident(ref name) => format!("aro_{}", name),
+                &CName::FuncArg => String::from("_aro_arg"),
+                &CName::FuncCaptures => String::from("_aro_captures"),
+            }
+        )
+    }
+}
+
 impl Display for CDeclaration {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{};", ctype_to_string(&self.0, &self.1))
+        write!(f, "{};", ctype_to_string(&self.0, &format!("{}", self.1)))
     }
 }
 

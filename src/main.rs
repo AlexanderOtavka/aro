@@ -181,6 +181,7 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
     let mut expr_index = 0;
     let mut functions = Vec::new();
     let mut function_index = 0;
+    let mut externs = Vec::new();
     let expr = c_compile::lift_expr(
         &typechecked_ast,
         &mut declarations,
@@ -188,6 +189,7 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
         &mut expr_index,
         &mut functions,
         &mut function_index,
+        &mut externs,
     );
 
     Ok(format!(
@@ -209,6 +211,8 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
          \n\
          \n{}\
          \n\
+         \n{}\
+         \n\
          \nint main(void) {{\
          \n  {}\
          \n  {}\
@@ -216,6 +220,11 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
          \n  printf(\"%f\\n\", (double) {});\
          \n  return 0;\
          \n}}",
+        externs
+            .iter()
+            .map(|extern_declaration| format!("extern {}", extern_declaration))
+            .collect::<Vec<String>>()
+            .join("\n"),
         functions
             .iter()
             .map(|function| format!("{};", function.expr.get_signature_string()))
@@ -272,6 +281,8 @@ mod c_compile_file {
              \n  void* Ref;\
              \n  void* Void_Ptr;\
              \n} _Aro_Any, *_Aro_Object, *_Aro_Closure;\
+             \n\
+             \n\
              \n\
              \n\
              \n\

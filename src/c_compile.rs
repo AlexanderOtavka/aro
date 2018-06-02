@@ -1,29 +1,29 @@
 use ast::{
-    Ast, BinOp, CDeclaration, CExpr, CFunc, CStatement, CType, CValue, EvaluatedType, TypedAst,
-    TypedExpression, TypedPattern, TypedValue,
+    Ast, BinOp, CDeclaration, CExpr, CFunc, CName, CStatement, CType, CValue, EvaluatedType,
+    TypedAst, TypedExpression, TypedPattern, TypedValue,
 };
 use std::collections::{HashMap, HashSet};
 
-fn get_expr_name(name: &str, expr_index: &mut i32) -> String {
+fn get_expr_name(name: &str, expr_index: &mut i32) -> CName {
     let old_i = *expr_index;
     *expr_index += 1;
-    format!("_aro_expr_{}_{}", name, old_i)
+    CName::Expr(String::from(name), old_i)
 }
 
-fn get_func_name(func_index: &mut i32) -> String {
+fn get_func_name(func_index: &mut i32) -> CName {
     let old_i = *func_index;
     *func_index += 1;
-    format!("_aro_func_{}", old_i)
+    CName::Func(old_i)
 }
 
-fn get_adaptor_func_name(func_index: &mut i32) -> String {
+fn get_adaptor_func_name(func_index: &mut i32) -> CName {
     let old_i = *func_index;
     *func_index += 1;
-    format!("_aro_func_adaptor_{}", old_i)
+    CName::AdaptorFunc(old_i)
 }
 
-fn get_ident_name(name: &str) -> String {
-    format!("aro_{}", name)
+fn get_ident_name(name: &str) -> CName {
+    CName::Ident(String::from(name))
 }
 
 fn type_to_ctype(t: &EvaluatedType) -> CType {
@@ -184,10 +184,7 @@ fn maybe_cast_representation(
             let mut adaptor_func_statements = Vec::new();
             let mut adaptor_func_expr_index = 0;
 
-            let arg = to_in.replace_expr(CValue::Ident(
-                String::from("_aro_arg"),
-                type_to_ctype(&to_in.expr),
-            ));
+            let arg = to_in.replace_expr(CValue::Ident(CName::FuncArg, type_to_ctype(&to_in.expr)));
             let (arg, arg_was_casted) = maybe_cast_representation(
                 arg,
                 &to_in.expr,
@@ -209,10 +206,7 @@ fn maybe_cast_representation(
                 inner_func_name.clone(),
                 from.replace_expr(CExpr::ObjectAccess {
                     index: 0,
-                    object: from.replace_expr(CValue::Ident(
-                        String::from("_aro_captures"),
-                        CType::Object,
-                    )),
+                    object: from.replace_expr(CValue::Ident(CName::FuncCaptures, CType::Object)),
                     field_type: inner_func_ctype.clone(),
                 }),
             )));
@@ -473,6 +467,7 @@ pub fn lift_expr(
     expr_index: &mut i32,
     functions: &mut Vec<Ast<CFunc>>,
     function_index: &mut i32,
+    externs: &mut Vec<CDeclaration>,
 ) -> Ast<CValue> {
     match &*ast.expr {
         &TypedExpression::Value(ref v) => match v {
@@ -491,8 +486,8 @@ pub fn lift_expr(
                 let mut func_expr_index = 0;
 
                 let param_ctype = type_to_ctype(&pattern.expr_type);
-                let param_value = pattern
-                    .replace_untyped(CValue::Ident(String::from("_aro_arg"), param_ctype.clone()));
+                let param_value =
+                    pattern.replace_untyped(CValue::Ident(CName::FuncArg, param_ctype.clone()));
                 make_declarations(pattern, &mut func_declarations, &mut func_statements);
                 bind_declarations(
                     pattern,
@@ -510,10 +505,8 @@ pub fn lift_expr(
                     let ident_type = CType::Ref(Box::new(CType::Ref(Box::new(var_type.clone()))));
                     func_declarations.push(CDeclaration(ident_type.clone(), ident_name.clone()));
 
-                    let captures_object = ast.replace_untyped(CValue::Ident(
-                        String::from("_aro_captures"),
-                        CType::Object,
-                    ));
+                    let captures_object =
+                        ast.replace_untyped(CValue::Ident(CName::FuncCaptures, CType::Object));
                     func_statements.push(ast.replace_untyped(CStatement::VarAssign(
                         ident_name,
                         ast.replace_untyped(CExpr::ObjectAccess {
@@ -531,6 +524,7 @@ pub fn lift_expr(
                     &mut func_expr_index,
                     functions,
                     function_index,
+                    externs,
                 );
 
                 let (ret, _) = maybe_cast_representation(
@@ -586,6 +580,7 @@ pub fn lift_expr(
                         expr_index,
                         functions,
                         function_index,
+                        externs,
                     ));
                 }
 
@@ -597,6 +592,12 @@ pub fn lift_expr(
                 }));
 
                 ast.replace_untyped(CValue::Ident(expr_name, CType::Object))
+            }
+            &TypedValue::Hook(ref names) => {
+                let ctype = type_to_ctype(&ast.expr_type);
+                let name = CName::Hook(names.clone());
+                externs.push(CDeclaration(ctype.clone(), name.clone()));
+                ast.replace_untyped(CValue::Ident(name, ctype))
             }
             _ => panic!(),
         },
@@ -612,6 +613,7 @@ pub fn lift_expr(
                 expr_index,
                 functions,
                 function_index,
+                externs,
             );
             let right_c_ast = {
                 let right_c_ast = lift_expr(
@@ -621,6 +623,7 @@ pub fn lift_expr(
                     expr_index,
                     functions,
                     function_index,
+                    externs,
                 );
                 match op {
                     &BinOp::Call => {
@@ -688,6 +691,7 @@ pub fn lift_expr(
                 expr_index,
                 functions,
                 function_index,
+                externs,
             );
 
             let expr_name = get_expr_name("if_result", expr_index);
@@ -702,6 +706,7 @@ pub fn lift_expr(
                 expr_index,
                 functions,
                 function_index,
+                externs,
             );
             consequent_statements.push(ast.replace_untyped(CStatement::VarAssign(
                 expr_name.clone(),
@@ -721,6 +726,7 @@ pub fn lift_expr(
                 expr_index,
                 functions,
                 function_index,
+                externs,
             );
             alternate_statements.push(ast.replace_untyped(CStatement::VarAssign(
                 expr_name.clone(),
@@ -755,6 +761,7 @@ pub fn lift_expr(
                 expr_index,
                 functions,
                 function_index,
+                externs,
             );
             bind_declarations(
                 pattern,
@@ -774,6 +781,7 @@ pub fn lift_expr(
                 expr_index,
                 functions,
                 function_index,
+                externs,
             );
             body_statements.push(body.replace_untyped(CStatement::VarAssign(
                 body_name.clone(),
@@ -793,6 +801,7 @@ pub fn lift_expr(
                 expr_index,
                 functions,
                 function_index,
+                externs,
             );
             let (casted, _) = maybe_cast_representation(
                 from_cvalue,
