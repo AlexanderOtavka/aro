@@ -1,5 +1,7 @@
-use ast::{Ast, BinOp, CDeclaration, CExpr, CFunc, CStatement, CType, CValue, EvaluatedType,
-          TypedAst, TypedExpression, TypedPattern, TypedValue};
+use ast::{
+    Ast, BinOp, CDeclaration, CExpr, CFunc, CStatement, CType, CValue, EvaluatedType, TypedAst,
+    TypedExpression, TypedPattern, TypedValue,
+};
 use std::collections::{HashMap, HashSet};
 
 fn get_expr_name(name: &str, expr_index: &mut i32) -> String {
@@ -368,13 +370,17 @@ fn make_declarations(
     match &*pattern.expr {
         &TypedPattern::Ident(ref name) => {
             let value_name = get_ident_name(name);
-            let value_ctype = type_to_ctype(&pattern.expr_type);
-            let value_ref_type = CType::Ref(Box::new(value_ctype.clone()));
+            let wrapper_type = CType::Ref(Box::new(type_to_ctype(&pattern.expr_type)));
+            let wrapper_ref_type = CType::Ref(Box::new(wrapper_type.clone()));
 
-            declarations.push(CDeclaration(value_ref_type, value_name.clone()));
+            declarations.push(CDeclaration(wrapper_ref_type, value_name.clone()));
             statements.push(
-                pattern.replace_untyped(CStatement::RefAlloc(value_name.clone(), value_ctype)),
+                pattern.replace_untyped(CStatement::RefAlloc(value_name.clone(), wrapper_type)),
             );
+            statements.push(pattern.replace_untyped(CStatement::RefAssign(
+                value_name.clone(),
+                pattern.replace_untyped(CExpr::Value(CValue::Int(0))),
+            )));
         }
         &TypedPattern::Tuple(ref vec) => for element in vec {
             make_declarations(element, declarations, statements);
@@ -394,7 +400,6 @@ fn bind_declarations(
 ) {
     match &*pattern.expr {
         &TypedPattern::Ident(ref name) => {
-            let value_name = get_ident_name(name);
             let (casted_value, _) = maybe_cast_representation(
                 value.clone(),
                 value_type,
@@ -405,10 +410,25 @@ fn bind_declarations(
                 functions,
                 function_index,
             );
+
+            let value_name = get_ident_name(name);
+            let value_ctype = type_to_ctype(&pattern.expr_type);
+
+            let wrapper_name = get_expr_name(&format!("{}_wrapper", name), expr_index);
+            let wrapper_type = CType::Ref(Box::new(value_ctype.clone()));
+
+            declarations.push(CDeclaration(wrapper_type.clone(), wrapper_name.clone()));
             statements.push(
-                pattern
-                    .replace_untyped(CStatement::RefAssign(value_name, casted_value.to_c_expr())),
+                pattern.replace_untyped(CStatement::RefAlloc(wrapper_name.clone(), value_ctype)),
             );
+            statements.push(pattern.replace_untyped(CStatement::RefAssign(
+                wrapper_name.clone(),
+                casted_value.to_c_expr(),
+            )));
+            statements.push(pattern.replace_untyped(CStatement::RefAssign(
+                value_name,
+                pattern.replace_untyped(CExpr::Value(CValue::Ident(wrapper_name, wrapper_type))),
+            )));
         }
         &TypedPattern::Tuple(ref vec) => for (index, element) in vec.iter().enumerate() {
             let inner_value_type =
@@ -487,10 +507,8 @@ pub fn lift_expr(
 
                 for (index, (name, var_type)) in captures_map.iter().enumerate() {
                     let ident_name = get_ident_name(name);
-                    func_declarations.push(CDeclaration(
-                        CType::Ref(Box::new(var_type.clone())),
-                        ident_name.clone(),
-                    ));
+                    let ident_type = CType::Ref(Box::new(CType::Ref(Box::new(var_type.clone()))));
+                    func_declarations.push(CDeclaration(ident_type.clone(), ident_name.clone()));
 
                     let captures_object = ast.replace_untyped(CValue::Ident(
                         String::from("_aro_captures"),
@@ -501,7 +519,7 @@ pub fn lift_expr(
                         ast.replace_untyped(CExpr::ObjectAccess {
                             object: captures_object,
                             index,
-                            field_type: CType::Ref(Box::new(var_type.clone())),
+                            field_type: ident_type,
                         }),
                     )))
                 }
@@ -582,7 +600,7 @@ pub fn lift_expr(
             }
             _ => panic!(),
         },
-        &TypedExpression::Ident(ref name) => ast.replace_untyped(CValue::Deref(
+        &TypedExpression::Ident(ref name) => ast.replace_untyped(CValue::DerefBound(
             get_ident_name(name),
             type_to_ctype(&ast.expr_type),
         )),
