@@ -162,6 +162,7 @@ pub enum CValue {
     Bool(bool),
     Ident(CName, CType),
     DerefBound(CName, CType),
+    Null,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -519,6 +520,7 @@ impl WellCTyped for CValue {
             &CValue::Float(_) => CType::Float,
             &CValue::Bool(_) => CType::Bool,
             &CValue::Ident(_, ref ctype) | &CValue::DerefBound(_, ref ctype) => ctype.clone(),
+            &CValue::Null => CType::VoidPtr,
         }
     }
 }
@@ -575,6 +577,7 @@ impl Display for CValue {
                 &CValue::Bool(value) => format!("{}", value),
                 &CValue::Ident(ref name, _) => format!("{}", name),
                 &CValue::DerefBound(ref name, _) => format!("(**{})", name),
+                &CValue::Null => String::from("NULL"),
             }
         )
     }

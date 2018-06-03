@@ -629,6 +629,33 @@ pub fn lift_expr(
                 externs.push(CDeclaration(ctype.clone(), name.clone()));
                 ast.replace_untyped(CValue::Ident(name, ctype))
             }
+            &TypedValue::List(ref elements) => {
+                let mut head = CValue::Null;
+
+                for element in elements.into_iter().rev() {
+                    let element_value = lift_expr(
+                        element,
+                        declarations,
+                        statements,
+                        expr_index,
+                        functions,
+                        function_index,
+                        externs,
+                    );
+
+                    let cons_name = get_expr_name("cons", expr_index);
+                    let cons_type = CType::Object;
+                    declarations.push(CDeclaration(cons_type.clone(), cons_name.clone()));
+                    statements.push(element.replace_untyped(CStatement::ObjectInit {
+                        name: cons_name.clone(),
+                        data: vec![element_value, element.replace_untyped(head)],
+                    }));
+
+                    head = CValue::Ident(cons_name, cons_type);
+                }
+
+                ast.replace_untyped(head)
+            }
             _ => panic!(),
         },
         &TypedExpression::Ident(ref name) => ast.replace_untyped(CValue::DerefBound(
@@ -1216,6 +1243,23 @@ mod lift_expr {
              return _aro_expr_op_result_4; \
              } ",
             "_aro_expr_op_result_4",
+        );
+    }
+
+    #[test]
+    fn builds_lists() {
+        assert_lift(
+            "[1 2]",
+            "_Aro_Object _aro_expr_cons_0; \
+             _Aro_Object _aro_expr_cons_1; \
+             _aro_expr_cons_0 = malloc(sizeof(_Aro_Any) * 2); \
+             _aro_expr_cons_0[0].Int = 2; \
+             _aro_expr_cons_0[1].Void_Ptr = NULL; \
+             _aro_expr_cons_1 = malloc(sizeof(_Aro_Any) * 2); \
+             _aro_expr_cons_1[0].Int = 1; \
+             _aro_expr_cons_1[1].Object = _aro_expr_cons_0; ",
+            "",
+            "_aro_expr_cons_1",
         );
     }
 }
