@@ -86,7 +86,7 @@ mod evaluate_file {
     fn basic_expressions() {
         assert_eq!(
             evaluate_file("examples/basic_expressions.aro", false).unwrap(),
-            "-5"
+            "-5.1"
         )
     }
 
