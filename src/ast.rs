@@ -520,7 +520,7 @@ impl WellCTyped for CValue {
             &CValue::Float(_) => CType::Float,
             &CValue::Bool(_) => CType::Bool,
             &CValue::Ident(_, ref ctype) | &CValue::DerefBound(_, ref ctype) => ctype.clone(),
-            &CValue::Null => CType::VoidPtr,
+            &CValue::Null => CType::Object,
         }
     }
 }

@@ -39,6 +39,7 @@ pub fn type_to_ctype(t: &EvaluatedType) -> CType {
         &EvaluatedType::Tuple(_) => CType::Object,
         &EvaluatedType::GenericFunc { ref output, .. } => type_to_ctype(&output.expr),
         &EvaluatedType::Ident(_, ref supertype) => type_to_ctype(&supertype.expr),
+        &EvaluatedType::List(_) => CType::Object,
         _ => panic!("Unhandled type: {}", t),
     }
 }
@@ -1254,7 +1255,7 @@ mod lift_expr {
              _Aro_Object _aro_expr_cons_1; \
              _aro_expr_cons_0 = malloc(sizeof(_Aro_Any) * 2); \
              _aro_expr_cons_0[0].Int = 2; \
-             _aro_expr_cons_0[1].Void_Ptr = NULL; \
+             _aro_expr_cons_0[1].Object = NULL; \
              _aro_expr_cons_1 = malloc(sizeof(_Aro_Any) * 2); \
              _aro_expr_cons_1[0].Int = 1; \
              _aro_expr_cons_1[1].Object = _aro_expr_cons_0; ",
