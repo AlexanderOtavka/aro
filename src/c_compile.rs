@@ -633,6 +633,13 @@ pub fn lift_expr(
             &TypedValue::List(ref elements) => {
                 let mut head = CValue::Null;
 
+                let element_supertype =
+                    if let &EvaluatedType::List(ref element_type_ast) = &*ast.expr_type {
+                        &*element_type_ast.expr
+                    } else {
+                        panic!("Bad typing of list")
+                    };
+
                 for element in elements.into_iter().rev() {
                     let element_value = lift_expr(
                         element,
@@ -642,6 +649,17 @@ pub fn lift_expr(
                         functions,
                         function_index,
                         externs,
+                    );
+
+                    let (element_value, _) = maybe_cast_representation(
+                        element_value,
+                        &element.expr_type,
+                        element_supertype,
+                        declarations,
+                        statements,
+                        expr_index,
+                        functions,
+                        function_index,
                     );
 
                     let cons_name = get_expr_name("cons", expr_index);
