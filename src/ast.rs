@@ -775,7 +775,7 @@ impl Display for CStatement {
                     ),
                     CType::Int => format!("printf(\"%d\", {});", value),
                     CType::Float => format!("printf(\"%lf\", {});", value),
-                    CType::Any => format!("printf(\"<Any %p>\", (void*) {});", value),
+                    CType::Any => format!("printf(\"<Any %p>\", {}.Void_Ptr);", value),
                     CType::Closure { .. } => format!("printf(\"<Closure %p>\", {});", value),
                     CType::Object => format!("printf(\"<Object %p>\", {});", value),
                     CType::Ref(_) => format!("printf(\"<Ref %p>\", {});", value),
