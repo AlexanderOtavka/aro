@@ -22,16 +22,16 @@ pub fn get_globals() -> HashMap<String, (Value, TypedAst<TypedExpression>)> {
     sources.insert(
         "push",
         r#"
-            T: Any =(T => [T] => [T])=>
-            el: T =([T] => [T])=>
-            list: [T] =[T]=>
-                (el list) |> @hook("std.list.push"  ((T  [T]) => [T]))
+            T: Any =([T] => T => [T])=>
+            list: [T] =(T => [T])=>
+            element: T =[T]=>
+                (element list) |> @hook("std.list.push"  ((T [T]) => [T]))
         "#,
     );
     sources.insert(
         "is_empty",
         r#"
-            @hook("std.list.is_empty"  (T: Any => [T] => Bool))
+            @hook("std.list.is_empty"  ([Any] => Bool))
         "#,
     );
     sources.insert(

@@ -2,14 +2,15 @@ let concat: (T: Any => [T] => [T] => [T]) <-
     T: Any =([T] => [T] => [T])=>
     first: [T] =([T] => [T])=>
     second: [T] =[T]=>
-        if first |> (is_empty <| type T) then
+        if first |> is_empty then
             second
-        else if second |> (is_empty <| type T) then
+        else if second |> is_empty then
             first
         else
-            (push <| type T)
-                <| (first |> (head <| type T))
-                <| (first |> (tail <| type T) |> (concat <| type T) <| second)
+            first
+                |> (tail <| type T)
+                |> (concat <| type T) <| second
+                |> (push <| type T) <| (first |> (head <| type T))
 
 let List_Element <- Int
 let numbers_123: [List_Element] <- [1 2 3]
