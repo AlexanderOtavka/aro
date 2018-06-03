@@ -9,6 +9,8 @@
 _Aro_Closure _aro_hook__std__math__floordiv;
 _Aro_Closure _aro_hook__std__list__push;
 _Aro_Closure _aro_hook__std__list__is_empty;
+_Aro_Closure _aro_hook__std__list__head;
+_Aro_Closure _aro_hook__std__list__tail;
 
 int _aro_std_ext__math__floordiv(_Aro_Object tuple_arg, _Aro_Object captures) {
     double left  = tuple_arg[0].Float;
@@ -31,6 +33,14 @@ bool _aro_std_ext__list__is_empty(_Aro_Object list, _Aro_Object captures) {
     return list == NULL;
 }
 
+_Aro_Any _aro_std_ext__list__head(_Aro_Object list, _Aro_Object captures) {
+    return list[0];
+}
+
+_Aro_Object _aro_std_ext__list__tail(_Aro_Object list, _Aro_Object captures) {
+    return list[1].Object;
+}
+
 void _aro_std_ext_init(void) {
     // std.math.floordiv
     _aro_hook__std__math__floordiv = malloc(sizeof(_Aro_Any));
@@ -43,4 +53,12 @@ void _aro_std_ext_init(void) {
     // std.list.is_empty
     _aro_hook__std__list__is_empty = malloc(sizeof(_Aro_Any));
     _aro_hook__std__list__is_empty->Void_Ptr = _aro_std_ext__list__is_empty;
+
+    // std.list.head
+    _aro_hook__std__list__head = malloc(sizeof(_Aro_Any));
+    _aro_hook__std__list__head->Void_Ptr = _aro_std_ext__list__head;
+
+    // std.list.tail
+    _aro_hook__std__list__tail = malloc(sizeof(_Aro_Any));
+    _aro_hook__std__list__tail->Void_Ptr = _aro_std_ext__list__tail;
 }

@@ -34,18 +34,18 @@ pub fn get_globals() -> HashMap<String, (Value, TypedAst<TypedExpression>)> {
             @hook("std.list.is_empty"  (T: Any => [T] => Bool))
         "#,
     );
-    // sources.insert(
-    //     "head",
-    //     r#"
-    //         @hook("std.list.head"  (T: Any => [T] => T))
-    //     "#,
-    // );
-    // sources.insert(
-    //     "tail",
-    //     r#"
-    //         @hook("std.list.tail"  (T: Any => [T] => [T]))
-    //     "#,
-    // );
+    sources.insert(
+        "head",
+        r#"
+            @hook("std.list.head"  (T: Any => [T] => T))
+        "#,
+    );
+    sources.insert(
+        "tail",
+        r#"
+            @hook("std.list.tail"  (T: Any => [T] => [T]))
+        "#,
+    );
     // sources.insert(
     //     "ref",
     //     r#"
