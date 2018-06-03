@@ -312,9 +312,9 @@ mod c_compile_file {
              \n  _aro_std_init();\
              \n\
              \n  double _aro_expr_op_result_0;\
-             \n  _aro_expr_op_result_0 = (1 + 1);\
+             \n  _aro_expr_op_result_0 = (1 + 1); printf(\"%lf\", _aro_expr_op_result_0);\
              \n\
-             \n  printf(\"%f\\n\", (double) _aro_expr_op_result_0);\
+             \n  printf(\"\\n\");\
              \n  return 0;\
              \n}",
         )
