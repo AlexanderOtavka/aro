@@ -231,6 +231,7 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
          \n  {}\
          \n  {}\
          \n\
+         \n  printf(\"\\n\");\
          \n  return 0;\
          \n}}",
         env!("CARGO_PKG_NAME"),
