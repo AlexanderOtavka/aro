@@ -885,8 +885,62 @@ pub fn print_value(
     statements: &mut Vec<Ast<CStatement>>,
     expr_index: &mut u64,
 ) {
-    statements.push(value_ast.replace_expr(CStatement::PrintValue(value_ast.clone())));
-    statements.push(value_ast.replace_expr(CStatement::PrintText(String::from("\\n"))));
+    match value_type {
+        EvaluatedType::Bool
+        | EvaluatedType::Int
+        | EvaluatedType::Num
+        | EvaluatedType::None
+        | EvaluatedType::Any
+        | EvaluatedType::Func(_, _) => {
+            statements.push(value_ast.replace_expr(CStatement::PrintValue(value_ast.clone())));
+        }
+        EvaluatedType::Ident(_, ref value_type_ast)
+        | EvaluatedType::GenericFunc {
+            substituted_output: ref value_type_ast,
+            ..
+        } => {
+            print_value(
+                value_ast,
+                &value_type_ast.expr,
+                declarations,
+                statements,
+                expr_index,
+            );
+        }
+        EvaluatedType::Tuple(ref element_types) => {
+            statements.push(value_ast.replace_expr(CStatement::PrintText(String::from("("))));
+
+            for (index, element_type) in element_types.into_iter().enumerate() {
+                let element_name = get_expr_name("tuple_element", expr_index);
+                let element_ctype = type_to_ctype(&element_type.expr);
+                declarations.push(CDeclaration(element_ctype.clone(), element_name.clone()));
+                statements.push(value_ast.replace_expr(CStatement::VarAssign(
+                    element_name.clone(),
+                    value_ast.replace_expr(CExpr::ObjectAccess {
+                        object: value_ast.clone(),
+                        index,
+                        field_type: element_ctype.clone(),
+                    }),
+                )));
+
+                print_value(
+                    value_ast.replace_expr(CValue::Ident(element_name, element_ctype)),
+                    &element_type.expr,
+                    declarations,
+                    statements,
+                    expr_index,
+                );
+
+                if index < element_types.len() - 1 {
+                    statements
+                        .push(value_ast.replace_expr(CStatement::PrintText(String::from(" "))));
+                }
+            }
+
+            statements.push(value_ast.replace_expr(CStatement::PrintText(String::from(")"))));
+        }
+        _ => panic!(),
+    }
 }
 
 #[cfg(test)]
