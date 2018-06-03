@@ -169,6 +169,7 @@ pub enum CValue {
 pub enum CExpr {
     Value(CValue),
     BinOp(BinOp, Ast<CValue>, Ast<CValue>, CType),
+    Not(Ast<CExpr>),
     ObjectAccess {
         object: Ast<CValue>,
         index: usize,
@@ -214,6 +215,7 @@ pub enum CStatement {
     },
     Block(Vec<CDeclaration>, Vec<Ast<CStatement>>),
     If(Ast<CValue>, Ast<CStatement>, Ast<CStatement>),
+    While(Ast<CValue>, Ast<CStatement>),
     PrintValue(Ast<CValue>),
     PrintText(String),
 }
@@ -531,6 +533,7 @@ impl WellCTyped for CExpr {
     fn get_ctype(&self) -> CType {
         match self {
             &CExpr::Value(ref value) => value.get_ctype(),
+            &CExpr::Not(_) => CType::Bool,
             &CExpr::AnyAccess {
                 value_type: ref expr_type,
                 ..
@@ -637,6 +640,7 @@ impl Display for CExpr {
                     index,
                     ctype_to_union_field(field_type)
                 ),
+                &CExpr::Not(ref value) => format!("(!{})", value),
                 &CExpr::AnyAccess {
                     ref value,
                     ref value_type,
@@ -767,6 +771,9 @@ impl Display for CStatement {
                 ),
                 &CStatement::If(ref condition, ref consequent, ref alternate) => {
                     format!("if ({}) {} else {}", condition, consequent, alternate)
+                }
+                &CStatement::While(ref condition, ref body) => {
+                    format!("while ({}) {}", condition, body)
                 }
                 &CStatement::PrintValue(ref value) => match value.expr.get_ctype() {
                     CType::Bool => format!(

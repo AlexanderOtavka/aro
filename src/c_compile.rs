@@ -28,7 +28,7 @@ fn get_ident_name(name: &str) -> CName {
 
 pub fn type_to_ctype(t: &EvaluatedType) -> CType {
     match t {
-        &EvaluatedType::Any => CType::Any,
+        &EvaluatedType::Any | &EvaluatedType::None => CType::Any,
         &EvaluatedType::Num => CType::Float,
         &EvaluatedType::Int => CType::Int,
         &EvaluatedType::Bool => CType::Bool,
@@ -938,6 +938,103 @@ pub fn print_value(
             }
 
             statements.push(value_ast.replace_expr(CStatement::PrintText(String::from(")"))));
+        }
+        EvaluatedType::List(ref element_type) => {
+            statements.push(value_ast.replace_expr(CStatement::PrintText(String::from("["))));
+
+            let iteration_var_name = get_expr_name("iteration_var", expr_index);
+            let iteration_var_type = CType::Object;
+            declarations.push(CDeclaration(
+                iteration_var_type.clone(),
+                iteration_var_name.clone(),
+            ));
+            statements.push(value_ast.replace_expr(CStatement::VarAssign(
+                iteration_var_name.clone(),
+                value_ast.to_c_expr(),
+            )));
+
+            let iteration_var = value_ast.replace_expr(CValue::Ident(
+                iteration_var_name.clone(),
+                iteration_var_type.clone(),
+            ));
+
+            let has_next_cond_expr =
+                value_ast.replace_expr(CExpr::Not(value_ast.replace_expr(CExpr::BinOp(
+                    BinOp::Call,
+                    value_ast.replace_expr(CValue::DerefBound(
+                        get_ident_name("is_empty"),
+                        CType::Closure {
+                            param: value_ast.replace_expr(CType::Object),
+                            ret: value_ast.replace_expr(CType::Bool),
+                        },
+                    )),
+                    iteration_var.clone(),
+                    CType::Bool,
+                ))));
+
+            let has_next_cond_name = get_expr_name("has_next", expr_index);
+            let has_next_cond_ctype = CType::Bool;
+            declarations.push(CDeclaration(
+                has_next_cond_ctype.clone(),
+                has_next_cond_name.clone(),
+            ));
+            statements.push(value_ast.replace_expr(CStatement::VarAssign(
+                has_next_cond_name.clone(),
+                has_next_cond_expr.clone(),
+            )));
+
+            let mut while_declarations = Vec::new();
+            let mut while_statements = Vec::new();
+
+            let element_name = get_expr_name("list_element", expr_index);
+            let element_ctype = type_to_ctype(&element_type.expr);
+            while_declarations.push(CDeclaration(element_ctype.clone(), element_name.clone()));
+            while_statements.push(value_ast.replace_expr(CStatement::VarAssign(
+                element_name.clone(),
+                value_ast.replace_expr(CExpr::ObjectAccess {
+                    object: iteration_var.clone(),
+                    index: 0,
+                    field_type: element_ctype.clone(),
+                }),
+            )));
+
+            print_value(
+                value_ast.replace_expr(CValue::Ident(element_name, element_ctype)),
+                &element_type.expr,
+                &mut while_declarations,
+                &mut while_statements,
+                expr_index,
+            );
+
+            while_statements.push(value_ast.replace_expr(CStatement::VarAssign(
+                iteration_var_name.clone(),
+                value_ast.replace_expr(CExpr::ObjectAccess {
+                    object: iteration_var,
+                    index: 1,
+                    field_type: iteration_var_type,
+                }),
+            )));
+
+            while_statements.push(value_ast.replace_expr(CStatement::VarAssign(
+                has_next_cond_name.clone(),
+                has_next_cond_expr,
+            )));
+
+            let has_next_cond_ident =
+                value_ast.replace_expr(CValue::Ident(has_next_cond_name, has_next_cond_ctype));
+
+            while_statements.push(value_ast.replace_expr(CStatement::If(
+                has_next_cond_ident.clone(),
+                value_ast.replace_expr(CStatement::PrintText(String::from(" "))),
+                value_ast.replace_expr(CStatement::Block(vec![], vec![])),
+            )));
+
+            statements.push(value_ast.replace_expr(CStatement::While(
+                has_next_cond_ident,
+                value_ast.replace_expr(CStatement::Block(while_declarations, while_statements)),
+            )));
+
+            statements.push(value_ast.replace_expr(CStatement::PrintText(String::from("]"))));
         }
         _ => panic!(),
     }
