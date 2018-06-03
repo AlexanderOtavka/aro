@@ -1,6 +1,7 @@
 {
   "rust-client.channel": "beta",
   "cSpell.words": [
+    "aroext",
     "concat",
     "lalrpop",
     "lexes",

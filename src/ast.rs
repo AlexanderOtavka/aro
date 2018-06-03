@@ -185,9 +185,9 @@ pub enum CExpr {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum CName {
-    Expr(String, i32),
-    Func(i32),
-    AdaptorFunc(i32),
+    Expr(String, u64),
+    Func(u64),
+    AdaptorFunc(u64),
     Ident(String),
     Hook(Vec<String>),
     FuncArg,

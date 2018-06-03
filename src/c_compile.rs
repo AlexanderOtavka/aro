@@ -4,19 +4,19 @@ use ast::{
 };
 use std::collections::{HashMap, HashSet};
 
-fn get_expr_name(name: &str, expr_index: &mut i32) -> CName {
+fn get_expr_name(name: &str, expr_index: &mut u64) -> CName {
     let old_i = *expr_index;
     *expr_index += 1;
     CName::Expr(String::from(name), old_i)
 }
 
-fn get_func_name(func_index: &mut i32) -> CName {
+fn get_func_name(func_index: &mut u64) -> CName {
     let old_i = *func_index;
     *func_index += 1;
     CName::Func(old_i)
 }
 
-fn get_adaptor_func_name(func_index: &mut i32) -> CName {
+fn get_adaptor_func_name(func_index: &mut u64) -> CName {
     let old_i = *func_index;
     *func_index += 1;
     CName::AdaptorFunc(old_i)
@@ -26,7 +26,7 @@ fn get_ident_name(name: &str) -> CName {
     CName::Ident(String::from(name))
 }
 
-fn type_to_ctype(t: &EvaluatedType) -> CType {
+pub fn type_to_ctype(t: &EvaluatedType) -> CType {
     match t {
         &EvaluatedType::Any => CType::Any,
         &EvaluatedType::Num => CType::Float,
@@ -49,9 +49,9 @@ fn maybe_cast_representation(
     to_type: &EvaluatedType,
     declarations: &mut Vec<CDeclaration>,
     statements: &mut Vec<Ast<CStatement>>,
-    expr_index: &mut i32,
+    expr_index: &mut u64,
     functions: &mut Vec<Ast<CFunc>>,
-    function_index: &mut i32,
+    function_index: &mut u64,
 ) -> (Ast<CValue>, bool) {
     match (from_type, to_type) {
         (&EvaluatedType::Int, &EvaluatedType::Num) => {
@@ -382,15 +382,45 @@ fn make_declarations(
     }
 }
 
+pub fn bind_global(
+    name: &str,
+    value: &Ast<CValue>,
+    value_type: &EvaluatedType,
+    declarations: &mut Vec<CDeclaration>,
+    statements: &mut Vec<Ast<CStatement>>,
+    expr_index: &mut u64,
+) {
+    let value_name = get_ident_name(name);
+    let value_ctype = type_to_ctype(value_type);
+
+    let wrapper_name = get_expr_name(&format!("{}_wrapper", name), expr_index);
+    let wrapper_type = CType::Ref(Box::new(value_ctype.clone()));
+
+    declarations.push(CDeclaration(wrapper_type.clone(), wrapper_name.clone()));
+    statements.push(value.replace_expr(CStatement::RefAlloc(wrapper_name.clone(), value_ctype)));
+    statements.push(value.replace_expr(CStatement::RefAssign(
+        wrapper_name.clone(),
+        value.to_c_expr(),
+    )));
+    statements.push(value.replace_expr(CStatement::RefAlloc(
+        value_name.clone(),
+        wrapper_type.clone(),
+    )));
+    statements.push(value.replace_expr(CStatement::RefAssign(
+        value_name,
+        value.replace_expr(CExpr::Value(CValue::Ident(wrapper_name, wrapper_type))),
+    )));
+}
+
 fn bind_declarations(
     pattern: &TypedAst<TypedPattern>,
     value: &Ast<CValue>,
     value_type: &EvaluatedType,
     declarations: &mut Vec<CDeclaration>,
     statements: &mut Vec<Ast<CStatement>>,
-    expr_index: &mut i32,
+    expr_index: &mut u64,
     functions: &mut Vec<Ast<CFunc>>,
-    function_index: &mut i32,
+    function_index: &mut u64,
 ) {
     match &*pattern.expr {
         &TypedPattern::Ident(ref name) => {
@@ -464,9 +494,9 @@ pub fn lift_expr(
     ast: &TypedAst<TypedExpression>,
     declarations: &mut Vec<CDeclaration>,
     statements: &mut Vec<Ast<CStatement>>,
-    expr_index: &mut i32,
+    expr_index: &mut u64,
     functions: &mut Vec<Ast<CFunc>>,
-    function_index: &mut i32,
+    function_index: &mut u64,
     externs: &mut Vec<CDeclaration>,
 ) -> Ast<CValue> {
     match &*ast.expr {
@@ -848,6 +878,7 @@ mod lift_expr {
             &mut expr_index,
             &mut functions,
             &mut function_index,
+            &mut Vec::new(),
         );
 
         let mut actual_statements = String::new();
@@ -975,16 +1006,20 @@ mod lift_expr {
             ",
             "double _aro_expr_let_body_0; \
              { \
-             double * aro_x; \
+             double * * aro_x; \
              int _aro_expr_op_result_1; \
              double _aro_expr_casted_2; \
-             double _aro_expr_op_result_3; \
-             aro_x = malloc(sizeof(double )); \
+             double * _aro_expr_x_wrapper_3; \
+             double _aro_expr_op_result_4; \
+             aro_x = malloc(sizeof(double * )); \
+             *aro_x = 0; \
              _aro_expr_op_result_1 = (5 + 2); \
              _aro_expr_casted_2 = ((double )_aro_expr_op_result_1); \
-             *aro_x = _aro_expr_casted_2; \
-             _aro_expr_op_result_3 = ((*aro_x) + 3); \
-             _aro_expr_let_body_0 = _aro_expr_op_result_3; \
+             _aro_expr_x_wrapper_3 = malloc(sizeof(double )); \
+             *_aro_expr_x_wrapper_3 = _aro_expr_casted_2; \
+             *aro_x = _aro_expr_x_wrapper_3; \
+             _aro_expr_op_result_4 = ((**aro_x) + 3); \
+             _aro_expr_let_body_0 = _aro_expr_op_result_4; \
              } ",
             "",
             "_aro_expr_let_body_0",
@@ -1001,21 +1036,29 @@ mod lift_expr {
             ",
             "int _aro_expr_let_body_0; \
              { \
-             double * aro_x; \
+             double * * aro_x; \
              double _aro_expr_casted_1; \
-             int _aro_expr_let_body_2; \
-             aro_x = malloc(sizeof(double )); \
+             double * _aro_expr_x_wrapper_2; \
+             int _aro_expr_let_body_3; \
+             aro_x = malloc(sizeof(double * )); \
+             *aro_x = 0; \
              _aro_expr_casted_1 = ((double )5); \
-             *aro_x = _aro_expr_casted_1; \
+             _aro_expr_x_wrapper_2 = malloc(sizeof(double )); \
+             *_aro_expr_x_wrapper_2 = _aro_expr_casted_1; \
+             *aro_x = _aro_expr_x_wrapper_2; \
              { \
-             int * aro_x; \
-             int _aro_expr_op_result_3; \
-             aro_x = malloc(sizeof(int )); \
-             *aro_x = 4; \
-             _aro_expr_op_result_3 = ((*aro_x) + 3); \
-             _aro_expr_let_body_2 = _aro_expr_op_result_3; \
+             int * * aro_x; \
+             int * _aro_expr_x_wrapper_4; \
+             int _aro_expr_op_result_5; \
+             aro_x = malloc(sizeof(int * )); \
+             *aro_x = 0; \
+             _aro_expr_x_wrapper_4 = malloc(sizeof(int )); \
+             *_aro_expr_x_wrapper_4 = 4; \
+             *aro_x = _aro_expr_x_wrapper_4; \
+             _aro_expr_op_result_5 = ((**aro_x) + 3); \
+             _aro_expr_let_body_3 = _aro_expr_op_result_5; \
              } \
-             _aro_expr_let_body_0 = _aro_expr_let_body_2; \
+             _aro_expr_let_body_0 = _aro_expr_let_body_3; \
              } ",
             "",
             "_aro_expr_let_body_0",
@@ -1033,12 +1076,16 @@ mod lift_expr {
              _aro_expr_op_result_1 = (*(int (*)(int , _Aro_Object ))_aro_expr_closure_0[0].Void_Ptr)\
              (2, &_aro_expr_closure_0[1]); ",
             "int _aro_func_0(int _aro_arg, _Aro_Object _aro_captures) { \
-             int * aro_x; \
-             int _aro_expr_op_result_0; \
-             aro_x = malloc(sizeof(int )); \
-             *aro_x = _aro_arg; \
-             _aro_expr_op_result_0 = ((*aro_x) + 1); \
-             return _aro_expr_op_result_0; \
+             int * * aro_x; \
+             int * _aro_expr_x_wrapper_0; \
+             int _aro_expr_op_result_1; \
+             aro_x = malloc(sizeof(int * )); \
+             *aro_x = 0; \
+             _aro_expr_x_wrapper_0 = malloc(sizeof(int )); \
+             *_aro_expr_x_wrapper_0 = _aro_arg; \
+             *aro_x = _aro_expr_x_wrapper_0; \
+             _aro_expr_op_result_1 = ((**aro_x) + 1); \
+             return _aro_expr_op_result_1; \
              } ",
             "_aro_expr_op_result_1",
         );
@@ -1053,23 +1100,31 @@ mod lift_expr {
             ",
             "double _aro_expr_let_body_0; \
              { \
-             int * aro_a; \
-             double * aro_b; \
+             int * * aro_a; \
+             double * * aro_b; \
              _Aro_Object _aro_expr_tuple_1; \
              int _aro_expr_unpacked_2; \
-             double _aro_expr_unpacked_3; \
-             double _aro_expr_op_result_4; \
-             aro_a = malloc(sizeof(int )); \
-             aro_b = malloc(sizeof(double )); \
+             int * _aro_expr_a_wrapper_3; \
+             double _aro_expr_unpacked_4; \
+             double * _aro_expr_b_wrapper_5; \
+             double _aro_expr_op_result_6; \
+             aro_a = malloc(sizeof(int * )); \
+             *aro_a = 0; \
+             aro_b = malloc(sizeof(double * )); \
+             *aro_b = 0; \
              _aro_expr_tuple_1 = malloc(sizeof(_Aro_Any) * 2); \
              _aro_expr_tuple_1[0].Int = 1; \
              _aro_expr_tuple_1[1].Float = 2.3; \
              _aro_expr_unpacked_2 = (_aro_expr_tuple_1[0].Int); \
-             *aro_a = _aro_expr_unpacked_2; \
-             _aro_expr_unpacked_3 = (_aro_expr_tuple_1[1].Float); \
-             *aro_b = _aro_expr_unpacked_3; \
-             _aro_expr_op_result_4 = ((*aro_a) + (*aro_b)); \
-             _aro_expr_let_body_0 = _aro_expr_op_result_4; \
+             _aro_expr_a_wrapper_3 = malloc(sizeof(int )); \
+             *_aro_expr_a_wrapper_3 = _aro_expr_unpacked_2; \
+             *aro_a = _aro_expr_a_wrapper_3; \
+             _aro_expr_unpacked_4 = (_aro_expr_tuple_1[1].Float); \
+             _aro_expr_b_wrapper_5 = malloc(sizeof(double )); \
+             *_aro_expr_b_wrapper_5 = _aro_expr_unpacked_4; \
+             *aro_b = _aro_expr_b_wrapper_5; \
+             _aro_expr_op_result_6 = ((**aro_a) + (**aro_b)); \
+             _aro_expr_let_body_0 = _aro_expr_op_result_6; \
              } ",
             "",
             "_aro_expr_let_body_0",
@@ -1082,32 +1137,44 @@ mod lift_expr {
             ",
             "double _aro_expr_let_body_0; \
              { \
-             _Aro_Object * aro_my_tuple; \
+             _Aro_Object * * aro_my_tuple; \
              _Aro_Object _aro_expr_tuple_1; \
-             double _aro_expr_let_body_4; \
-             aro_my_tuple = malloc(sizeof(_Aro_Object )); \
+             _Aro_Object * _aro_expr_my_tuple_wrapper_4; \
+             double _aro_expr_let_body_5; \
+             aro_my_tuple = malloc(sizeof(_Aro_Object * )); \
+             *aro_my_tuple = 0; \
              _aro_expr_tuple_1 = malloc(sizeof(_Aro_Any) * 2); \
              _aro_expr_tuple_1[0].Int = 1; \
              _aro_expr_tuple_1[1].Float = 2.3; \
-             *aro_my_tuple = _aro_expr_tuple_1; \
+             _aro_expr_my_tuple_wrapper_4 = malloc(sizeof(_Aro_Object )); \
+             *_aro_expr_my_tuple_wrapper_4 = _aro_expr_tuple_1; \
+             *aro_my_tuple = _aro_expr_my_tuple_wrapper_4; \
              { \
-             double * aro_a; \
-             double * aro_b; \
-             int _aro_expr_unpacked_5; \
-             double _aro_expr_casted_6; \
-             double _aro_expr_unpacked_7; \
-             double _aro_expr_op_result_8; \
-             aro_a = malloc(sizeof(double )); \
-             aro_b = malloc(sizeof(double )); \
-             _aro_expr_unpacked_5 = ((*aro_my_tuple)[0].Int); \
-             _aro_expr_casted_6 = ((double )_aro_expr_unpacked_5); \
-             *aro_a = _aro_expr_casted_6; \
-             _aro_expr_unpacked_7 = ((*aro_my_tuple)[1].Float); \
-             *aro_b = _aro_expr_unpacked_7; \
-             _aro_expr_op_result_8 = ((*aro_a) + (*aro_b)); \
-             _aro_expr_let_body_4 = _aro_expr_op_result_8; \
+             double * * aro_a; \
+             double * * aro_b; \
+             int _aro_expr_unpacked_6; \
+             double _aro_expr_casted_7; \
+             double * _aro_expr_a_wrapper_8; \
+             double _aro_expr_unpacked_9; \
+             double * _aro_expr_b_wrapper_10; \
+             double _aro_expr_op_result_11; \
+             aro_a = malloc(sizeof(double * )); \
+             *aro_a = 0; \
+             aro_b = malloc(sizeof(double * )); \
+             *aro_b = 0; \
+             _aro_expr_unpacked_6 = ((**aro_my_tuple)[0].Int); \
+             _aro_expr_casted_7 = ((double )_aro_expr_unpacked_6); \
+             _aro_expr_a_wrapper_8 = malloc(sizeof(double )); \
+             *_aro_expr_a_wrapper_8 = _aro_expr_casted_7; \
+             *aro_a = _aro_expr_a_wrapper_8; \
+             _aro_expr_unpacked_9 = ((**aro_my_tuple)[1].Float); \
+             _aro_expr_b_wrapper_10 = malloc(sizeof(double )); \
+             *_aro_expr_b_wrapper_10 = _aro_expr_unpacked_9; \
+             *aro_b = _aro_expr_b_wrapper_10; \
+             _aro_expr_op_result_11 = ((**aro_a) + (**aro_b)); \
+             _aro_expr_let_body_5 = _aro_expr_op_result_11; \
              } \
-             _aro_expr_let_body_0 = _aro_expr_let_body_4; \
+             _aro_expr_let_body_0 = _aro_expr_let_body_5; \
              } ",
             "",
             "_aro_expr_let_body_0",
@@ -1126,20 +1193,27 @@ mod lift_expr {
              _aro_expr_tuple_1[1].Float = 2.3; \
              _aro_expr_op_result_4 = (*(double (*)(_Aro_Object , _Aro_Object ))\
              _aro_expr_closure_0[0].Void_Ptr)(_aro_expr_tuple_1, &_aro_expr_closure_0[1]); ",
-            "double _aro_func_0(_Aro_Object _aro_arg, _Aro_Object _aro_captures) { \
-             int * aro_a; \
-             double * aro_b; \
+            "double _aro_func_0(_Aro_Object _aro_arg, _Aro_Object _aro_captures) { int * * aro_a; \
+             double * * aro_b; \
              int _aro_expr_unpacked_0; \
-             double _aro_expr_unpacked_1; \
-             double _aro_expr_op_result_2; \
-             aro_a = malloc(sizeof(int )); \
-             aro_b = malloc(sizeof(double )); \
+             int * _aro_expr_a_wrapper_1; \
+             double _aro_expr_unpacked_2; \
+             double * _aro_expr_b_wrapper_3; \
+             double _aro_expr_op_result_4; \
+             aro_a = malloc(sizeof(int * )); \
+             *aro_a = 0; \
+             aro_b = malloc(sizeof(double * )); \
+             *aro_b = 0; \
              _aro_expr_unpacked_0 = (_aro_arg[0].Int); \
-             *aro_a = _aro_expr_unpacked_0; \
-             _aro_expr_unpacked_1 = (_aro_arg[1].Float); \
-             *aro_b = _aro_expr_unpacked_1; \
-             _aro_expr_op_result_2 = ((*aro_a) + (*aro_b)); \
-             return _aro_expr_op_result_2; \
+             _aro_expr_a_wrapper_1 = malloc(sizeof(int )); \
+             *_aro_expr_a_wrapper_1 = _aro_expr_unpacked_0; \
+             *aro_a = _aro_expr_a_wrapper_1; \
+             _aro_expr_unpacked_2 = (_aro_arg[1].Float); \
+             _aro_expr_b_wrapper_3 = malloc(sizeof(double )); \
+             *_aro_expr_b_wrapper_3 = _aro_expr_unpacked_2; \
+             *aro_b = _aro_expr_b_wrapper_3; \
+             _aro_expr_op_result_4 = ((**aro_a) + (**aro_b)); \
+             return _aro_expr_op_result_4; \
              } ",
             "_aro_expr_op_result_4",
         );
