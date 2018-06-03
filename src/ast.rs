@@ -214,6 +214,8 @@ pub enum CStatement {
     },
     Block(Vec<CDeclaration>, Vec<Ast<CStatement>>),
     If(Ast<CValue>, Ast<CStatement>, Ast<CStatement>),
+    PrintValue(Ast<CValue>),
+    PrintText(String),
 }
 
 #[derive(Debug, Clone)]
@@ -766,6 +768,20 @@ impl Display for CStatement {
                 &CStatement::If(ref condition, ref consequent, ref alternate) => {
                     format!("if ({}) {} else {}", condition, consequent, alternate)
                 }
+                &CStatement::PrintValue(ref value) => match value.expr.get_ctype() {
+                    CType::Bool => format!(
+                        "if ({}) printf(\"#true()\"); else printf(\"#false()\");",
+                        value
+                    ),
+                    CType::Int => format!("printf(\"%d\", {});", value),
+                    CType::Float => format!("printf(\"%lf\", {});", value),
+                    CType::Any => format!("printf(\"<Any %p>\", (void*) {});", value),
+                    CType::Closure { .. } => format!("printf(\"<Closure %p>\", {});", value),
+                    CType::Object => format!("printf(\"<Object %p>\", {});", value),
+                    CType::Ref(_) => format!("printf(\"<Ref %p>\", {});", value),
+                    CType::VoidPtr => format!("printf(\"%p\", {});", value),
+                },
+                &CStatement::PrintText(ref text) => format!("printf(\"{}\");", text),
             }
         )
     }

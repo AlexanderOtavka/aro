@@ -878,6 +878,17 @@ pub fn lift_expr(
     }
 }
 
+pub fn print_value(
+    value_ast: Ast<CValue>,
+    value_type: &EvaluatedType,
+    declarations: &mut Vec<CDeclaration>,
+    statements: &mut Vec<Ast<CStatement>>,
+    expr_index: &mut u64,
+) {
+    statements.push(value_ast.replace_expr(CStatement::PrintValue(value_ast.clone())));
+    statements.push(value_ast.replace_expr(CStatement::PrintText(String::from("\\n"))));
+}
+
 #[cfg(test)]
 mod lift_expr {
     use super::*;

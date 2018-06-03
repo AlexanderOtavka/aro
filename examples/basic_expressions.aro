@@ -1,4 +1,4 @@
 if 20 <= 10 then
     2 * 1 / 0 + inf
 else
-    -10 - (-11.3 |> floordiv <| 2)
+    -10.1 - (-11.3 |> floordiv <| 2)
