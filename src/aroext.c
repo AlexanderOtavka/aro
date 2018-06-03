@@ -6,19 +6,28 @@
 
 #include <arostd.h>
 
-_Aro_Closure _aro_hook__std__math__floordiv;
-_Aro_Closure _aro_hook__std__list__push;
-_Aro_Closure _aro_hook__std__list__is_empty;
-_Aro_Closure _aro_hook__std__list__head;
-_Aro_Closure _aro_hook__std__list__tail;
+#define _ARO_STD_EXT_DEFINE_CLOSURE(name, return_type, argument) \
+    _Aro_Closure _aro_hook__std__##name; \
+    return_type _aro_std_ext_fn__##name(argument, _Aro_Object _captures)
 
-int _aro_std_ext__math__floordiv(_Aro_Object tuple_arg, _Aro_Object captures) {
+#define _ARO_STD_EXT_BIND_CLOSURE(name) \
+    _aro_hook__std__##name = malloc(sizeof(_Aro_Any)); \
+    _aro_hook__std__##name->Void_Ptr = _aro_std_ext_fn__##name;
+
+
+_ARO_STD_EXT_DEFINE_CLOSURE(math__floordiv, int, _Aro_Object tuple_arg) {
     double left  = tuple_arg[0].Float;
     double right = tuple_arg[1].Float;
+
+    if ((int)right == 0) {
+        fprintf(stderr, "Can't divide by your future (which is zero).\n");
+        exit(EXIT_FAILURE);
+    }
+
     return (int)left / (int)right;
 }
 
-_Aro_Object _aro_std_ext__list__push(_Aro_Object tuple_arg, _Aro_Object captures) {
+_ARO_STD_EXT_DEFINE_CLOSURE(list__push, _Aro_Object, _Aro_Object tuple_arg) {
     _Aro_Any    element = tuple_arg[0];
     _Aro_Object list    = tuple_arg[1].Object;
 
@@ -29,36 +38,38 @@ _Aro_Object _aro_std_ext__list__push(_Aro_Object tuple_arg, _Aro_Object captures
     return new_node;
 }
 
-bool _aro_std_ext__list__is_empty(_Aro_Object list, _Aro_Object captures) {
+_ARO_STD_EXT_DEFINE_CLOSURE(list__is_empty, bool, _Aro_Object list) {
     return list == NULL;
 }
 
-_Aro_Any _aro_std_ext__list__head(_Aro_Object list, _Aro_Object captures) {
+_ARO_STD_EXT_DEFINE_CLOSURE(list__head, _Aro_Any, _Aro_Object list) {
+    if (list == NULL) {
+        fprintf(stderr, "As usual, you can't get head.\n"
+                        "Especially not from an empty list.\n");
+        exit(EXIT_FAILURE);
+    }
+
     return list[0];
 }
 
-_Aro_Object _aro_std_ext__list__tail(_Aro_Object list, _Aro_Object captures) {
+_ARO_STD_EXT_DEFINE_CLOSURE(list__tail, _Aro_Object, _Aro_Object list) {
+    if (list == NULL) {
+        fprintf(stderr, "You spent your whole life chasing your own tail.\n"
+                        "You can't even find the tail of a list.\n"
+                        "The list is empty, dumbass.");
+        exit(EXIT_FAILURE);
+    }
+
     return list[1].Object;
 }
 
 void _aro_std_ext_init(void) {
-    // std.math.floordiv
-    _aro_hook__std__math__floordiv = malloc(sizeof(_Aro_Any));
-    _aro_hook__std__math__floordiv->Void_Ptr = _aro_std_ext__math__floordiv;
+    // std.math.*
+    _ARO_STD_EXT_BIND_CLOSURE(math__floordiv);
 
-    // std.list.push
-    _aro_hook__std__list__push = malloc(sizeof(_Aro_Any));
-    _aro_hook__std__list__push->Void_Ptr = _aro_std_ext__list__push;
-
-    // std.list.is_empty
-    _aro_hook__std__list__is_empty = malloc(sizeof(_Aro_Any));
-    _aro_hook__std__list__is_empty->Void_Ptr = _aro_std_ext__list__is_empty;
-
-    // std.list.head
-    _aro_hook__std__list__head = malloc(sizeof(_Aro_Any));
-    _aro_hook__std__list__head->Void_Ptr = _aro_std_ext__list__head;
-
-    // std.list.tail
-    _aro_hook__std__list__tail = malloc(sizeof(_Aro_Any));
-    _aro_hook__std__list__tail->Void_Ptr = _aro_std_ext__list__tail;
+    // std.list.*
+    _ARO_STD_EXT_BIND_CLOSURE(list__push);
+    _ARO_STD_EXT_BIND_CLOSURE(list__is_empty);
+    _ARO_STD_EXT_BIND_CLOSURE(list__head);
+    _ARO_STD_EXT_BIND_CLOSURE(list__tail);
 }
