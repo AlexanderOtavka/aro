@@ -204,6 +204,7 @@ pub enum CStatement {
     VarAssign(CName, Ast<CExpr>),
     RefAlloc(CName, CType),
     RefAssign(CName, Ast<CExpr>),
+    AnyAssign(CName, Ast<CValue>),
     ClosureInit {
         name: CName,
         function: Ast<CValue>,
@@ -719,7 +720,14 @@ impl Display for CName {
                 &CName::Expr(ref name, index) => format!("_aro_expr_{}_{}", name, index),
                 &CName::Func(index) => format!("_aro_func_{}", index),
                 &CName::AdaptorFunc(index) => format!("_aro_func_adaptor_{}", index),
-                &CName::Ident(ref name) => format!("aro_{}", name),
+                &CName::Ident(ref name) => {
+                    // Replace trailing ! with __
+                    if &name[name.len() - 1..] == "!" {
+                        format!("aro_{}__", &name[..name.len() - 1])
+                    } else {
+                        format!("aro_{}", name)
+                    }
+                }
                 &CName::FuncArg => String::from("_aro_arg"),
                 &CName::FuncCaptures => String::from("_aro_captures"),
             }
@@ -749,6 +757,12 @@ impl Display for CStatement {
                     ctype_to_string(value_type, "")
                 ),
                 &CStatement::RefAssign(ref name, ref value) => format!("*{} = {};", name, value),
+                &CStatement::AnyAssign(ref name, ref value) => format!(
+                    "{}{} = {};",
+                    name,
+                    ctype_to_union_field(&value.expr.get_ctype()),
+                    value
+                ),
                 &CStatement::ObjectInit { ref name, ref data } => format!(
                     "{} = malloc(sizeof(_Aro_Any) * {}); {}",
                     name,

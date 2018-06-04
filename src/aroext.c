@@ -63,6 +63,24 @@ _ARO_STD_EXT_DEFINE_CLOSURE(list__tail, _Aro_Object, _Aro_Object list) {
     return list[1].Object;
 }
 
+_ARO_STD_EXT_DEFINE_CLOSURE(ref__new__, _Aro_Any*, _Aro_Any value) {
+    _Aro_Any* ref = malloc(sizeof(value));
+    *ref = value;
+    return ref;
+}
+
+_ARO_STD_EXT_DEFINE_CLOSURE(ref__get__, _Aro_Any, _Aro_Any* ref) {
+    return *ref;
+}
+
+_ARO_STD_EXT_DEFINE_CLOSURE(ref__set__, _Aro_Any*, _Aro_Object tuple_arg) {
+    _Aro_Any* ref       = tuple_arg[0].Ref;
+    _Aro_Any  new_value = tuple_arg[1];
+
+    *ref = new_value;
+    return ref;
+}
+
 void _aro_std_ext_init(void) {
     // std.math.*
     _ARO_STD_EXT_BIND_CLOSURE(math__floordiv);
@@ -72,4 +90,9 @@ void _aro_std_ext_init(void) {
     _ARO_STD_EXT_BIND_CLOSURE(list__is_empty);
     _ARO_STD_EXT_BIND_CLOSURE(list__head);
     _ARO_STD_EXT_BIND_CLOSURE(list__tail);
+
+    // std.ref.*
+    _ARO_STD_EXT_BIND_CLOSURE(ref__new__);
+    _ARO_STD_EXT_BIND_CLOSURE(ref__get__);
+    _ARO_STD_EXT_BIND_CLOSURE(ref__set__);
 }

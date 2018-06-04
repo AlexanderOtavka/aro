@@ -40,6 +40,7 @@ pub fn type_to_ctype(t: &EvaluatedType) -> CType {
         &EvaluatedType::GenericFunc { ref output, .. } => type_to_ctype(&output.expr),
         &EvaluatedType::Ident(_, ref supertype) => type_to_ctype(&supertype.expr),
         &EvaluatedType::List(_) => CType::Object,
+        &EvaluatedType::Ref(_) => CType::Ref(Box::new(CType::Any)),
         _ => panic!("Unhandled type: {}", t),
     }
 }
@@ -108,13 +109,8 @@ fn maybe_cast_representation(
             let expr_name = get_expr_name("casted", expr_index);
             let expr_ctype = CType::Any;
             declarations.push(CDeclaration(expr_ctype.clone(), expr_name.clone()));
-            statements.push(from.replace_expr(CStatement::VarAssign(
-                expr_name.clone(),
-                from.replace_expr(CExpr::Cast {
-                    value: from.clone(),
-                    to_type: expr_ctype.clone(),
-                }),
-            )));
+            statements
+                .push(from.replace_expr(CStatement::AnyAssign(expr_name.clone(), from.clone())));
             (
                 from.replace_expr(CValue::Ident(expr_name, expr_ctype)),
                 true,
@@ -394,7 +390,7 @@ pub fn bind_global(
     let value_name = get_ident_name(name);
     let value_ctype = type_to_ctype(value_type);
 
-    let wrapper_name = get_expr_name(&format!("{}_wrapper", name), expr_index);
+    let wrapper_name = get_expr_name("wrapper", expr_index);
     let wrapper_type = CType::Ref(Box::new(value_ctype.clone()));
 
     declarations.push(CDeclaration(wrapper_type.clone(), wrapper_name.clone()));
@@ -439,7 +435,7 @@ fn bind_declarations(
             let value_name = get_ident_name(name);
             let value_ctype = type_to_ctype(&pattern.expr_type);
 
-            let wrapper_name = get_expr_name(&format!("{}_wrapper", name), expr_index);
+            let wrapper_name = get_expr_name("wrapper", expr_index);
             let wrapper_type = CType::Ref(Box::new(value_ctype.clone()));
 
             declarations.push(CDeclaration(wrapper_type.clone(), wrapper_name.clone()));
@@ -892,6 +888,26 @@ pub fn lift_expr(
 
             casted
         }
+        &TypedExpression::Sequence(ref side_effect, ref result) => {
+            lift_expr(
+                side_effect,
+                declarations,
+                statements,
+                expr_index,
+                functions,
+                function_index,
+                externs,
+            );
+            lift_expr(
+                result,
+                declarations,
+                statements,
+                expr_index,
+                functions,
+                function_index,
+                externs,
+            )
+        }
         _ => panic!(),
     }
 }
@@ -1053,6 +1069,40 @@ pub fn print_value(
             )));
 
             statements.push(value_ast.replace_expr(CStatement::PrintText(String::from("]"))));
+        }
+        EvaluatedType::Ref(ref wrapped_type) => {
+            statements
+                .push(value_ast.replace_expr(CStatement::PrintText(String::from("(ref <| "))));
+
+            let deref_name = get_expr_name("deref", expr_index);
+            let deref_type = type_to_ctype(&wrapped_type.expr);
+
+            declarations.push(CDeclaration(deref_type.clone(), deref_name.clone()));
+            statements.push(value_ast.replace_expr(CStatement::VarAssign(
+                deref_name.clone(),
+                value_ast.replace_expr(CExpr::BinOp(
+                    BinOp::Call,
+                    value_ast.replace_expr(CValue::DerefBound(
+                        get_ident_name("get!"),
+                        CType::Closure {
+                            param: value_ast.replace_expr(CType::Ref(Box::new(CType::Any))),
+                            ret: value_ast.replace_expr(deref_type.clone()),
+                        },
+                    )),
+                    value_ast.clone(),
+                    CType::Bool,
+                )),
+            )));
+
+            print_value(
+                value_ast.replace_expr(CValue::Ident(deref_name, deref_type)),
+                &wrapped_type.expr,
+                declarations,
+                statements,
+                expr_index,
+            );
+
+            statements.push(value_ast.replace_expr(CStatement::PrintText(String::from(")"))));
         }
         _ => panic!(),
     }
