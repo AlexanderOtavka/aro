@@ -47,7 +47,7 @@ pub fn get_globals() -> HashMap<String, (Value, TypedAst<TypedExpression>)> {
         "#,
     );
     sources.insert(
-        "ref",
+        "ref!",
         r#"
             @hook("std.ref.new!"  (T: Any => T => (Ref <| T)))
         "#,

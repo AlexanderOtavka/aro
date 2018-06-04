@@ -354,7 +354,7 @@ fn handle_hook_call(
                 panic!("int.floordiv arg should be a tuple")
             }
         }
-        "std.ref.new" => Ok(Ast::<Expression>::new(
+        "std.ref.new!" => Ok(Ast::<Expression>::new(
             left_loc,
             right_loc,
             Expression::Value(Value::Ref(Rc::new(RefCell::new(param_value.clone())))),
@@ -918,7 +918,7 @@ mod evaluate_ast {
     fn sequences_execute_side_effects() {
         assert_eval_eq(
             r#"
-            let x: Any <- @hook("std.ref.new" Any) <| 5
+            let x: Any <- @hook("std.ref.new!" Any) <| 5
             @hook("std.ref.set!" Any) <| (x  7);
             @hook("std.ref.set!" Any) <| (
                 x

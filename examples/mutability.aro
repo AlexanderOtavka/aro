@@ -1,4 +1,4 @@
-let mutable_ref: (Ref <| Int) <- ref <| type Int <| 1
+let mutable_ref: (Ref <| Int) <- ref! <| type Int <| 1
 
 mutable_ref |> (set! <| type Int <| 2);
 
