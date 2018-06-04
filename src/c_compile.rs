@@ -379,36 +379,6 @@ fn make_declarations(
     }
 }
 
-pub fn bind_global(
-    name: &str,
-    value: &Ast<CValue>,
-    value_type: &EvaluatedType,
-    declarations: &mut Vec<CDeclaration>,
-    statements: &mut Vec<Ast<CStatement>>,
-    expr_index: &mut u64,
-) {
-    let value_name = get_ident_name(name);
-    let value_ctype = type_to_ctype(value_type);
-
-    let wrapper_name = get_expr_name("wrapper", expr_index);
-    let wrapper_type = CType::Ref(Box::new(value_ctype.clone()));
-
-    declarations.push(CDeclaration(wrapper_type.clone(), wrapper_name.clone()));
-    statements.push(value.replace_expr(CStatement::RefAlloc(wrapper_name.clone(), value_ctype)));
-    statements.push(value.replace_expr(CStatement::RefAssign(
-        wrapper_name.clone(),
-        value.to_c_expr(),
-    )));
-    statements.push(value.replace_expr(CStatement::RefAlloc(
-        value_name.clone(),
-        wrapper_type.clone(),
-    )));
-    statements.push(value.replace_expr(CStatement::RefAssign(
-        value_name,
-        value.replace_expr(CExpr::Value(CValue::Ident(wrapper_name, wrapper_type))),
-    )));
-}
-
 fn bind_declarations(
     pattern: &TypedAst<TypedPattern>,
     value: &Ast<CValue>,
@@ -485,6 +455,36 @@ fn bind_declarations(
             );
         },
     }
+}
+
+pub fn bind_global(
+    name: &str,
+    value: &Ast<CValue>,
+    value_type: &EvaluatedType,
+    declarations: &mut Vec<CDeclaration>,
+    statements: &mut Vec<Ast<CStatement>>,
+    expr_index: &mut u64,
+) {
+    let value_name = get_ident_name(name);
+    let value_ctype = type_to_ctype(value_type);
+
+    let wrapper_name = get_expr_name("wrapper", expr_index);
+    let wrapper_type = CType::Ref(Box::new(value_ctype.clone()));
+
+    declarations.push(CDeclaration(wrapper_type.clone(), wrapper_name.clone()));
+    statements.push(value.replace_expr(CStatement::RefAlloc(wrapper_name.clone(), value_ctype)));
+    statements.push(value.replace_expr(CStatement::RefAssign(
+        wrapper_name.clone(),
+        value.to_c_expr(),
+    )));
+    statements.push(value.replace_expr(CStatement::RefAlloc(
+        value_name.clone(),
+        wrapper_type.clone(),
+    )));
+    statements.push(value.replace_expr(CStatement::RefAssign(
+        value_name,
+        value.replace_expr(CExpr::Value(CValue::Ident(wrapper_name, wrapper_type))),
+    )));
 }
 
 pub fn lift_expr(
