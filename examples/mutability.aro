@@ -7,8 +7,7 @@ let before_loop: Int <- *!mutable_ref
 while
     <| (fn () =Bool=> *!mutable_ref <= 10)
     <| (fn () =Any=>
-        let new_val: Int <- *!mutable_ref * 2
-        *!mutable_ref <- new_val
+        *!mutable_ref <- *!mutable_ref * 2
     );
 
 let after_loop: Int <- *!mutable_ref
