@@ -192,7 +192,6 @@ pub fn get_globals_c_files(
          \n  _aro_std_ext_init();\
          \n\
          \n  {}\
-         \n\
          \n  {}\
          \n\
          \n  _aro_ext_init();\
@@ -214,7 +213,7 @@ pub fn get_globals_c_files(
             .into_iter()
             .map(|function| format!("{}", function))
             .collect::<Vec<String>>()
-            .join("\n\n"),
+            .join("\n"),
         declarations
             .iter()
             .map(|declaration| format!("{}", declaration))
