@@ -32,6 +32,9 @@ pub enum Expression {
     TypeLet(String, Ast<Type>, Ast<Expression>),
     Sequence(Ast<Expression>, Ast<Expression>),
     RecordAccess(Ast<Expression>, String),
+    RefNew(Ast<Expression>),
+    RefGet(Ast<Expression>),
+    RefSet(Ast<Expression>, Ast<Expression>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -52,6 +55,9 @@ pub enum TypedExpression {
     Cast(TypedAst<TypedExpression>, Ast<EvaluatedType>),
     Sequence(TypedAst<TypedExpression>, TypedAst<TypedExpression>),
     RecordAccess(TypedAst<TypedExpression>, String),
+    RefNew(TypedAst<TypedExpression>),
+    RefGet(TypedAst<TypedExpression>),
+    RefSet(TypedAst<TypedExpression>, TypedAst<TypedExpression>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -274,8 +280,8 @@ impl Ast<Expression> {
 
     pub fn is_term(&self) -> bool {
         match &*self.expr {
-            &Expression::Value(Value::Tuple(ref vec)) => vec.into_iter().all(|ast| ast.is_term()),
-            &Expression::Value(Value::List(ref vec)) => vec.into_iter().all(|ast| ast.is_term()),
+            &Expression::Value(Value::Tuple(ref vec))
+            | &Expression::Value(Value::List(ref vec)) => vec.into_iter().all(|ast| ast.is_term()),
             &Expression::Value(Value::Record(ref map)) => {
                 map.into_iter().all(|(_, ast)| ast.is_term())
             }
@@ -376,6 +382,9 @@ impl Display for Expression {
             &Expression::TypeLet(ref n, ref v, ref e) => write!(f, "(let {} <- {} {})", n, v, e),
             &Expression::Sequence(ref s, ref r) => write!(f, "({}; {})", s, r),
             &Expression::RecordAccess(ref r, ref n) => write!(f, "({}.{})", r, n),
+            &Expression::RefNew(ref v) => write!(f, "(&!{})", v),
+            &Expression::RefGet(ref r) => write!(f, "(*!{})", r),
+            &Expression::RefSet(ref r, ref v) => write!(f, "(*!{} <- {})", r, v),
         }
     }
 }
@@ -407,7 +416,7 @@ impl Display for Value {
                 &Value::Hook(ref name, ref hook_type) => {
                     format!("@hook (\"{}\" {})", name.join("."), hook_type)
                 }
-                &Value::Ref(ref rc) => format!("(ref <| {})", rc.borrow()),
+                &Value::Ref(ref rc) => format!("(&!{})", rc.borrow()),
                 &Value::Record(ref map) => sequence_to_str(
                     "{",
                     &{
@@ -457,7 +466,7 @@ impl Display for Type {
                 }
                 &Type::Tuple(ref vec) => sequence_to_str("(", vec, ")"),
                 &Type::List(ref element_type) => format!("[{}]", element_type),
-                &Type::Ref(ref value_type) => format!("(Ref <| {})", value_type),
+                &Type::Ref(ref value_type) => format!("(&{})", value_type),
                 &Type::Record(ref map) => sequence_to_str(
                     "{",
                     &{
@@ -497,7 +506,7 @@ impl Display for EvaluatedType {
                 } => format!("({}: {} => {})", param_name, param_supertype, output),
                 &EvaluatedType::Tuple(ref vec) => sequence_to_str("(", vec, ")"),
                 &EvaluatedType::List(ref element_type) => format!("[{}]", element_type),
-                &EvaluatedType::Ref(ref value_type) => format!("(Ref <| {})", value_type),
+                &EvaluatedType::Ref(ref value_type) => format!("(&{})", value_type),
                 &EvaluatedType::Record(ref map) => sequence_to_str(
                     "{",
                     &{

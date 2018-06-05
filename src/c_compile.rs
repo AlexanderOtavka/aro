@@ -300,12 +300,17 @@ fn find_captures(
     captures: &mut HashMap<String, CType>,
 ) {
     match &*ast.expr {
-        &TypedExpression::BinOp(_, ref left, ref right) => {
-            find_captures(left, locals, captures);
-            find_captures(right, locals, captures);
+        &TypedExpression::BinOp(_, ref a, ref b)
+        | &TypedExpression::Sequence(ref a, ref b)
+        | &TypedExpression::RefSet(ref a, ref b) => {
+            find_captures(a, locals, captures);
+            find_captures(b, locals, captures);
         }
-        &TypedExpression::Cast(ref from, _) => {
-            find_captures(from, locals, captures);
+        &TypedExpression::RecordAccess(ref x, _)
+        | &TypedExpression::Cast(ref x, _)
+        | &TypedExpression::RefNew(ref x)
+        | &TypedExpression::RefGet(ref x) => {
+            find_captures(x, locals, captures);
         }
         &TypedExpression::Ident(ref name) => {
             if !locals.contains(name) {
@@ -322,13 +327,6 @@ fn find_captures(
             find_names_in_pattern(pattern, &mut locals);
             find_captures(value, &locals, captures);
             find_captures(body, &locals, captures);
-        }
-        &TypedExpression::RecordAccess(ref record, _) => {
-            find_captures(record, locals, captures);
-        }
-        &TypedExpression::Sequence(ref side_effect, ref result) => {
-            find_captures(side_effect, locals, captures);
-            find_captures(result, locals, captures);
         }
         &TypedExpression::Value(ref value) => match value {
             &TypedValue::Bool(_)

@@ -228,7 +228,24 @@ fn substitute(
                         .collect(),
                 )))
             }
-            &Expression::Value(_) => ast.clone(),
+            &Expression::Value(Value::Bool(_))
+            | &Expression::Value(Value::Hook(_, _))
+            | &Expression::Value(Value::Int(_))
+            | &Expression::Value(Value::Num(_))
+            | &Expression::Value(Value::Ref(_)) => ast.clone(),
+            &Expression::RefNew(ref value_ast) => {
+                ast.replace_expr(Expression::RefNew(substitute(value_ast, pattern, value)))
+            }
+            &Expression::RefGet(ref reference) => {
+                ast.replace_expr(Expression::RefGet(substitute(reference, pattern, value)))
+            }
+            &Expression::RefSet(ref reference, ref value_ast) => {
+                let subref = substitute(reference, pattern, value);
+                ast.replace_expr(Expression::RefSet(
+                    subref,
+                    substitute(value_ast, pattern, value),
+                ))
+            }
         },
     }
 }
@@ -436,7 +453,12 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
 
             Ok(ast.replace_expr(Expression::Value(Value::Record(stepped_record))))
         }
-        &Expression::Value(_) => Ok(ast.clone()),
+        &Expression::Value(Value::Bool(_))
+        | &Expression::Value(Value::Hook(_, _))
+        | &Expression::Value(Value::Int(_))
+        | &Expression::Value(Value::Num(_))
+        | &Expression::Value(Value::Ref(_))
+        | &Expression::Value(Value::Func(_, _, _)) => Ok(ast.clone()),
         &Expression::Ident(ref name) => Err(Error::LRLocated {
             message: format!("How do you expect me to evaluate a `{}`?", name),
             left_loc,
@@ -587,6 +609,31 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
             )))
         },
         &Expression::TypeLet(_, _, ref body) => Ok(body.clone()),
+        &Expression::RefNew(ref value) => Ok(ast.replace_expr(match &*value.expr {
+            &Expression::Value(ref term_value) if value.is_term() => {
+                Expression::Value(Value::Ref(Rc::new(RefCell::new(term_value.clone()))))
+            }
+            _ => Expression::RefNew(step_ast(value)?),
+        })),
+        &Expression::RefGet(ref reference) => Ok(ast.replace_expr(match &*reference.expr {
+            &Expression::Value(Value::Ref(ref rc)) if reference.is_term() => {
+                Expression::Value(rc.borrow().clone())
+            }
+            _ => Expression::RefGet(step_ast(reference)?),
+        })),
+        &Expression::RefSet(ref reference, ref value) => {
+            Ok(ast.replace_expr(match &*reference.expr {
+                &Expression::Value(Value::Ref(ref rc)) if reference.is_term() => match &*value.expr
+                {
+                    &Expression::Value(ref term_value) if value.is_term() => {
+                        *rc.borrow_mut() = term_value.clone();
+                        Expression::Value(term_value.clone())
+                    }
+                    _ => Expression::RefSet(reference.clone(), step_ast(value)?),
+                },
+                _ => Expression::RefSet(step_ast(reference)?, value.clone()),
+            }))
+        }
     }
 }
 
@@ -618,6 +665,9 @@ pub fn get_eval_steps(
         }
 
         if stepped_ast == ast {
+            for step in steps {
+                println!("--> {}", step);
+            }
             panic!("Infinite loop");
         }
 

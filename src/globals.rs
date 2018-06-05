@@ -49,23 +49,23 @@ pub fn get_globals() -> HashMap<String, (Value, TypedAst<TypedExpression>)> {
     sources.insert(
         "ref!",
         r#"
-            @hook("std.ref.new!"  (T: Any => T => (Ref <| T)))
+            @hook("std.ref.new!"  (T: Any => T => &T))
         "#,
     );
     sources.insert(
         "get!",
         r#"
-            @hook("std.ref.get!"  (T: Any => (Ref <| T) => T))
+            @hook("std.ref.get!"  (T: Any => &T => T))
         "#,
     );
     sources.insert(
         "set!",
         r#"
-            T: Any =(T => (Ref <| T) => (Ref <| T))=>
-            new_value: T =((Ref <| T) => (Ref <| T))=>
-            reference: (Ref <| T) =(Ref <| T)=>
+            T: Any =(T => &T => &T)=>
+            new_value: T =(&T => &T)=>
+            reference: &T =&T=>
                 (reference new_value)
-                    |> @hook("std.ref.set!"  (((Ref <| T)  T) => (Ref <| T)))
+                    |> @hook("std.ref.set!"  ((&T  T) => &T))
         "#,
     );
     sources.insert(

@@ -132,7 +132,7 @@ mod evaluate_file {
     fn mutability() {
         assert_eq!(
             evaluate_file("examples/mutability.aro", false).unwrap(),
-            "(2 16 7 (ref <| 7))"
+            "(2 16 7 (&!7))"
         )
     }
 
@@ -142,7 +142,7 @@ mod evaluate_file {
             evaluate_file("examples/parse_error.aro", false).unwrap_err(),
             "Bitch, do I look like I speak perl?\
              \n      |\
-             \n    4 |     -10 & -5\
+             \n    4 |     -10 $ -5\
              \n      |         ^"
         )
     }

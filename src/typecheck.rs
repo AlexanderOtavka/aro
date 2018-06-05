@@ -1,5 +1,7 @@
-use ast::{Ast, BinOp, EvaluatedType, Expression, Pattern, Type, TypedAst, TypedExpression,
-          TypedPattern, TypedValue, Value};
+use ast::{
+    Ast, BinOp, EvaluatedType, Expression, Pattern, Type, TypedAst, TypedExpression, TypedPattern,
+    TypedValue, Value,
+};
 use std::collections::HashMap;
 use std::iter::Iterator;
 use util::Error;
@@ -475,6 +477,16 @@ fn substitute_expr(ast: &Ast<Expression>, name: &str, value: &Ast<Type>) -> Ast<
                 ))
             }
         }
+        &Expression::RefNew(ref value_ast) => {
+            ast.replace_expr(Expression::RefNew(substitute_expr(value_ast, name, value)))
+        }
+        &Expression::RefGet(ref reference) => {
+            ast.replace_expr(Expression::RefNew(substitute_expr(reference, name, value)))
+        }
+        &Expression::RefSet(ref reference, ref value_ast) => ast.replace_expr(Expression::RefSet(
+            substitute_expr(reference, name, value),
+            substitute_expr(value_ast, name, value),
+        )),
         &Expression::Value(ref ast_value) => ast.replace_expr(Expression::Value(match ast_value {
             &Value::Bool(_)
             | &Value::Int(_)
@@ -1007,6 +1019,65 @@ pub fn typecheck_ast(
                 },
             ),
         },
+        &Expression::RefNew(ref value) => {
+            let typechecked_value = typecheck_ast(value, env)?;
+            let value_type = typechecked_value.to_type_ast();
+            Ok(ast.to_typed(
+                TypedExpression::RefNew(typechecked_value),
+                EvaluatedType::Ref(value_type),
+            ))
+        }
+        &Expression::RefGet(ref reference) => {
+            let typechecked_reference = typecheck_ast(reference, env)?;
+
+            if let EvaluatedType::Ref(value_type) = *typechecked_reference.expr_type.clone() {
+                Ok(ast.to_typed(
+                    TypedExpression::RefGet(typechecked_reference),
+                    *value_type.expr,
+                ))
+            } else {
+                Err(Error::type_error(
+                    left_loc,
+                    right_loc,
+                    &EvaluatedType::Ref(ast.replace_expr(EvaluatedType::Any)),
+                    &typechecked_reference.expr_type,
+                ))
+            }
+        }
+        &Expression::RefSet(ref reference, ref value) => {
+            let typechecked_reference = typecheck_ast(reference, env)?;
+            let typechecked_value = typecheck_ast(value, env)?;
+
+            if let EvaluatedType::Ref(ref_value_type) = *typechecked_reference.expr_type.clone() {
+                if ref_value_type
+                    .expr
+                    .is_sub_type(&typechecked_value.expr_type)
+                    && typechecked_value
+                        .expr_type
+                        .is_sub_type(&ref_value_type.expr)
+                {
+                    let value_type = *typechecked_value.expr_type.clone();
+                    Ok(ast.to_typed(
+                        TypedExpression::RefSet(typechecked_reference, typechecked_value),
+                        value_type,
+                    ))
+                } else {
+                    Err(Error::type_error(
+                        value.left_loc,
+                        value.right_loc,
+                        &ref_value_type.expr,
+                        &typechecked_value.expr_type,
+                    ))
+                }
+            } else {
+                Err(Error::type_error(
+                    left_loc,
+                    right_loc,
+                    &EvaluatedType::Ref(ast.replace_expr(EvaluatedType::Any)),
+                    &typechecked_reference.expr_type,
+                ))
+            }
+        }
     }
 }
 

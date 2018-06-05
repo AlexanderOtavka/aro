@@ -20,9 +20,14 @@ pub Expr: Ast<Expression> = {
     <l:@L> <p:TypeIdent> ":" <s:ValueType> "=" <et:ValueType> "=>" <e:Expr> <r:@R> =>
         Ast::<Expression>::new(l, r, Expression::Value(Value::GenericFunc(p, s, et, e))),
 
-    <l:@L> <s:Call> ";" <e:Expr> <r:@R> =>
+    <l:@L> <s:Assignment> ";" <e:Expr> <r:@R> =>
         Ast::<Expression>::new(l, r, Expression::Sequence(s, e)),
 
+    Assignment,
+};
+
+Assignment = {
+    <l:@L> "*!" <x:Unary> "<-" <v:Assignment> <r:@R> => Ast::<Expression>::new(l, r, Expression::RefSet(x, v)),
     Call,
 };
 
@@ -48,6 +53,12 @@ Arith = {
 Factor = {
     <l:@L> <a:Factor> "*" <b:Value> <r:@R> => Ast::<Expression>::new(l, r, Expression::BinOp(BinOp::Mul, a, b)),
     <l:@L> <a:Factor> "/" <b:Value> <r:@R> => Ast::<Expression>::new(l, r, Expression::BinOp(BinOp::Div, a, b)),
+    Unary,
+};
+
+Unary = {
+    <l:@L> "&!" <v:Unary> <r:@R> => Ast::<Expression>::new(l, r, Expression::RefNew(v)),
+    <l:@L> "*!" <x:Unary> <r:@R> => Ast::<Expression>::new(l, r, Expression::RefGet(x)),
     Value,
 };
 
@@ -97,8 +108,7 @@ ValueType = {
     <l:@L> "Any" <r:@R> => Ast::<Type>::new(l, r, Type::Any),
     <l:@L> "None" <r:@R> => Ast::<Type>::new(l, r, Type::None),
 
-    <l:@L> "(" "Ref" "<|" <t:Type> ")" <r:@R> => Ast::<Type>::new(l, r, Type::Ref(t)),
-    <l:@L> "(" <t:Type> "|>" "Ref" ")" <r:@R> => Ast::<Type>::new(l, r, Type::Ref(t)),
+    <l:@L> "&" <t:ValueType> <r:@R> => Ast::<Type>::new(l, r, Type::Ref(t)),
 
     <l:@L> "(" ")" <r:@R> => Ast::<Type>::new(l, r, Type::Tuple(vec![])),
     <l:@L> "(" <h:Type> <t: Type+ > ")" <r:@R> => Ast::<Type>::new(l, r, Type::Tuple({
