@@ -32,6 +32,7 @@ Assignment = {
 };
 
 Call = {
+    <l:@L> <v:Call> "->" "*!" <x:Unary> <r:@R> => Ast::<Expression>::new(l, r, Expression::RefSet(x, v)),
     <l:@L> <f:Call> "<|" <a:Comp> <r:@R> => Ast::<Expression>::new(l, r, Expression::BinOp(BinOp::Call, f, a)),
     <l:@L> <a:Call> "|>" <f:Comp> <r:@R> => Ast::<Expression>::new(l, r, Expression::BinOp(BinOp::Call, f, a)),
     <l:@L> <f:Call> "<|" "type" <t:ValueType> <r:@R> => Ast::<Expression>::new(l, r, Expression::GenericCall(f, t)),
