@@ -371,36 +371,6 @@ fn handle_hook_call(
                 panic!("int.floordiv arg should be a tuple")
             }
         }
-        "std.ref.new!" => Ok(Ast::<Expression>::new(
-            left_loc,
-            right_loc,
-            Expression::Value(Value::Ref(Rc::new(RefCell::new(param_value.clone())))),
-        )),
-        "std.ref.get!" => if let &Value::Ref(ref ptr) = param_value {
-            Ok(Ast::<Expression>::new(
-                left_loc,
-                right_loc,
-                Expression::Value(ptr.borrow().clone()),
-            ))
-        } else {
-            panic!("ref.get! must be called with a ref")
-        },
-        "std.ref.set!" => if let &Value::Tuple(ref vec) = param_value {
-            let ref_ast = &vec[0];
-            let new_value_ast = &vec[1];
-            if let &Expression::Value(Value::Ref(ref ptr)) = &*ref_ast.expr {
-                if let &Expression::Value(ref new_value) = &*new_value_ast.expr {
-                    *ptr.borrow_mut() = new_value.clone();
-                    Ok(ref_ast.clone())
-                } else {
-                    panic!("ref.get! second tuple arg must be a value")
-                }
-            } else {
-                panic!("ref.get! first tuple arg must be a ref")
-            }
-        } else {
-            panic!("ref.get! must be called with a tuple")
-        },
         _ => {
             return None;
         }
@@ -968,13 +938,10 @@ mod evaluate_ast {
     fn sequences_execute_side_effects() {
         assert_eval_eq(
             r#"
-            let x: Any <- @hook("std.ref.new!" Any) <| 5
-            @hook("std.ref.set!" Any) <| (x  7);
-            @hook("std.ref.set!" Any) <| (
-                x
-                (@hook("std.ref.get!" Any) <| x) + 1
-            );
-            @hook("std.ref.get!" Any) <| x
+            let x: Any <- &!5
+            *!x <- 7;
+            *!x <- *!x + 1;
+            *!x
             "#,
             "8",
         );

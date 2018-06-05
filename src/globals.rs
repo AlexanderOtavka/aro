@@ -47,28 +47,6 @@ pub fn get_globals() -> HashMap<String, (Value, TypedAst<TypedExpression>)> {
         "#,
     );
     sources.insert(
-        "ref!",
-        r#"
-            @hook("std.ref.new!"  (T: Any => T => &T))
-        "#,
-    );
-    sources.insert(
-        "get!",
-        r#"
-            @hook("std.ref.get!"  (T: Any => &T => T))
-        "#,
-    );
-    sources.insert(
-        "set!",
-        r#"
-            T: Any =(T => &T => &T)=>
-            new_value: T =(&T => &T)=>
-            reference: &T =&T=>
-                (reference new_value)
-                    |> @hook("std.ref.set!"  ((&T  T) => &T))
-        "#,
-    );
-    sources.insert(
         "while",
         r#"
             let while_internal: ((() => Bool) => (() => Any) => ()) <-
