@@ -906,6 +906,77 @@ pub fn lift_expr(
                 externs,
             )
         }
+        &TypedExpression::RefNew(ref value) => {
+            let value = lift_expr(
+                value,
+                declarations,
+                statements,
+                expr_index,
+                functions,
+                function_index,
+                externs,
+            );
+
+            let ref_name = get_expr_name("ref", expr_index);
+            let ref_type = type_to_ctype(&ast.expr_type);
+
+            declarations.push(CDeclaration(ref_type.clone(), ref_name.clone()));
+            statements
+                .push(ast.replace_untyped(CStatement::RefAlloc(ref_name.clone(), CType::Any)));
+            statements.push(ast.replace_untyped(CStatement::AnyRefAssign(
+                ast.replace_untyped(CValue::Ident(ref_name.clone(), ref_type.clone())),
+                value,
+            )));
+
+            ast.replace_untyped(CValue::Ident(ref_name, ref_type))
+        }
+        &TypedExpression::RefGet(ref reference) => {
+            let reference = lift_expr(
+                reference,
+                declarations,
+                statements,
+                expr_index,
+                functions,
+                function_index,
+                externs,
+            );
+
+            let value_name = get_expr_name("ref_value", expr_index);
+            let value_type = type_to_ctype(&ast.expr_type);
+
+            declarations.push(CDeclaration(value_type.clone(), value_name.clone()));
+            statements.push(ast.replace_untyped(CStatement::VarAssign(
+                value_name.clone(),
+                ast.replace_untyped(CExpr::AnyRefGet(reference, value_type.clone())),
+            )));
+
+            ast.replace_untyped(CValue::Ident(value_name, value_type))
+        }
+        &TypedExpression::RefSet(ref reference, ref value) => {
+            let reference = lift_expr(
+                reference,
+                declarations,
+                statements,
+                expr_index,
+                functions,
+                function_index,
+                externs,
+            );
+            let value = lift_expr(
+                value,
+                declarations,
+                statements,
+                expr_index,
+                functions,
+                function_index,
+                externs,
+            );
+
+            statements
+                .push(ast.replace_untyped(CStatement::AnyRefAssign(reference, value.clone())));
+
+            value
+        }
         _ => panic!(),
     }
 }
@@ -1069,8 +1140,7 @@ pub fn print_value(
             statements.push(value_ast.replace_expr(CStatement::PrintText(String::from("]"))));
         }
         EvaluatedType::Ref(ref wrapped_type) => {
-            statements
-                .push(value_ast.replace_expr(CStatement::PrintText(String::from("(ref <| "))));
+            statements.push(value_ast.replace_expr(CStatement::PrintText(String::from("(&!"))));
 
             let deref_name = get_expr_name("deref", expr_index);
             let deref_type = type_to_ctype(&wrapped_type.expr);
@@ -1078,18 +1148,7 @@ pub fn print_value(
             declarations.push(CDeclaration(deref_type.clone(), deref_name.clone()));
             statements.push(value_ast.replace_expr(CStatement::VarAssign(
                 deref_name.clone(),
-                value_ast.replace_expr(CExpr::BinOp(
-                    BinOp::Call,
-                    value_ast.replace_expr(CValue::DerefBound(
-                        get_ident_name("get!"),
-                        CType::Closure {
-                            param: value_ast.replace_expr(CType::Ref(Box::new(CType::Any))),
-                            ret: value_ast.replace_expr(deref_type.clone()),
-                        },
-                    )),
-                    value_ast.clone(),
-                    CType::Bool,
-                )),
+                value_ast.replace_expr(CExpr::AnyRefGet(value_ast.clone(), deref_type.clone())),
             )));
 
             print_value(

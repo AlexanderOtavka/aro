@@ -176,6 +176,7 @@ pub enum CExpr {
     Value(CValue),
     BinOp(BinOp, Ast<CValue>, Ast<CValue>, CType),
     Not(Ast<CExpr>),
+    AnyRefGet(Ast<CValue>, CType),
     ObjectAccess {
         object: Ast<CValue>,
         index: usize,
@@ -210,6 +211,7 @@ pub enum CStatement {
     VarAssign(CName, Ast<CExpr>),
     RefAlloc(CName, CType),
     RefAssign(CName, Ast<CExpr>),
+    AnyRefAssign(Ast<CValue>, Ast<CValue>),
     AnyAssign(CName, Ast<CValue>),
     ClosureInit {
         name: CName,
@@ -556,7 +558,8 @@ impl WellCTyped for CExpr {
                 to_type: ref expr_type,
                 ..
             }
-            | &CExpr::BinOp(_, _, _, ref expr_type) => expr_type.clone(),
+            | &CExpr::BinOp(_, _, _, ref expr_type)
+            | &CExpr::AnyRefGet(_, ref expr_type) => expr_type.clone(),
         }
     }
 }
@@ -651,6 +654,9 @@ impl Display for CExpr {
                     ctype_to_union_field(field_type)
                 ),
                 &CExpr::Not(ref value) => format!("(!{})", value),
+                &CExpr::AnyRefGet(ref reference, ref value_type) => {
+                    format!("((*{}){})", reference, ctype_to_union_field(value_type))
+                }
                 &CExpr::AnyAccess {
                     ref value,
                     ref value_type,
@@ -766,6 +772,12 @@ impl Display for CStatement {
                     ctype_to_string(value_type, "")
                 ),
                 &CStatement::RefAssign(ref name, ref value) => format!("*{} = {};", name, value),
+                &CStatement::AnyRefAssign(ref reference, ref value) => format!(
+                    "(*{}){} = {};",
+                    reference,
+                    ctype_to_union_field(&value.expr.get_ctype()),
+                    value
+                ),
                 &CStatement::AnyAssign(ref name, ref value) => format!(
                     "{}{} = {};",
                     name,
