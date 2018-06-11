@@ -368,7 +368,7 @@ fn make_declarations(
             );
             statements.push(pattern.replace_untyped(CStatement::RefAssign(
                 value_name.clone(),
-                pattern.replace_untyped(CExpr::Value(CValue::Int(0))),
+                pattern.replace_untyped(CExpr::Value(CValue::Null)),
             )));
         }
         &TypedPattern::Tuple(ref vec) => for element in vec {
