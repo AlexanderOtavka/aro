@@ -27,7 +27,7 @@ use util::{Error, SOURCE_FUNC_NAMESPACE};
 fn evaluate_source(input: &str, small_step: bool) -> Result<String, Error> {
     let ast = parse::source_to_ast(input)?;
 
-    let globals = get_globals();
+    let globals = get_globals(&mut Vec::new());
 
     typecheck::typecheck_ast(
         &ast,
@@ -35,6 +35,7 @@ fn evaluate_source(input: &str, small_step: bool) -> Result<String, Error> {
             .iter()
             .map(|(name, &(_, ref typechecked))| (name.clone(), *typechecked.expr_type.clone()))
             .collect(),
+        &mut Vec::new(),
     )?;
 
     if small_step {
@@ -180,7 +181,8 @@ mod evaluate_file {
 fn c_compile_source(input: &str) -> Result<String, Error> {
     let ast = parse::source_to_ast(input)?;
 
-    let globals = get_globals();
+    let mut real_types = Vec::new();
+    let globals = get_globals(&mut real_types);
 
     let typechecked_ast = typecheck::typecheck_ast(
         &ast,
@@ -188,7 +190,10 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
             .iter()
             .map(|(name, &(_, ref typechecked))| (name.clone(), *typechecked.expr_type.clone()))
             .collect(),
+        &mut real_types,
     )?;
+
+    let record_layouts = c_compile::layout_records(real_types.clone());
 
     let mut declarations = Vec::new();
     let mut statements = Vec::new();
@@ -204,6 +209,8 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
         &mut functions,
         &mut function_index,
         &mut externs,
+        &real_types,
+        &record_layouts,
     );
 
     c_compile::print_value(
@@ -212,6 +219,8 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
         &mut declarations,
         &mut statements,
         &mut expr_index,
+        &real_types,
+        &record_layouts,
     );
 
     Ok(format!(
@@ -265,7 +274,8 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
 }
 
 fn c_compile_globals(path: &Path) -> Result<(), String> {
-    let (std_h_code, std_c_code) = get_globals_c_files(&get_globals());
+    let mut real_types = Vec::new();
+    let (std_h_code, std_c_code) = get_globals_c_files(&get_globals(&mut real_types), &real_types);
 
     let mut std_h_file = File::create(path.join("arostd.h"))
         .map_err(|err| format!("Couldn't create std file: {}", err))?;

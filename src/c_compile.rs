@@ -36,12 +36,12 @@ pub fn type_to_ctype(t: &EvaluatedType) -> CType {
             param: param.replace_expr(type_to_ctype(&param.expr)),
             ret: ret.replace_expr(type_to_ctype(&ret.expr)),
         },
-        &EvaluatedType::Tuple(_) => CType::Object,
+        &EvaluatedType::Tuple(_) | &EvaluatedType::Record(_) | &EvaluatedType::List(_) => {
+            CType::Object
+        }
         &EvaluatedType::GenericFunc { ref output, .. } => type_to_ctype(&output.expr),
         &EvaluatedType::Ident(_, ref supertype) => type_to_ctype(&supertype.expr),
-        &EvaluatedType::List(_) => CType::Object,
         &EvaluatedType::Ref(_) => CType::Ref(Box::new(CType::Any)),
-        _ => panic!("Unhandled type: {}", t),
     }
 }
 
@@ -485,6 +485,39 @@ pub fn bind_global(
     )));
 }
 
+pub fn layout_records(real_types: Vec<EvaluatedType>) -> HashMap<usize, HashMap<String, usize>> {
+    let record_map = real_types.into_iter().enumerate().filter_map(
+        |(id, real_type)| match real_type {
+            EvaluatedType::Record(map) => Some((id, map)),
+            _ => None,
+        },
+    );
+
+    let mut fields = HashSet::new();
+    for (_, record) in record_map.clone() {
+        for (field, _) in record {
+            fields.insert(field);
+        }
+    }
+
+    record_map
+        .map(|(id, record)| {
+            let mut layout = HashMap::new();
+            for (field, _) in record {
+                layout.insert(
+                    field.clone(),
+                    fields
+                        .iter()
+                        .position(|known_field| known_field == &field)
+                        .unwrap(),
+                );
+            }
+
+            (id, layout)
+        })
+        .collect()
+}
+
 pub fn lift_expr(
     ast: &TypedAst<TypedExpression>,
     declarations: &mut Vec<CDeclaration>,
@@ -493,6 +526,8 @@ pub fn lift_expr(
     functions: &mut Vec<Ast<CFunc>>,
     function_index: &mut u64,
     externs: &mut Vec<CDeclaration>,
+    real_types: &Vec<EvaluatedType>,
+    record_layouts: &HashMap<usize, HashMap<String, usize>>,
 ) -> Ast<CValue> {
     match &*ast.expr {
         &TypedExpression::Value(ref v) => match v {
@@ -550,6 +585,8 @@ pub fn lift_expr(
                     functions,
                     function_index,
                     externs,
+                    real_types,
+                    record_layouts,
                 );
 
                 let (ret, _) = maybe_cast_representation(
@@ -606,6 +643,8 @@ pub fn lift_expr(
                         functions,
                         function_index,
                         externs,
+                        real_types,
+                        record_layouts,
                     ));
                 }
 
@@ -643,6 +682,8 @@ pub fn lift_expr(
                         functions,
                         function_index,
                         externs,
+                        real_types,
+                        record_layouts,
                     );
 
                     let (element_value, _) = maybe_cast_representation(
@@ -669,7 +710,46 @@ pub fn lift_expr(
 
                 ast.replace_untyped(head)
             }
-            _ => panic!(),
+            &TypedValue::Record(ref map) => {
+                let type_index = real_types
+                    .into_iter()
+                    .position(|real_type| real_type == &*ast.expr_type)
+                    .unwrap();
+                let layout = record_layouts.get(&type_index).unwrap();
+
+                let mut data = Vec::new();
+                for (field, field_value) in map {
+                    let field_position = *layout.get(field).unwrap();
+                    if field_position >= data.len() {
+                        data.resize(field_position + 1, ast.replace_untyped(CValue::Null));
+                    }
+
+                    data.remove(field_position);
+                    data.insert(
+                        field_position,
+                        lift_expr(
+                            field_value,
+                            declarations,
+                            statements,
+                            expr_index,
+                            functions,
+                            function_index,
+                            externs,
+                            real_types,
+                            record_layouts,
+                        ),
+                    );
+                }
+
+                let expr_name = get_expr_name("record", expr_index);
+                declarations.push(CDeclaration(CType::Object, expr_name.clone()));
+                statements.push(ast.replace_untyped(CStatement::ObjectInit {
+                    name: expr_name.clone(),
+                    data,
+                }));
+
+                ast.replace_untyped(CValue::Ident(expr_name, CType::Object))
+            }
         },
         &TypedExpression::Ident(ref name) => ast.replace_untyped(CValue::DerefBound(
             get_ident_name(name),
@@ -684,6 +764,8 @@ pub fn lift_expr(
                 functions,
                 function_index,
                 externs,
+                real_types,
+                record_layouts,
             );
             let right_c_ast = {
                 let right_c_ast = lift_expr(
@@ -694,6 +776,8 @@ pub fn lift_expr(
                     functions,
                     function_index,
                     externs,
+                    real_types,
+                    record_layouts,
                 );
                 match op {
                     &BinOp::Call => {
@@ -762,6 +846,8 @@ pub fn lift_expr(
                 functions,
                 function_index,
                 externs,
+                real_types,
+                record_layouts,
             );
 
             let expr_name = get_expr_name("if_result", expr_index);
@@ -777,6 +863,8 @@ pub fn lift_expr(
                 functions,
                 function_index,
                 externs,
+                real_types,
+                record_layouts,
             );
             consequent_statements.push(ast.replace_untyped(CStatement::VarAssign(
                 expr_name.clone(),
@@ -797,6 +885,8 @@ pub fn lift_expr(
                 functions,
                 function_index,
                 externs,
+                real_types,
+                record_layouts,
             );
             alternate_statements.push(ast.replace_untyped(CStatement::VarAssign(
                 expr_name.clone(),
@@ -832,6 +922,8 @@ pub fn lift_expr(
                 functions,
                 function_index,
                 externs,
+                real_types,
+                record_layouts,
             );
             bind_declarations(
                 pattern,
@@ -852,6 +944,8 @@ pub fn lift_expr(
                 functions,
                 function_index,
                 externs,
+                real_types,
+                record_layouts,
             );
             body_statements.push(body.replace_untyped(CStatement::VarAssign(
                 body_name.clone(),
@@ -872,6 +966,8 @@ pub fn lift_expr(
                 functions,
                 function_index,
                 externs,
+                real_types,
+                record_layouts,
             );
             let (casted, _) = maybe_cast_representation(
                 from_cvalue,
@@ -895,6 +991,8 @@ pub fn lift_expr(
                 functions,
                 function_index,
                 externs,
+                real_types,
+                record_layouts,
             );
             lift_expr(
                 result,
@@ -904,6 +1002,8 @@ pub fn lift_expr(
                 functions,
                 function_index,
                 externs,
+                real_types,
+                record_layouts,
             )
         }
         &TypedExpression::RefNew(ref value) => {
@@ -915,6 +1015,8 @@ pub fn lift_expr(
                 functions,
                 function_index,
                 externs,
+                real_types,
+                record_layouts,
             );
 
             let ref_name = get_expr_name("ref", expr_index);
@@ -939,6 +1041,8 @@ pub fn lift_expr(
                 functions,
                 function_index,
                 externs,
+                real_types,
+                record_layouts,
             );
 
             let value_name = get_expr_name("ref_value", expr_index);
@@ -961,6 +1065,8 @@ pub fn lift_expr(
                 functions,
                 function_index,
                 externs,
+                real_types,
+                record_layouts,
             );
             let value = lift_expr(
                 value,
@@ -970,6 +1076,8 @@ pub fn lift_expr(
                 functions,
                 function_index,
                 externs,
+                real_types,
+                record_layouts,
             );
 
             statements
@@ -977,7 +1085,50 @@ pub fn lift_expr(
 
             value
         }
-        _ => panic!(),
+        &TypedExpression::RecordAccess(ref record, ref field) => {
+            let record_cvalue = lift_expr(
+                record,
+                declarations,
+                statements,
+                expr_index,
+                functions,
+                function_index,
+                externs,
+                real_types,
+                record_layouts,
+            );
+
+            let real_subtype_index = real_types
+                .into_iter()
+                .position(|real_type| real_type.is_sub_type(&record.expr_type))
+                .expect(&format!(
+                    "There is nothing that could be a subtype of `{}`",
+                    &record.expr_type,
+                ));
+
+            // TODO: add an assertion to make sure all real subtypes have the field in the same place
+
+            let access_position = *record_layouts
+                .get(&real_subtype_index)
+                .unwrap()
+                .get(field)
+                .unwrap();
+
+            let value_name = get_expr_name("record_access", expr_index);
+            let value_type = type_to_ctype(&ast.expr_type);
+
+            declarations.push(CDeclaration(value_type.clone(), value_name.clone()));
+            statements.push(ast.replace_untyped(CStatement::VarAssign(
+                value_name.clone(),
+                ast.replace_untyped(CExpr::ObjectAccess {
+                    object: record_cvalue,
+                    index: access_position,
+                    field_type: type_to_ctype(&ast.expr_type),
+                }),
+            )));
+
+            ast.replace_untyped(CValue::Ident(value_name, value_type))
+        }
     }
 }
 
@@ -987,6 +1138,8 @@ pub fn print_value(
     declarations: &mut Vec<CDeclaration>,
     statements: &mut Vec<Ast<CStatement>>,
     expr_index: &mut u64,
+    real_types: &Vec<EvaluatedType>,
+    record_layouts: &HashMap<usize, HashMap<String, usize>>,
 ) {
     match value_type {
         EvaluatedType::Bool
@@ -1008,6 +1161,8 @@ pub fn print_value(
                 declarations,
                 statements,
                 expr_index,
+                real_types,
+                record_layouts,
             );
         }
         EvaluatedType::Tuple(ref element_types) => {
@@ -1032,6 +1187,8 @@ pub fn print_value(
                     declarations,
                     statements,
                     expr_index,
+                    real_types,
+                    record_layouts,
                 );
 
                 if index < element_types.len() - 1 {
@@ -1041,6 +1198,60 @@ pub fn print_value(
             }
 
             statements.push(value_ast.replace_expr(CStatement::PrintText(String::from(")"))));
+        }
+        EvaluatedType::Record(ref type_map) => {
+            statements.push(value_ast.replace_expr(CStatement::PrintText(String::from("{"))));
+
+            let mut is_first = true;
+
+            for (field, field_type) in type_map {
+                if is_first {
+                    is_first = false;
+                } else {
+                    statements
+                        .push(value_ast.replace_expr(CStatement::PrintText(String::from("  "))));
+                }
+
+                let index = *real_types
+                    .into_iter()
+                    .enumerate()
+                    .filter_map(|(index, real_type)| {
+                        if real_type.is_sub_type(value_type) {
+                            record_layouts.get(&index).unwrap().get(field)
+                        } else {
+                            None
+                        }
+                    })
+                    .next()
+                    .unwrap();
+
+                let value_name = get_expr_name("record_field", expr_index);
+                let value_ctype = type_to_ctype(&field_type.expr);
+                declarations.push(CDeclaration(value_ctype.clone(), value_name.clone()));
+                statements.push(value_ast.replace_expr(CStatement::VarAssign(
+                    value_name.clone(),
+                    value_ast.replace_expr(CExpr::ObjectAccess {
+                        object: value_ast.clone(),
+                        index,
+                        field_type: value_ctype.clone(),
+                    }),
+                )));
+
+                statements
+                    .push(value_ast.replace_expr(CStatement::PrintText(format!("{} <- ", field))));
+
+                print_value(
+                    value_ast.replace_expr(CValue::Ident(value_name, value_ctype)),
+                    &field_type.expr,
+                    declarations,
+                    statements,
+                    expr_index,
+                    real_types,
+                    record_layouts,
+                );
+            }
+
+            statements.push(value_ast.replace_expr(CStatement::PrintText(String::from("}"))));
         }
         EvaluatedType::List(ref element_type) => {
             statements.push(value_ast.replace_expr(CStatement::PrintText(String::from("["))));
@@ -1107,6 +1318,8 @@ pub fn print_value(
                 &mut while_declarations,
                 &mut while_statements,
                 expr_index,
+                real_types,
+                record_layouts,
             );
 
             while_statements.push(value_ast.replace_expr(CStatement::VarAssign(
@@ -1157,10 +1370,11 @@ pub fn print_value(
                 declarations,
                 statements,
                 expr_index,
+                real_types,
+                record_layouts,
             );
 
             statements.push(value_ast.replace_expr(CStatement::PrintText(String::from(")"))));
         }
-        _ => panic!(),
     }
 }

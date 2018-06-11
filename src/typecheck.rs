@@ -606,13 +606,14 @@ fn typecheck_numeric_bin_op<TypeGetter>(
     left: &Ast<Expression>,
     right: &Ast<Expression>,
     env: &HashMap<String, EvaluatedType>,
+    real_types: &mut Vec<EvaluatedType>,
     get_type: TypeGetter,
 ) -> Result<TypedAst<TypedExpression>, Error>
 where
     TypeGetter: Fn(&EvaluatedType, &EvaluatedType) -> EvaluatedType,
 {
-    let typechecked_left = typecheck_ast(left, env)?;
-    let typechecked_right = typecheck_ast(right, env)?;
+    let typechecked_left = typecheck_ast(left, env, real_types)?;
+    let typechecked_right = typecheck_ast(right, env, real_types)?;
     if !typechecked_left.expr_type.is_sub_type(&EvaluatedType::Num) {
         Err(Error::LRLocated {
             message: format!(
@@ -640,9 +641,19 @@ where
     }
 }
 
+fn add_real_type(some_type: EvaluatedType, real_types: &mut Vec<EvaluatedType>) {
+    if !real_types
+        .into_iter()
+        .any(|real_type| real_type == &some_type)
+    {
+        real_types.push(some_type);
+    }
+}
+
 pub fn typecheck_ast(
     ast: &Ast<Expression>,
     env: &HashMap<String, EvaluatedType>,
+    real_types: &mut Vec<EvaluatedType>,
 ) -> Result<TypedAst<TypedExpression>, Error> {
     let left_loc = ast.left_loc;
     let right_loc = ast.right_loc;
@@ -671,14 +682,17 @@ pub fn typecheck_ast(
                 let mut value_vec = Vec::new();
 
                 for item in vec {
-                    let typed_ast = typecheck_ast(item, env)?;
+                    let typed_ast = typecheck_ast(item, env, real_types)?;
                     type_vec.push(typed_ast.to_type_ast());
                     value_vec.push(typed_ast);
                 }
 
+                let result_type = EvaluatedType::Tuple(type_vec);
+                add_real_type(result_type.clone(), real_types);
+
                 Ok(ast.to_typed(
                     TypedExpression::Value(TypedValue::Tuple(value_vec)),
-                    EvaluatedType::Tuple(type_vec),
+                    result_type,
                 ))
             }
             &Value::Record(ref map) => {
@@ -686,14 +700,17 @@ pub fn typecheck_ast(
                 let mut value_map = HashMap::new();
 
                 for (name, value) in map {
-                    let typed_ast = typecheck_ast(value, env)?;
+                    let typed_ast = typecheck_ast(value, env, real_types)?;
                     type_map.insert(name.clone(), typed_ast.to_type_ast());
                     value_map.insert(name.clone(), typed_ast);
                 }
 
+                let result_type = EvaluatedType::Record(type_map);
+                add_real_type(result_type.clone(), real_types);
+
                 Ok(ast.to_typed(
                     TypedExpression::Value(TypedValue::Record(value_map)),
-                    EvaluatedType::Record(type_map),
+                    result_type,
                 ))
             }
             &Value::List(ref vec) => {
@@ -701,7 +718,7 @@ pub fn typecheck_ast(
                 let mut value_vec = Vec::new();
 
                 for item in vec {
-                    let typed_ast = typecheck_ast(item, env)?;
+                    let typed_ast = typecheck_ast(item, env, real_types)?;
                     union_type = union_type.union(&typed_ast.expr_type);
                     value_vec.push(typed_ast);
                 }
@@ -721,7 +738,7 @@ pub fn typecheck_ast(
                 let declared_body_type = evaluate_type(body_type_ast, &body_env)?;
                 let declared_body_type_ast = body_type_ast.replace_expr(declared_body_type.clone());
 
-                let typechecked_body = typecheck_ast(body, &body_env)?;
+                let typechecked_body = typecheck_ast(body, &body_env, real_types)?;
                 let actual_body_type_ast = typechecked_body.to_type_ast();
 
                 if !actual_body_type_ast.is_sub_type(&declared_body_type_ast) {
@@ -755,7 +772,7 @@ pub fn typecheck_ast(
                 let declared_body_type = evaluate_type(body_type_ast, env)?;
                 let declared_body_type_ast = body_type_ast.replace_expr(declared_body_type.clone());
 
-                let typechecked_body = typecheck_ast(body, env)?;
+                let typechecked_body = typecheck_ast(body, env, real_types)?;
                 let actual_body_type_ast = typechecked_body.to_type_ast();
 
                 if !actual_body_type_ast.is_sub_type(&declared_body_type_ast) {
@@ -794,8 +811,8 @@ pub fn typecheck_ast(
             }
         },
         &Expression::Sequence(ref side_effect, ref result) => {
-            let typechecked_side_effect = typecheck_ast(side_effect, env)?;
-            let typechecked_result = typecheck_ast(result, env)?;
+            let typechecked_side_effect = typecheck_ast(side_effect, env, real_types)?;
+            let typechecked_result = typecheck_ast(result, env, real_types)?;
             let result_type = *typechecked_result.expr_type.clone();
             Ok(ast.to_typed(
                 TypedExpression::Sequence(typechecked_side_effect, typechecked_result),
@@ -803,7 +820,7 @@ pub fn typecheck_ast(
             ))
         }
         &Expression::RecordAccess(ref record, ref field) => {
-            let typechecked_record = typecheck_ast(record, env)?;
+            let typechecked_record = typecheck_ast(record, env, real_types)?;
             let record_type = *typechecked_record.expr_type.clone();
             let try_access_record = |object_type| {
                 if let &EvaluatedType::Record(ref map) = object_type {
@@ -841,7 +858,7 @@ pub fn typecheck_ast(
             }
         }
         &Expression::GenericCall(ref generic_func, ref arg) => {
-            let typechecked_generic_func = typecheck_ast(generic_func, env)?;
+            let typechecked_generic_func = typecheck_ast(generic_func, env, real_types)?;
             if let EvaluatedType::GenericFunc {
                 ref param_name,
                 ref param_supertype,
@@ -891,7 +908,7 @@ pub fn typecheck_ast(
             })
         },
         &Expression::If(ref condition, ref consequent, ref alternate) => {
-            let typechecked_condition = typecheck_ast(condition, env)?;
+            let typechecked_condition = typecheck_ast(condition, env, real_types)?;
             if *typechecked_condition.expr_type != EvaluatedType::Bool {
                 Err(Error::type_error(
                     alternate.left_loc,
@@ -900,8 +917,8 @@ pub fn typecheck_ast(
                     &typechecked_condition.expr_type,
                 ))
             } else {
-                let typechecked_consequent = typecheck_ast(consequent, env)?;
-                let typechecked_alternate = typecheck_ast(alternate, env)?;
+                let typechecked_consequent = typecheck_ast(consequent, env, real_types)?;
+                let typechecked_alternate = typecheck_ast(alternate, env, real_types)?;
                 let result_type = typechecked_consequent
                     .expr_type
                     .union(&typechecked_alternate.expr_type);
@@ -923,7 +940,7 @@ pub fn typecheck_ast(
             let typechecked_pattern = typecheck_pattern(pattern, env)?;
             let declared_value_type = typechecked_pattern.to_type_ast();
 
-            let typechecked_value = typecheck_ast(value, &body_env)?;
+            let typechecked_value = typecheck_ast(value, &body_env, real_types)?;
             let actual_value_type = typechecked_value.to_type_ast();
 
             if !actual_value_type.is_sub_type(&declared_value_type) {
@@ -934,7 +951,7 @@ pub fn typecheck_ast(
                     &actual_value_type.expr,
                 ))
             } else {
-                let typechecked_body = typecheck_ast(body, &body_env)?;
+                let typechecked_body = typecheck_ast(body, &body_env, real_types)?;
                 let body_type = *typechecked_body.expr_type.clone();
                 Ok(ast.to_typed(
                     TypedExpression::Let(typechecked_pattern, typechecked_value, typechecked_body),
@@ -943,12 +960,12 @@ pub fn typecheck_ast(
             }
         }
         &Expression::TypeLet(ref name, ref value, ref body) => {
-            typecheck_ast(&substitute_expr(body, name, value), env)
+            typecheck_ast(&substitute_expr(body, name, value), env, real_types)
         }
         &Expression::BinOp(ref operation, ref left, ref right) => match operation {
             &BinOp::Call => {
-                let typechecked_left = typecheck_ast(left, env)?;
-                let typechecked_right = typecheck_ast(right, env)?;
+                let typechecked_left = typecheck_ast(left, env, real_types)?;
+                let typechecked_right = typecheck_ast(right, env, real_types)?;
 
                 if let EvaluatedType::Func(ref param_type, ref output_type) =
                     *typechecked_left.expr_type.clone()
@@ -982,18 +999,23 @@ pub fn typecheck_ast(
                     })
                 }
             }
-            &BinOp::LEq => typecheck_numeric_bin_op(ast, operation, left, right, env, |_, _| {
-                EvaluatedType::Bool
-            }),
-            &BinOp::Div => typecheck_numeric_bin_op(ast, operation, left, right, env, |_, _| {
-                EvaluatedType::Num
-            }),
+            &BinOp::LEq => {
+                typecheck_numeric_bin_op(ast, operation, left, right, env, real_types, |_, _| {
+                    EvaluatedType::Bool
+                })
+            }
+            &BinOp::Div => {
+                typecheck_numeric_bin_op(ast, operation, left, right, env, real_types, |_, _| {
+                    EvaluatedType::Num
+                })
+            }
             &BinOp::Add | &BinOp::Sub | &BinOp::Mul => typecheck_numeric_bin_op(
                 ast,
                 operation,
                 left,
                 right,
                 env,
+                real_types,
                 |left_type, right_type| match (left_type, right_type) {
                     (&EvaluatedType::Int, &EvaluatedType::Int) => EvaluatedType::Int,
                     (&EvaluatedType::Int, &EvaluatedType::Ident(ref name, ref supertype))
@@ -1020,7 +1042,7 @@ pub fn typecheck_ast(
             ),
         },
         &Expression::RefNew(ref value) => {
-            let typechecked_value = typecheck_ast(value, env)?;
+            let typechecked_value = typecheck_ast(value, env, real_types)?;
             let value_type = typechecked_value.to_type_ast();
             Ok(ast.to_typed(
                 TypedExpression::RefNew(typechecked_value),
@@ -1028,7 +1050,7 @@ pub fn typecheck_ast(
             ))
         }
         &Expression::RefGet(ref reference) => {
-            let typechecked_reference = typecheck_ast(reference, env)?;
+            let typechecked_reference = typecheck_ast(reference, env, real_types)?;
 
             if let EvaluatedType::Ref(value_type) = *typechecked_reference.expr_type.clone() {
                 Ok(ast.to_typed(
@@ -1045,8 +1067,8 @@ pub fn typecheck_ast(
             }
         }
         &Expression::RefSet(ref reference, ref value) => {
-            let typechecked_reference = typecheck_ast(reference, env)?;
-            let typechecked_value = typecheck_ast(value, env)?;
+            let typechecked_reference = typecheck_ast(reference, env, real_types)?;
+            let typechecked_value = typecheck_ast(value, env, real_types)?;
 
             if let EvaluatedType::Ref(ref_value_type) = *typechecked_reference.expr_type.clone() {
                 if ref_value_type
@@ -1090,8 +1112,11 @@ mod typecheck_ast {
         assert_eq!(
             format!(
                 "{}",
-                typecheck_ast(&source_to_ast(actual).unwrap(), &HashMap::new())
-                    .unwrap()
+                typecheck_ast(
+                    &source_to_ast(actual).unwrap(),
+                    &HashMap::new(),
+                    &mut Vec::new()
+                ).unwrap()
                     .expr_type
             ),
             expected
@@ -1099,7 +1124,13 @@ mod typecheck_ast {
     }
 
     fn assert_typecheck_err(source: &str) {
-        assert!(typecheck_ast(&source_to_ast(source).unwrap(), &HashMap::new()).is_err());
+        assert!(
+            typecheck_ast(
+                &source_to_ast(source).unwrap(),
+                &HashMap::new(),
+                &mut Vec::new()
+            ).is_err()
+        );
     }
 
     #[test]
@@ -1126,8 +1157,11 @@ mod typecheck_ast {
         assert_eq!(
             format!(
                 "{}",
-                typecheck_ast(&source_to_ast("global_val").unwrap(), &globals)
-                    .unwrap()
+                typecheck_ast(
+                    &source_to_ast("global_val").unwrap(),
+                    &globals,
+                    &mut Vec::new()
+                ).unwrap()
                     .expr_type
             ),
             "Int"

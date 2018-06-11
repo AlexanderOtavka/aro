@@ -1,12 +1,14 @@
-use ast::{CDeclaration, CName, CType, TypedAst, TypedExpression, Value};
-use c_compile::{bind_global, lift_expr, type_to_ctype};
+use ast::{CDeclaration, CName, CType, EvaluatedType, TypedAst, TypedExpression, Value};
+use c_compile::{bind_global, layout_records, lift_expr, type_to_ctype};
 use eval::evaluate_ast;
 use parse::source_to_ast;
 use std::collections::HashMap;
 use typecheck::typecheck_ast;
 use util::GLOBALS_FUNC_NAMESPACE;
 
-pub fn get_globals() -> HashMap<String, (Value, TypedAst<TypedExpression>)> {
+pub fn get_globals(
+    real_types: &mut Vec<EvaluatedType>,
+) -> HashMap<String, (Value, TypedAst<TypedExpression>)> {
     let mut sources = HashMap::new();
 
     sources.insert("inf", "1/0");
@@ -68,7 +70,7 @@ pub fn get_globals() -> HashMap<String, (Value, TypedAst<TypedExpression>)> {
             String::from(name),
             (
                 evaluate_ast(&ast, &HashMap::new()).unwrap(),
-                typecheck_ast(&ast, &HashMap::new()).unwrap(),
+                typecheck_ast(&ast, &HashMap::new(), real_types).unwrap(),
             ),
         );
     }
@@ -78,6 +80,7 @@ pub fn get_globals() -> HashMap<String, (Value, TypedAst<TypedExpression>)> {
 
 pub fn get_globals_c_files(
     globals: &HashMap<String, (Value, TypedAst<TypedExpression>)>,
+    real_types: &Vec<EvaluatedType>,
 ) -> (String, String) {
     let mut declarations = Vec::new();
 
@@ -104,6 +107,8 @@ pub fn get_globals_c_files(
             &mut functions,
             &mut function_index,
             &mut externs,
+            real_types,
+            &layout_records(real_types.clone()),
         );
         bind_global(
             name,
