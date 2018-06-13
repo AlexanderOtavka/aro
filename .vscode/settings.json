@@ -6,5 +6,8 @@
     "lalrpop",
     "lexes",
     "oooh"
-  ]
+  ],
+  "files.associations": {
+    "arostd.h": "c"
+  }
 }
