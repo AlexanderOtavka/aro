@@ -8,13 +8,15 @@
 
 extern crate clap;
 extern crate lalrpop_util;
-mod ast;
+mod c_ast;
 mod c_compile;
 mod eval;
 mod globals;
 mod grammar;
 mod parse;
 mod typecheck;
+mod typed_ast;
+mod untyped_ast;
 mod util;
 
 use globals::{get_globals, get_globals_c_files};

@@ -1,9 +1,7 @@
-use ast::{
-    Ast, BinOp, EvaluatedType, Expression, Pattern, Type, TypedAst, TypedExpression, TypedPattern,
-    TypedValue, Value,
-};
 use std::collections::HashMap;
 use std::iter::Iterator;
+use typed_ast::{EvaluatedType, TypedAst, TypedExpression, TypedPattern, TypedValue};
+use untyped_ast::{Ast, BinOp, Expression, Pattern, Type, Value};
 use util::Error;
 
 impl Error {

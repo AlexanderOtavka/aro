@@ -1,6 +1,6 @@
-use ast::{Ast, Expression};
 use grammar::parse_Expr;
 use lalrpop_util::ParseError;
+use untyped_ast::{Ast, Expression};
 use util::Error;
 
 pub fn source_to_ast<'input>(source: &'input str) -> Result<Ast<Expression>, Error> {

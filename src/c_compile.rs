@@ -1,8 +1,7 @@
-use ast::{
-    Ast, BinOp, CDeclaration, CExpr, CFunc, CName, CStatement, CType, CValue, EvaluatedType,
-    TypedAst, TypedExpression, TypedPattern, TypedValue,
-};
+use c_ast::{CDeclaration, CExpr, CFunc, CName, CStatement, CType, CValue};
 use std::collections::{HashMap, HashSet};
+use typed_ast::{EvaluatedType, TypedAst, TypedExpression, TypedPattern, TypedValue};
+use untyped_ast::{Ast, BinOp};
 
 fn get_expr_name(name: &str, expr_index: &mut u64) -> CName {
     let old_i = *expr_index;

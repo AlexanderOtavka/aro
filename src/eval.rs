@@ -1,9 +1,9 @@
-use ast::{Ast, BinOp, Expression, Pattern, Type, Value};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::f64;
 use std::iter::Iterator;
 use std::rc::Rc;
+use untyped_ast::{Ast, BinOp, Expression, Pattern, Type, Value};
 use util::Error;
 
 fn evaluate_number_operator<F>(

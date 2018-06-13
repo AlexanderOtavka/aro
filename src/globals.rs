@@ -1,9 +1,11 @@
-use ast::{CDeclaration, CName, CType, EvaluatedType, TypedAst, TypedExpression, Value};
+use c_ast::{CDeclaration, CName, CType};
 use c_compile::{bind_global, layout_records, lift_expr, type_to_ctype};
 use eval::evaluate_ast;
 use parse::source_to_ast;
 use std::collections::HashMap;
 use typecheck::typecheck_ast;
+use typed_ast::{EvaluatedType, TypedAst, TypedExpression};
+use untyped_ast::Value;
 
 pub fn get_globals(
     real_types: &mut Vec<EvaluatedType>,

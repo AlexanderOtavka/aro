@@ -1,5 +1,5 @@
 use std::str::FromStr;
-use ast::{Ast, Expression, BinOp, Value, Type, Pattern};
+use untyped_ast::{Ast, Expression, BinOp, Value, Type, Pattern};
 
 grammar;
 
