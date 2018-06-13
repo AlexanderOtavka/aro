@@ -1,9 +1,5 @@
 use std::cmp::min;
 
-// Safe buffer between any other function spaces
-pub static SOURCE_FUNC_NAMESPACE: u64 = 0;
-pub static GLOBALS_FUNC_NAMESPACE: u64 = 1_000_000_000_000_000_000;
-
 #[derive(Debug)]
 pub enum Error {
     LRLocated {

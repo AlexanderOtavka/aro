@@ -4,7 +4,6 @@ use eval::evaluate_ast;
 use parse::source_to_ast;
 use std::collections::HashMap;
 use typecheck::typecheck_ast;
-use util::GLOBALS_FUNC_NAMESPACE;
 
 pub fn get_globals(
     real_types: &mut Vec<EvaluatedType>,
@@ -88,7 +87,7 @@ pub fn get_globals_c_files(
     let mut local_statements = Vec::new();
     let mut expr_index = 0;
     let mut functions = Vec::new();
-    let mut function_index = GLOBALS_FUNC_NAMESPACE;
+    let mut function_index = 0;
     let mut externs = Vec::new();
 
     for (name, (_, typechecked)) in globals {
@@ -138,6 +137,15 @@ pub fn get_globals_c_files(
          \n  void* Ref;\
          \n  void* Void_Ptr;\
          \n}} _Aro_Any, *_Aro_Object, *_Aro_Closure;\
+         \n\
+         \n// Useful macros\
+         \n#define ARO_DEFINE_CLOSURE_HOOK(NAME, RETURN_TYPE, ARGUMENT) \\\
+         \n  _Aro_Closure _aro_hook__##NAME;                            \\\
+         \n  static RETURN_TYPE fn__##NAME(ARGUMENT, _Aro_Object _captures)\
+         \n\
+         \n#define ARO_BIND_CLOSURE_HOOK(NAME)             \\\
+         \n  _aro_hook__##NAME = malloc(sizeof(_Aro_Any)); \\\
+         \n _aro_hook__##NAME->Void_Ptr = fn__##NAME;\
          \n\
          \n// Lifecycle hooks for linked libraries\
          \nvoid _aro_std_init(void);\
@@ -189,12 +197,12 @@ pub fn get_globals_c_files(
             .join("\n"),
         functions
             .iter()
-            .map(|function| format!("{};", function.expr.get_signature_string()))
+            .map(|function| format!("static {};", function.expr.get_signature_string()))
             .collect::<Vec<String>>()
             .join("\n"),
         functions
             .into_iter()
-            .map(|function| format!("{}", function))
+            .map(|function| format!("static {}", function))
             .collect::<Vec<String>>()
             .join("\n"),
         declarations

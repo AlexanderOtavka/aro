@@ -22,7 +22,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 use std::process::exit;
-use util::{Error, SOURCE_FUNC_NAMESPACE};
+use util::Error;
 
 fn evaluate_source(input: &str, small_step: bool) -> Result<String, Error> {
     let ast = parse::source_to_ast(input)?;
@@ -199,7 +199,7 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
     let mut statements = Vec::new();
     let mut expr_index = 0;
     let mut functions = Vec::new();
-    let mut function_index = SOURCE_FUNC_NAMESPACE;
+    let mut function_index = 0;
     let mut externs = Vec::new();
     let expr = c_compile::lift_expr(
         &typechecked_ast,
@@ -252,12 +252,12 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
             .join("\n"),
         functions
             .iter()
-            .map(|function| format!("{};", function.expr.get_signature_string()))
+            .map(|function| format!("static {};", function.expr.get_signature_string()))
             .collect::<Vec<String>>()
             .join("\n"),
         functions
             .into_iter()
-            .map(|function| format!("{}", function))
+            .map(|function| format!("static {}", function))
             .collect::<Vec<String>>()
             .join("\n\n"),
         declarations
