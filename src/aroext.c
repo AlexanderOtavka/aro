@@ -6,16 +6,20 @@
 
 #include <arostd.h>
 
+#include <limits.h>
+
 ARO_DEFINE_CLOSURE_HOOK(std__math__floordiv, int, _Aro_Object tuple_arg) {
   double left = tuple_arg[0].Float;
   double right = tuple_arg[1].Float;
 
-  if ((int)right == 0) {
-    fprintf(stderr, "Can't divide by your future (which is zero).\n");
+  double quotient = left / right;
+  if (quotient > INT_MAX || quotient < INT_MIN) {
+    fprintf(stderr,
+            "The result of the division is too big, just like your ego.\n");
     exit(EXIT_FAILURE);
   }
 
-  return (int)left / (int)right;
+  return (int)quotient;
 }
 
 ARO_DEFINE_CLOSURE_HOOK(std__list__push, _Aro_Object, _Aro_Object tuple_arg) {
