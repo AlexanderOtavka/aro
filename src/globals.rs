@@ -137,8 +137,12 @@ pub fn get_globals_c_files(
          \n  union _Aro_Any* Object;\
          \n  union _Aro_Any* Closure;\
          \n  void* Ref;\
-         \n  void* Void_Ptr;\
-         \n}} _Aro_Any, *_Aro_Object, *_Aro_Closure;\
+         \n}} _Aro_Any, *_Aro_Object;\
+         \n\
+         \ntypedef struct _Aro_Closure {{\
+         \n  void* func;\
+         \n  _Aro_Any captures[];\
+         \n}} *_Aro_Closure;\
          \n\
          \n// Useful macros\
          \n#define ARO_DEFINE_CLOSURE_HOOK(NAME, RETURN_TYPE, ARGUMENT) \\\
@@ -146,8 +150,8 @@ pub fn get_globals_c_files(
          \n  static RETURN_TYPE fn__##NAME(ARGUMENT, _Aro_Object _captures)\
          \n\
          \n#define ARO_BIND_CLOSURE_HOOK(NAME)             \\\
-         \n  _aro_hook__##NAME = malloc(sizeof(_Aro_Any)); \\\
-         \n _aro_hook__##NAME->Void_Ptr = fn__##NAME;\
+         \n  _aro_hook__##NAME = malloc(sizeof(struct _Aro_Closure)); \\\
+         \n  _aro_hook__##NAME->func = fn__##NAME;\
          \n\
          \n// Lifecycle hooks for linked libraries\
          \nvoid _aro_std_init(void);\

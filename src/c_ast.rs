@@ -265,7 +265,7 @@ impl Display for CExpr {
                     right
                 ),
                 &CExpr::Call(ref closure, ref arg, ref ret_type) => format!(
-                    "(*({}){}[0].Void_Ptr)({}, &{}[1])",
+                    "(*({}){}->func)({}, {}->captures)",
                     ctype_to_string(
                         &ret_type,
                         &format!(
@@ -287,17 +287,13 @@ impl Display for CExpr {
     }
 }
 
-fn init_array<Element: WellCTyped + Display>(
-    name: &CName,
-    elements: &Vec<Ast<Element>>,
-    start_index: usize,
-) -> String {
+fn init_array<Element: WellCTyped + Display>(name: &str, elements: &Vec<Ast<Element>>) -> String {
     let mut assignments = Vec::new();
     for (i, element) in elements.iter().enumerate() {
         assignments.push(format!(
             "{}[{}]{} = {};",
             name,
-            i + start_index,
+            i,
             ctype_to_union_field(&element.expr.get_ctype()),
             element
         ));
@@ -376,21 +372,21 @@ impl Display for CStatement {
                     "{} = malloc(sizeof(_Aro_Any) * {}); {}",
                     name,
                     data.len(),
-                    init_array(name, data, 0)
+                    init_array(&format!("{}", name), data)
                 ),
                 &CStatement::ClosureInit {
                     ref name,
                     ref function,
                     ref captures,
                 } => format!(
-                    "{} = malloc(sizeof(_Aro_Any) * {}); \
-                     {}[0].Void_Ptr = {}; \
+                    "{} = malloc(sizeof(struct _Aro_Closure) + sizeof(_Aro_Any) * {}); \
+                     {}->func = {}; \
                      {}",
                     name,
-                    captures.len() + 1,
+                    captures.len(),
                     name,
                     function,
-                    init_array(name, captures, 1)
+                    init_array(&format!("{}->captures", name), captures)
                 ),
                 &CStatement::If(ref condition, ref consequent, ref alternate) => {
                     format!("if ({}) {} else {}", condition, consequent, alternate)
