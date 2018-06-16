@@ -9,4 +9,4 @@ wasm_file="target/$1.wasm"
 
 cargo run -- -t $aro_file > $wat_file &&
 wat2wasm $wat_file -o $wasm_file &&
-node exec-wasm.js $wasm_file
+wasm-interp --run-all-exports $2 $wasm_file
