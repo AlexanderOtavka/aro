@@ -1,7 +1,7 @@
 use c_ast::{CDeclaration, CExpr, CFunc, CName, CStatement, CType, CValue};
 use std::collections::{HashMap, HashSet};
 use typed_ast::{EvaluatedType, TypedAst, TypedExpression, TypedPattern, TypedValue};
-use untyped_ast::{Ast, BinOp};
+use untyped_ast::Ast;
 
 fn get_expr_name(name: &str, expr_index: &mut u64) -> CName {
     let old_i = *expr_index;
@@ -207,8 +207,7 @@ fn maybe_cast_representation(
                 }),
             )));
 
-            let ret = from_out.replace_expr(CExpr::BinOp(
-                BinOp::Call,
+            let ret = from_out.replace_expr(CExpr::Call(
                 from.replace_expr(CValue::Ident(inner_func_name, inner_func_ctype)),
                 arg,
                 type_to_ctype(&from_out.expr),
@@ -300,6 +299,7 @@ fn find_captures(
 ) {
     match &*ast.expr {
         &TypedExpression::BinOp(_, ref a, ref b)
+        | &TypedExpression::Call(ref a, ref b)
         | &TypedExpression::Sequence(ref a, ref b)
         | &TypedExpression::RefSet(ref a, ref b) => {
             find_captures(a, locals, captures);
@@ -754,6 +754,76 @@ pub fn lift_expr(
             get_ident_name(name),
             type_to_ctype(&ast.expr_type),
         )),
+        &TypedExpression::Call(ref left, ref right) => {
+            let left_c_ast = lift_expr(
+                left,
+                declarations,
+                statements,
+                expr_index,
+                functions,
+                function_index,
+                externs,
+                real_types,
+                record_layouts,
+            );
+
+            let right_c_ast = lift_expr(
+                right,
+                declarations,
+                statements,
+                expr_index,
+                functions,
+                function_index,
+                externs,
+                real_types,
+                record_layouts,
+            );
+            let right_c_ast = if let &EvaluatedType::Func(ref param_type, _) = &*left.expr_type {
+                let (casted_ast, _) = maybe_cast_representation(
+                    right_c_ast,
+                    &right.expr_type,
+                    &param_type.expr,
+                    declarations,
+                    statements,
+                    expr_index,
+                    functions,
+                    function_index,
+                );
+
+                casted_ast
+            } else {
+                panic!("Calling non-function `{}`", left.expr_type)
+            };
+
+            let result_name = get_expr_name("op_result", expr_index);
+            let result_type = type_to_ctype(&ast.expr_type);
+            declarations.push(CDeclaration(result_type.clone(), result_name.clone()));
+            statements.push(ast.replace_untyped(CStatement::VarAssign(
+                result_name.clone(),
+                ast.replace_untyped(CExpr::Call(
+                    left_c_ast.clone(),
+                    right_c_ast,
+                    type_to_ctype(&ast.expr_type),
+                )),
+            )));
+            let result = ast.replace_untyped(CValue::Ident(result_name, result_type));
+
+            if let &EvaluatedType::Func(_, ref ret_type) = &*left.expr_type {
+                let (casted, _) = maybe_cast_representation(
+                    result,
+                    &ret_type.expr,
+                    &ast.expr_type,
+                    declarations,
+                    statements,
+                    expr_index,
+                    functions,
+                    function_index,
+                );
+                casted
+            } else {
+                panic!("Calling non-function `{}`", left.expr_type)
+            }
+        }
         &TypedExpression::BinOp(ref op, ref left, ref right) => {
             let left_c_ast = lift_expr(
                 left,
@@ -766,40 +836,17 @@ pub fn lift_expr(
                 real_types,
                 record_layouts,
             );
-            let right_c_ast = {
-                let right_c_ast = lift_expr(
-                    right,
-                    declarations,
-                    statements,
-                    expr_index,
-                    functions,
-                    function_index,
-                    externs,
-                    real_types,
-                    record_layouts,
-                );
-                match op {
-                    &BinOp::Call => {
-                        if let &EvaluatedType::Func(ref param_type, _) = &*left.expr_type {
-                            let (casted_ast, _) = maybe_cast_representation(
-                                right_c_ast,
-                                &right.expr_type,
-                                &param_type.expr,
-                                declarations,
-                                statements,
-                                expr_index,
-                                functions,
-                                function_index,
-                            );
-
-                            casted_ast
-                        } else {
-                            panic!("Calling non-function `{}`", left.expr_type)
-                        }
-                    }
-                    _ => right_c_ast,
-                }
-            };
+            let right_c_ast = lift_expr(
+                right,
+                declarations,
+                statements,
+                expr_index,
+                functions,
+                function_index,
+                externs,
+                real_types,
+                record_layouts,
+            );
 
             let result_name = get_expr_name("op_result", expr_index);
             let result_type = type_to_ctype(&ast.expr_type);
@@ -813,28 +860,8 @@ pub fn lift_expr(
                     type_to_ctype(&ast.expr_type),
                 )),
             )));
-            let result = ast.replace_untyped(CValue::Ident(result_name, result_type));
 
-            match op {
-                &BinOp::Call => {
-                    if let &EvaluatedType::Func(_, ref ret_type) = &*left.expr_type {
-                        let (casted, _) = maybe_cast_representation(
-                            result,
-                            &ret_type.expr,
-                            &ast.expr_type,
-                            declarations,
-                            statements,
-                            expr_index,
-                            functions,
-                            function_index,
-                        );
-                        casted
-                    } else {
-                        panic!("Calling non-function `{}`", left.expr_type)
-                    }
-                }
-                _ => result,
-            }
+            ast.replace_untyped(CValue::Ident(result_name, result_type))
         }
         &TypedExpression::If(ref condition, ref consequent, ref alternate) => {
             let condition_c_ast = lift_expr(
@@ -1272,8 +1299,7 @@ pub fn print_value(
             ));
 
             let has_next_cond_expr =
-                value_ast.replace_expr(CExpr::Not(value_ast.replace_expr(CExpr::BinOp(
-                    BinOp::Call,
+                value_ast.replace_expr(CExpr::Not(value_ast.replace_expr(CExpr::Call(
                     value_ast.replace_expr(CValue::DerefBound(
                         get_ident_name("is_empty"),
                         CType::Closure {

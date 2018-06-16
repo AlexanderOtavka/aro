@@ -1,5 +1,5 @@
 use std::str::FromStr;
-use untyped_ast::{Ast, Expression, BinOp, Value, Type, Pattern};
+use untyped_ast::{Ast, Expression, BinOp, RelOp, NumOp, Value, Type, Pattern};
 
 grammar;
 
@@ -33,27 +33,27 @@ Assignment = {
 
 Call = {
     <l:@L> <v:Call> "->" "*!" <x:Unary> <r:@R> => Ast::<Expression>::new(l, r, Expression::RefSet(x, v)),
-    <l:@L> <f:Call> "<|" <a:Comp> <r:@R> => Ast::<Expression>::new(l, r, Expression::BinOp(BinOp::Call, f, a)),
-    <l:@L> <a:Call> "|>" <f:Comp> <r:@R> => Ast::<Expression>::new(l, r, Expression::BinOp(BinOp::Call, f, a)),
+    <l:@L> <f:Call> "<|" <a:Comp> <r:@R> => Ast::<Expression>::new(l, r, Expression::Call(f, a)),
+    <l:@L> <a:Call> "|>" <f:Comp> <r:@R> => Ast::<Expression>::new(l, r, Expression::Call(f, a)),
     <l:@L> <f:Call> "<|" "type" <t:ValueType> <r:@R> => Ast::<Expression>::new(l, r, Expression::GenericCall(f, t)),
     <l:@L> "type" <t:ValueType> "|>" <f:Comp> <r:@R> => Ast::<Expression>::new(l, r, Expression::GenericCall(f, t)),
     Comp,
 };
 
 Comp = {
-    <l:@L> <a:Comp> "<=" <b:Arith> <r:@R> => Ast::<Expression>::new(l, r, Expression::BinOp(BinOp::LEq, a, b)),
+    <l:@L> <a:Comp> "<=" <b:Arith> <r:@R> => Ast::<Expression>::new(l, r, Expression::BinOp(BinOp::Rel(RelOp::LEq), a, b)),
     Arith,
 };
 
 Arith = {
-    <l:@L> <a:Arith> "+" <b:Factor> <r:@R> => Ast::<Expression>::new(l, r, Expression::BinOp(BinOp::Add, a, b)),
-    <l:@L> <a:Arith> "-" <b:Factor> <r:@R> => Ast::<Expression>::new(l, r, Expression::BinOp(BinOp::Sub, a, b)),
+    <l:@L> <a:Arith> "+" <b:Factor> <r:@R> => Ast::<Expression>::new(l, r, Expression::BinOp(BinOp::Num(NumOp::Add), a, b)),
+    <l:@L> <a:Arith> "-" <b:Factor> <r:@R> => Ast::<Expression>::new(l, r, Expression::BinOp(BinOp::Num(NumOp::Sub), a, b)),
     Factor,
 };
 
 Factor = {
-    <l:@L> <a:Factor> "*" <b:Value> <r:@R> => Ast::<Expression>::new(l, r, Expression::BinOp(BinOp::Mul, a, b)),
-    <l:@L> <a:Factor> "/" <b:Value> <r:@R> => Ast::<Expression>::new(l, r, Expression::BinOp(BinOp::Div, a, b)),
+    <l:@L> <a:Factor> "*" <b:Value> <r:@R> => Ast::<Expression>::new(l, r, Expression::BinOp(BinOp::Num(NumOp::Mul), a, b)),
+    <l:@L> <a:Factor> "/" <b:Value> <r:@R> => Ast::<Expression>::new(l, r, Expression::BinOp(BinOp::Num(NumOp::Div), a, b)),
     Unary,
 };
 

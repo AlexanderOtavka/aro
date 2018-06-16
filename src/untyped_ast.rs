@@ -20,6 +20,7 @@ pub enum Expression {
     If(Ast<Expression>, Ast<Expression>, Ast<Expression>),
     Ident(String),
     Let(Ast<Pattern>, Ast<Expression>, Ast<Expression>),
+    Call(Ast<Expression>, Ast<Expression>),
     GenericCall(Ast<Expression>, Ast<Type>),
     TypeLet(String, Ast<Type>, Ast<Expression>),
     Sequence(Ast<Expression>, Ast<Expression>),
@@ -31,12 +32,21 @@ pub enum Expression {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum BinOp {
+    Num(NumOp),
+    Rel(RelOp),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum NumOp {
     Add,
     Sub,
     Mul,
     Div,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum RelOp {
     LEq,
-    Call,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -156,25 +166,49 @@ impl<T: Display> Display for Ast<T> {
     }
 }
 
+impl Display for NumOp {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                &NumOp::Add => "+",
+                &NumOp::Sub => "-",
+                &NumOp::Mul => "*",
+                &NumOp::Div => "/",
+            }
+        )
+    }
+}
+
+impl Display for RelOp {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                &RelOp::LEq => "<=",
+            }
+        )
+    }
+}
+
+impl Display for BinOp {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            &BinOp::Num(ref op) => op.fmt(f),
+            &BinOp::Rel(ref op) => op.fmt(f),
+        }
+    }
+}
+
 impl Display for Expression {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             &Expression::Value(ref value) => value.fmt(f),
-            &Expression::BinOp(ref op, ref a, ref b) => write!(
-                f,
-                "({} {} {})",
-                a,
-                match op {
-                    &BinOp::Add => "+",
-                    &BinOp::Sub => "-",
-                    &BinOp::Mul => "*",
-                    &BinOp::Div => "/",
-                    &BinOp::LEq => "<=",
-                    &BinOp::Call => "<|",
-                },
-                b,
-            ),
+            &Expression::BinOp(ref op, ref a, ref b) => write!(f, "({} {} {})", a, op, b,),
             &Expression::GenericCall(ref e, ref t) => write!(f, "({} <| type {})", e, t),
+            &Expression::Call(ref e, ref a) => write!(f, "({} <| {})", e, a),
             &Expression::If(ref c, ref t, ref e) => write!(f, "(if {} then {} else {})", c, t, e),
             &Expression::Ident(ref n) => write!(f, "({})", n),
             &Expression::Let(ref p, ref v, ref e) => write!(f, "(let {} <- {} {})", p, v, e),

@@ -17,6 +17,7 @@ pub struct TypedAst<Expr> {
 pub enum TypedExpression {
     Value(TypedValue),
     BinOp(BinOp, TypedAst<TypedExpression>, TypedAst<TypedExpression>),
+    Call(TypedAst<TypedExpression>, TypedAst<TypedExpression>),
     If(
         TypedAst<TypedExpression>,
         TypedAst<TypedExpression>,

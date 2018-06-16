@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::f64;
 use std::iter::Iterator;
 use std::rc::Rc;
-use untyped_ast::{Ast, BinOp, Expression, Pattern, Type, Value};
+use untyped_ast::{Ast, BinOp, Expression, NumOp, Pattern, RelOp, Type, Value};
 use util::Error;
 
 fn evaluate_number_operator<F>(
@@ -163,6 +163,10 @@ fn substitute(
             &Expression::RecordAccess(ref record, ref field) => ast.replace_expr(
                 Expression::RecordAccess(substitute(record, pattern, value), field.clone()),
             ),
+            &Expression::Call(ref func, ref arg) => ast.replace_expr(Expression::Call(
+                substitute(func, pattern, value),
+                substitute(arg, pattern, value),
+            )),
             &Expression::BinOp(ref op, ref left, ref right) => ast.replace_expr(Expression::BinOp(
                 op.clone(),
                 substitute(left, pattern, value),
@@ -454,6 +458,45 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
         } else {
             ast.replace_expr(Expression::Sequence(step_ast(side_effect)?, result.clone()))
         }),
+        &Expression::Call(ref func_ast, ref arg_ast) => match (&*func_ast.expr, &*arg_ast.expr) {
+            (&Expression::Value(ref func), &Expression::Value(ref arg))
+                if func_ast.is_term() && arg_ast.is_term() =>
+            {
+                if let &Value::Hook(ref path, _) = func {
+                    match handle_hook_call(path, left_loc, right_loc, arg_ast, arg) {
+                        Some(result) => result,
+                        None => Err(Error::LRLocated {
+                            message: format!(
+                                "`{}` ain't gonna hook up with your ugly ass.\n\
+                                 'Cuz it's not a hook.",
+                                path.join(".")
+                            ),
+                            left_loc: func_ast.left_loc,
+                            right_loc: func_ast.right_loc,
+                        }),
+                    }
+                } else if let &Value::Func(ref pattern, _, ref body) = func {
+                    Ok(substitute(
+                        body,
+                        pattern,
+                        &arg_ast.replace_expr(Expression::Value(arg.clone())),
+                    ))
+                } else {
+                    Err(Error::LRLocated {
+                        message: String::from(
+                            "I only call two things on a regular basis: functions, and your mom.\
+                             \nThat's not a function.",
+                        ),
+                        left_loc,
+                        right_loc,
+                    })
+                }
+            }
+            (&Expression::Value(_), _) if func_ast.is_term() => {
+                Ok(ast.replace_expr(Expression::Call(func_ast.clone(), step_ast(arg_ast)?)))
+            }
+            _ => Ok(ast.replace_expr(Expression::Call(step_ast(func_ast)?, arg_ast.clone()))),
+        },
         &Expression::BinOp(ref operation, ref left_ast, ref right_ast) => match (
             &*left_ast.expr,
             &*right_ast.expr,
@@ -462,71 +505,46 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
                 if left_ast.is_term() && right_ast.is_term() =>
             {
                 match operation {
-                    &BinOp::Call => {
-                        if let &Value::Hook(ref path, _) = left {
-                            match handle_hook_call(path, left_loc, right_loc, right_ast, right) {
-                                Some(result) => result,
-                                None => Err(Error::LRLocated {
-                                    message: format!(
-                                        "`{}` ain't gonna hook up with your ugly ass.\n\
-                                         'Cuz it's not a hook.",
-                                        path.join(".")
-                                    ),
-                                    left_loc: left_ast.left_loc,
-                                    right_loc: left_ast.right_loc,
-                                }),
+                    &BinOp::Num(ref num_op) => match num_op {
+                        &NumOp::Add => evaluate_number_operator(ast, &left, &right, |a, b| a + b),
+                        &NumOp::Sub => evaluate_number_operator(ast, &left, &right, |a, b| a - b),
+                        &NumOp::Mul => evaluate_number_operator(ast, &left, &right, |a, b| a * b),
+                        &NumOp::Div => match (left, right) {
+                            (&Value::Int(left_value), &Value::Int(right_value)) => {
+                                Ok(ast.replace_expr(Expression::Value(Value::Num(
+                                    (left_value as f64) / (right_value as f64),
+                                ))))
                             }
-                        } else if let &Value::Func(ref pattern, _, ref body) = left {
-                            Ok(substitute(
-                                body,
-                                pattern,
-                                &right_ast.replace_expr(Expression::Value(right.clone())),
-                            ))
-                        } else {
-                            Err(Error::LRLocated {
-                                message: String::from(
-                                    "I only call two things on a regular basis: functions, and your mom.\
-                                    \nThat's not a function."
-                                ),
-                                left_loc,
-                                right_loc,
-                            })
-                        }
-                    }
-                    &BinOp::Add => evaluate_number_operator(ast, &left, &right, |a, b| a + b),
-                    &BinOp::Sub => evaluate_number_operator(ast, &left, &right, |a, b| a - b),
-                    &BinOp::Mul => evaluate_number_operator(ast, &left, &right, |a, b| a * b),
-                    &BinOp::Div => match (left, right) {
-                        (&Value::Int(left_value), &Value::Int(right_value)) => {
-                            Ok(ast.replace_expr(Expression::Value(Value::Num(
-                                (left_value as f64) / (right_value as f64),
-                            ))))
-                        }
-                        (left_value, right_value) => {
-                            evaluate_number_operator(ast, left_value, right_value, |a, b| a / b)
-                        }
+                            (left_value, right_value) => {
+                                evaluate_number_operator(ast, left_value, right_value, |a, b| a / b)
+                            }
+                        },
                     },
-                    &BinOp::LEq => Ok(ast.replace_expr(Expression::Value(Value::Bool(match (
-                        left, right,
-                    ) {
-                        (&Value::Int(left_value), &Value::Int(right_value)) => {
-                            Ok(left_value <= right_value)
-                        }
-                        (&Value::Num(left_value), &Value::Int(right_value)) => {
-                            Ok(left_value <= right_value as f64)
-                        }
-                        (&Value::Int(left_value), &Value::Num(right_value)) => {
-                            Ok(left_value as f64 <= right_value)
-                        }
-                        (&Value::Num(left_value), &Value::Num(right_value)) => {
-                            Ok(left_value <= right_value)
-                        }
-                        _ => Err(Error::LRLocated {
-                            message: String::from("Fuck off with your non-number bullshit."),
-                            left_loc,
-                            right_loc,
-                        }),
-                    }?)))),
+                    &BinOp::Rel(ref rel_op) => match rel_op {
+                        &RelOp::LEq => Ok(ast.replace_expr(Expression::Value(Value::Bool(
+                            match (left, right) {
+                                (&Value::Int(left_value), &Value::Int(right_value)) => {
+                                    Ok(left_value <= right_value)
+                                }
+                                (&Value::Num(left_value), &Value::Int(right_value)) => {
+                                    Ok(left_value <= right_value as f64)
+                                }
+                                (&Value::Int(left_value), &Value::Num(right_value)) => {
+                                    Ok(left_value as f64 <= right_value)
+                                }
+                                (&Value::Num(left_value), &Value::Num(right_value)) => {
+                                    Ok(left_value <= right_value)
+                                }
+                                _ => Err(Error::LRLocated {
+                                    message: String::from(
+                                        "Fuck off with your non-number bullshit.",
+                                    ),
+                                    left_loc,
+                                    right_loc,
+                                }),
+                            }?,
+                        )))),
+                    },
                 }
             }
             (&Expression::Value(_), _) if left_ast.is_term() => Ok(ast.replace_expr(

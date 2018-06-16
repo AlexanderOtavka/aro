@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::iter::Iterator;
 use typed_ast::{EvaluatedType, TypedAst, TypedExpression, TypedPattern, TypedValue};
-use untyped_ast::{Ast, BinOp, Expression, Pattern, Type, Value};
+use untyped_ast::{Ast, BinOp, Expression, NumOp, Pattern, RelOp, Type, Value};
 use util::Error;
 
 impl Error {
@@ -437,6 +437,10 @@ fn substitute_expr(ast: &Ast<Expression>, name: &str, value: &Ast<Type>) -> Ast<
         &Expression::GenericCall(ref expr, ref arg) => ast.replace_expr(Expression::GenericCall(
             substitute_expr(expr, name, value),
             substitute_raw_type(arg, name, value),
+        )),
+        &Expression::Call(ref func, ref arg) => ast.replace_expr(Expression::Call(
+            substitute_expr(func, name, value),
+            substitute_expr(arg, name, value),
         )),
         &Expression::BinOp(ref op, ref left, ref right) => ast.replace_expr(Expression::BinOp(
             op.clone(),
@@ -960,84 +964,92 @@ pub fn typecheck_ast(
         &Expression::TypeLet(ref name, ref value, ref body) => {
             typecheck_ast(&substitute_expr(body, name, value), env, real_types)
         }
-        &Expression::BinOp(ref operation, ref left, ref right) => match operation {
-            &BinOp::Call => {
-                let typechecked_left = typecheck_ast(left, env, real_types)?;
-                let typechecked_right = typecheck_ast(right, env, real_types)?;
+        &Expression::Call(ref func, ref arg) => {
+            let typechecked_func = typecheck_ast(func, env, real_types)?;
+            let typechecked_arg = typecheck_ast(arg, env, real_types)?;
 
-                if let EvaluatedType::Func(ref param_type, ref output_type) =
-                    *typechecked_left.expr_type.clone()
-                {
-                    if !typechecked_right.expr_type.is_sub_type(&param_type.expr) {
-                        Err(Error::type_error(
-                            right.left_loc,
-                            right.right_loc,
-                            &param_type.expr,
-                            &typechecked_right.expr_type,
-                        ))
-                    } else {
-                        Ok(ast.to_typed(
-                            TypedExpression::BinOp(
-                                operation.clone(),
-                                typechecked_left,
-                                typechecked_right,
-                            ),
-                            *output_type.expr.clone(),
-                        ))
-                    }
+            if let EvaluatedType::Func(ref param_type, ref output_type) =
+                *typechecked_func.expr_type.clone()
+            {
+                if !typechecked_arg.expr_type.is_sub_type(&param_type.expr) {
+                    Err(Error::type_error(
+                        arg.left_loc,
+                        arg.right_loc,
+                        &param_type.expr,
+                        &typechecked_arg.expr_type,
+                    ))
                 } else {
-                    Err(Error::LRLocated {
-                        message: format!(
-                            "I only call two things on a regular basis: functions, and your mom.\n\
-                             `{}` is not a function.",
-                            typechecked_left.expr_type
-                        ),
-                        left_loc: left.left_loc,
-                        right_loc: left.right_loc,
-                    })
+                    Ok(ast.to_typed(
+                        TypedExpression::Call(typechecked_func, typechecked_arg),
+                        *output_type.expr.clone(),
+                    ))
                 }
-            }
-            &BinOp::LEq => {
-                typecheck_numeric_bin_op(ast, operation, left, right, env, real_types, |_, _| {
-                    EvaluatedType::Bool
+            } else {
+                Err(Error::LRLocated {
+                    message: format!(
+                        "I only call two things on a regular basis: functions, and your mom.\n\
+                         `{}` is not a function.",
+                        typechecked_func.expr_type
+                    ),
+                    left_loc: func.left_loc,
+                    right_loc: func.right_loc,
                 })
             }
-            &BinOp::Div => {
-                typecheck_numeric_bin_op(ast, operation, left, right, env, real_types, |_, _| {
-                    EvaluatedType::Num
-                })
-            }
-            &BinOp::Add | &BinOp::Sub | &BinOp::Mul => typecheck_numeric_bin_op(
-                ast,
-                operation,
-                left,
-                right,
-                env,
-                real_types,
-                |left_type, right_type| match (left_type, right_type) {
-                    (&EvaluatedType::Int, &EvaluatedType::Int) => EvaluatedType::Int,
-                    (&EvaluatedType::Int, &EvaluatedType::Ident(ref name, ref supertype))
-                    | (&EvaluatedType::Ident(ref name, ref supertype), &EvaluatedType::Int) => {
-                        EvaluatedType::Ident(name.clone(), supertype.clone())
-                    }
-                    (
-                        &EvaluatedType::Ident(ref left_name, ref left_supertype),
-                        &EvaluatedType::Ident(ref right_name, ref right_supertype),
-                    ) => {
-                        if left_name == right_name {
-                            assert!(left_supertype == right_supertype);
-                            left_type.clone()
-                        } else if &*left_supertype.expr == &EvaluatedType::Int
-                            && &*right_supertype.expr == &EvaluatedType::Int
-                        {
-                            EvaluatedType::Int
-                        } else {
-                            EvaluatedType::Num
+        }
+        &Expression::BinOp(ref operation, ref left, ref right) => match operation {
+            &BinOp::Rel(ref rel_op) => match rel_op {
+                &RelOp::LEq => typecheck_numeric_bin_op(
+                    ast,
+                    operation,
+                    left,
+                    right,
+                    env,
+                    real_types,
+                    |_, _| EvaluatedType::Bool,
+                ),
+            },
+            &BinOp::Num(ref num_op) => match num_op {
+                &NumOp::Div => typecheck_numeric_bin_op(
+                    ast,
+                    operation,
+                    left,
+                    right,
+                    env,
+                    real_types,
+                    |_, _| EvaluatedType::Num,
+                ),
+                &NumOp::Add | &NumOp::Sub | &NumOp::Mul => typecheck_numeric_bin_op(
+                    ast,
+                    operation,
+                    left,
+                    right,
+                    env,
+                    real_types,
+                    |left_type, right_type| match (left_type, right_type) {
+                        (&EvaluatedType::Int, &EvaluatedType::Int) => EvaluatedType::Int,
+                        (&EvaluatedType::Int, &EvaluatedType::Ident(ref name, ref supertype))
+                        | (&EvaluatedType::Ident(ref name, ref supertype), &EvaluatedType::Int) => {
+                            EvaluatedType::Ident(name.clone(), supertype.clone())
                         }
-                    }
-                    _ => EvaluatedType::Num,
-                },
-            ),
+                        (
+                            &EvaluatedType::Ident(ref left_name, ref left_supertype),
+                            &EvaluatedType::Ident(ref right_name, ref right_supertype),
+                        ) => {
+                            if left_name == right_name {
+                                assert!(left_supertype == right_supertype);
+                                left_type.clone()
+                            } else if &*left_supertype.expr == &EvaluatedType::Int
+                                && &*right_supertype.expr == &EvaluatedType::Int
+                            {
+                                EvaluatedType::Int
+                            } else {
+                                EvaluatedType::Num
+                            }
+                        }
+                        _ => EvaluatedType::Num,
+                    },
+                ),
+            },
         },
         &Expression::RefNew(ref value) => {
             let typechecked_value = typecheck_ast(value, env, real_types)?;

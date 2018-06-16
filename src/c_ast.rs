@@ -2,7 +2,7 @@ use std::f64;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::iter::Iterator;
-use untyped_ast::{Ast, BinOp};
+use untyped_ast::{Ast, BinOp, NumOp};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum CType {
@@ -30,6 +30,7 @@ pub enum CValue {
 pub enum CExpr {
     Value(CValue),
     BinOp(BinOp, Ast<CValue>, Ast<CValue>, CType),
+    Call(Ast<CValue>, Ast<CValue>, CType),
     Not(Ast<CExpr>),
     AnyRefGet(Ast<CValue>, CType),
     ObjectAccess {
@@ -147,6 +148,7 @@ impl WellCTyped for CExpr {
                 ..
             }
             | &CExpr::BinOp(_, _, _, ref expr_type)
+            | &CExpr::Call(_, _, ref expr_type)
             | &CExpr::AnyRefGet(_, ref expr_type) => expr_type.clone(),
         }
     }
@@ -250,41 +252,31 @@ impl Display for CExpr {
                     ref value_type,
                 } => format!("({}{})", value, ctype_to_union_field(value_type)),
                 &CExpr::Value(ref value) => format!("{}", value),
-                &CExpr::BinOp(ref op, ref left, ref right, _) => match op {
-                    &BinOp::Add => format!("({} + {})", left, right),
-                    &BinOp::Sub => format!("({} - {})", left, right),
-                    &BinOp::Mul => format!("({} * {})", left, right),
-                    &BinOp::Div => format!(
-                        "(({}) {} / {})",
-                        ctype_to_string(&CType::Float, ""),
-                        left,
-                        right
+                &CExpr::BinOp(ref op, ref left, ref right, _) => format!(
+                    "({}{} {} {})",
+                    if op == &BinOp::Num(NumOp::Div) {
+                        format!("({}) ", ctype_to_string(&CType::Float, ""))
+                    } else {
+                        String::from("")
+                    },
+                    left,
+                    op,
+                    right
+                ),
+                &CExpr::Call(ref closure, ref arg, ref ret_type) => format!(
+                    "(*({}){}[0].Void_Ptr)({}, &{}[1])",
+                    ctype_to_string(
+                        &ret_type,
+                        &format!(
+                            "(*)({}, {})",
+                            ctype_to_string(&arg.expr.get_ctype(), ""),
+                            ctype_to_string(&CType::Object, ""),
+                        )
                     ),
-                    &BinOp::Call => {
-                        if let CType::Closure { ref param, ref ret } = left.expr.get_ctype() {
-                            format!(
-                                "(*({}){}[0].Void_Ptr)({}, &{}[1])",
-                                ctype_to_string(
-                                    &ret.expr,
-                                    &format!(
-                                        "(*)({}, {})",
-                                        ctype_to_string(&param.expr, ""),
-                                        ctype_to_string(&CType::Object, ""),
-                                    )
-                                ),
-                                left,
-                                right,
-                                left
-                            )
-                        } else {
-                            panic!(
-                                "Cannot do call with {}",
-                                ctype_to_string(&left.expr.get_ctype(), "")
-                            )
-                        }
-                    }
-                    &BinOp::LEq => format!("({} <= {})", left, right),
-                },
+                    closure,
+                    arg,
+                    closure
+                ),
                 &CExpr::Cast {
                     ref value,
                     ref to_type,
