@@ -1,6 +1,6 @@
 use c_ast::CName;
 use std::fmt::{self, Display, Formatter};
-use untyped_ast::Ast;
+use untyped_ast::{Ast, BinOp, NumOp, RelOp};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum WASMType {
@@ -20,6 +20,8 @@ pub enum WASMExpr {
     Const(WASMType, WASMValue),
     SetLocal(CName, Ast<WASMExpr>),
     GetLocal(CName),
+    BinOp(BinOp, Ast<WASMExpr>, Ast<WASMExpr>, WASMType),
+    PromoteInt(Ast<WASMExpr>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -71,6 +73,21 @@ impl Display for WASMExpr {
             }
             WASMExpr::GetLocal(ref name) => write!(f, "(get_local ${})", name),
             WASMExpr::SetLocal(ref name, ref value) => write!(f, "(set_local ${} {})", name, value),
+            WASMExpr::BinOp(ref op, ref left, ref right, ref result_type) => write!(
+                f,
+                "({}.{} {} {})",
+                result_type,
+                match op {
+                    BinOp::Num(NumOp::Add) => "add",
+                    BinOp::Num(NumOp::Sub) => "sub",
+                    BinOp::Num(NumOp::Mul) => "mul",
+                    BinOp::Num(NumOp::Div) => "div",
+                    BinOp::Rel(RelOp::LEq) => "le",
+                },
+                left,
+                right
+            ),
+            WASMExpr::PromoteInt(ref int) => write!(f, "(f64.convert_s/i32 {})", int),
         }
     }
 }
