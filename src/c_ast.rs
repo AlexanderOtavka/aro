@@ -11,7 +11,6 @@ pub enum CType {
     Bool,
     Object,
     Any,
-    VoidPtr,
     Ref(Box<CType>),
     Closure { param: Ast<CType>, ret: Ast<CType> },
 }
@@ -51,12 +50,16 @@ pub enum CExpr {
 #[derive(Debug, PartialEq, Clone)]
 pub enum CName {
     Expr(String, u64),
-    Func(u64),
-    AdaptorFunc(u64),
     Ident(String),
     Hook(Vec<String>),
     FuncArg,
     FuncCaptures,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum CFuncName {
+    Func(u64),
+    AdaptorFunc(u64),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -71,7 +74,7 @@ pub enum CStatement {
     AnyAssign(CName, Ast<CValue>),
     ClosureInit {
         name: CName,
-        function: Ast<CValue>,
+        function: CFuncName,
         captures: Vec<Ast<CValue>>,
     },
     ObjectInit {
@@ -87,7 +90,7 @@ pub enum CStatement {
 
 #[derive(Debug, Clone)]
 pub struct CFunc {
-    pub name: CName,
+    pub name: CFuncName,
     pub param: Ast<CType>,
     pub declarations: Vec<CDeclaration>,
     pub body: Vec<Ast<CStatement>>,
@@ -199,7 +202,6 @@ fn ctype_to_string(ctype: &CType, name: &str) -> String {
         &CType::Int => format!("int {}", name),
         &CType::Object => format!("_Aro_Object {}", name),
         &CType::Closure { .. } => format!("_Aro_Closure {}", name),
-        &CType::VoidPtr => format!("void* {}", name),
         &CType::Ref(ref contained) => format!("{}* {}", ctype_to_string(contained, ""), name),
     }
 }
@@ -211,7 +213,6 @@ fn ctype_to_union_field(ctype: &CType) -> &'static str {
         &CType::Bool => ".Bool",
         &CType::Object => ".Object",
         &CType::Closure { .. } => ".Closure",
-        &CType::VoidPtr => ".Void_Ptr",
         &CType::Ref(_) => ".Ref",
         &CType::Any => "",
     }
@@ -313,8 +314,6 @@ impl Display for CName {
             match self {
                 &CName::Hook(ref names) => get_hook_c_name(names),
                 &CName::Expr(ref name, index) => format!("_aro_expr_{}_{}", name, index),
-                &CName::Func(index) => format!("_aro_func_{}", index),
-                &CName::AdaptorFunc(index) => format!("_aro_func_adaptor_{}", index),
                 &CName::Ident(ref name) => {
                     // Replace trailing ! with __
                     if &name[name.len() - 1..] == "!" {
@@ -327,6 +326,15 @@ impl Display for CName {
                 &CName::FuncCaptures => String::from("_aro_captures"),
             }
         )
+    }
+}
+
+impl Display for CFuncName {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            &CFuncName::Func(index) => write!(f, "_aro_func_{}", index),
+            &CFuncName::AdaptorFunc(index) => write!(f, "_aro_func_adaptor_{}", index),
+        }
     }
 }
 
@@ -401,7 +409,6 @@ impl Display for CStatement {
                     CType::Closure { .. } => format!("printf(\"<Closure %p>\", {});", value),
                     CType::Object => format!("printf(\"<Object %p>\", {});", value),
                     CType::Ref(_) => format!("printf(\"<Ref %p>\", {});", value),
-                    CType::VoidPtr => format!("printf(\"%p\", {});", value),
                 },
                 &CStatement::PrintText(ref text) => format!("printf(\"{}\");", text),
             }

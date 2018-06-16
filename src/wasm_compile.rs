@@ -4,12 +4,9 @@ use wasm_ast::{WASMExpr, WASMLocal, WASMType, WASMValue};
 
 pub fn c_type_to_wasm(c_type: &CType) -> WASMType {
     match c_type {
-        &CType::Int
-        | &CType::Bool
-        | &CType::Closure { .. }
-        | &CType::Object
-        | &CType::Ref(_)
-        | &CType::VoidPtr => WASMType::I32,
+        &CType::Int | &CType::Bool | &CType::Closure { .. } | &CType::Object | &CType::Ref(_) => {
+            WASMType::I32
+        }
         &CType::Any => WASMType::I64,
         &CType::Float => WASMType::F64,
     }

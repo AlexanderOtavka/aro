@@ -1,4 +1,4 @@
-use c_ast::{CDeclaration, CExpr, CFunc, CName, CStatement, CType, CValue};
+use c_ast::{CDeclaration, CExpr, CFunc, CFuncName, CName, CStatement, CType, CValue};
 use std::collections::{HashMap, HashSet};
 use typed_ast::{EvaluatedType, TypedAst, TypedExpression, TypedPattern, TypedValue};
 use untyped_ast::Ast;
@@ -9,16 +9,16 @@ fn get_expr_name(name: &str, expr_index: &mut u64) -> CName {
     CName::Expr(String::from(name), old_i)
 }
 
-fn get_func_name(func_index: &mut u64) -> CName {
+fn get_func_name(func_index: &mut u64) -> CFuncName {
     let old_i = *func_index;
     *func_index += 1;
-    CName::Func(old_i)
+    CFuncName::Func(old_i)
 }
 
-fn get_adaptor_func_name(func_index: &mut u64) -> CName {
+fn get_adaptor_func_name(func_index: &mut u64) -> CFuncName {
     let old_i = *func_index;
     *func_index += 1;
-    CName::AdaptorFunc(old_i)
+    CFuncName::AdaptorFunc(old_i)
 }
 
 fn get_ident_name(name: &str) -> CName {
@@ -246,7 +246,7 @@ fn maybe_cast_representation(
                 ));
                 statements.push(from.replace_expr(CStatement::ClosureInit {
                     name: adaptor_closure_name.clone(),
-                    function: from.replace_expr(CValue::Ident(adaptor_func_name, CType::VoidPtr)),
+                    function: adaptor_func_name,
                     captures: vec![from.clone()],
                 }));
 
@@ -605,10 +605,7 @@ pub fn lift_expr(
                 statements.push(
                     ast.replace_untyped(CStatement::ClosureInit {
                         name: closure_name.clone(),
-                        function: ast.replace_untyped(CValue::Ident(
-                            func_name.clone(),
-                            CType::VoidPtr,
-                        )),
+                        function: func_name.clone(),
                         captures: captures_map
                             .into_iter()
                             .map(|(name, var_type)| {
