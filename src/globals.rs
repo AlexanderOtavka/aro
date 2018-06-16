@@ -135,7 +135,7 @@ pub fn get_globals_c_files(
          \n  int Int;\
          \n  double Float;\
          \n  union _Aro_Any* Object;\
-         \n  union _Aro_Any* Closure;\
+         \n  struct _Aro_Closure* Closure;\
          \n  void* Ref;\
          \n}} _Aro_Any, *_Aro_Object;\
          \n\
