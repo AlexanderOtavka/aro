@@ -792,7 +792,7 @@ pub fn lift_expr(
                 panic!("Calling non-function `{}`", left.expr_type)
             };
 
-            let result_name = get_expr_name("op_result", expr_index);
+            let result_name = get_expr_name("call_result", expr_index);
             let result_type = type_to_ctype(&ast.expr_type);
             declarations.push(CDeclaration(result_type.clone(), result_name.clone()));
             statements.push(ast.replace_untyped(CStatement::VarAssign(
