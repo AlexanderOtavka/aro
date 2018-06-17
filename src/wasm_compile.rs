@@ -1,8 +1,7 @@
 use c_ast::{CDeclaration, CExpr, CFuncName, CStatement, CType, CValue, WellCTyped};
 use untyped_ast::{Ast, BinOp, NumOp};
-use wasm_ast::{WASMExpr, WASMLocal, WASMType, WASMValue};
+use wasm_ast::{WASMDirectFuncName, WASMExpr, WASMLocal, WASMType, WASMValue};
 
-static PAGE_SIZE: i64 = 0x10_000; // WebAssembly page size defined at 64kb
 static OBJECT_ELEMENT_ALIGN: usize = 8; // The size of a union
 
 fn get_func_index(name: &CFuncName) -> u64 {
@@ -57,21 +56,23 @@ fn c_expr_to_wasm(c_expr: &Ast<CExpr>) -> Ast<WASMExpr> {
         }
         &CExpr::Call(ref closure, ref arg, ref ret_type) => {
             let closure_wasm = closure.replace_expr(c_value_to_wasm(&closure.expr));
-            WASMExpr::Call {
-                param_type: c_type_to_wasm(&arg.expr.get_ctype()),
+            WASMExpr::CallIndirect {
+                param_types: vec![c_type_to_wasm(&arg.expr.get_ctype()), WASMType::I32],
                 ret_type: c_type_to_wasm(ret_type),
                 function_index: closure
                     .replace_expr(WASMExpr::Load(WASMType::I32, closure_wasm.clone())),
-                arg: arg.replace_expr(c_value_to_wasm(&arg.expr)),
-                captures: closure.replace_expr(WASMExpr::BinOp(
-                    BinOp::Num(NumOp::Add),
-                    closure_wasm,
-                    closure.replace_expr(WASMExpr::Const(
+                args: vec![
+                    arg.replace_expr(c_value_to_wasm(&arg.expr)),
+                    closure.replace_expr(WASMExpr::BinOp(
+                        BinOp::Num(NumOp::Add),
+                        closure_wasm,
+                        closure.replace_expr(WASMExpr::Const(
+                            WASMType::I32,
+                            WASMValue::I32(OBJECT_ELEMENT_ALIGN as i64),
+                        )),
                         WASMType::I32,
-                        WASMValue::I32(OBJECT_ELEMENT_ALIGN as i64),
                     )),
-                    WASMType::I32,
-                )),
+                ],
             }
         }
         _ => panic!(),
@@ -110,20 +111,16 @@ fn flatten_c_statement(
             ref function,
             ref captures,
         } => {
-            // Allocate a new page and store the address in `name` local
+            // Allocate a new buffer and store the address in `name` local
             wasm_exprs.push(c_statement.replace_expr(WASMExpr::SetLocal(
                 name.clone(),
-                c_statement.replace_expr(
-                    WASMExpr::BinOp(
-                        BinOp::Num(NumOp::Mul),
-                        c_statement.replace_expr(WASMExpr::GrowMemory),
-                        c_statement.replace_expr(WASMExpr::Const(
-                            WASMType::I32,
-                            WASMValue::I32(PAGE_SIZE),
-                        )),
+                c_statement.replace_expr(WASMExpr::Call(
+                    WASMDirectFuncName::Alloc,
+                    vec![c_statement.replace_expr(WASMExpr::Const(
                         WASMType::I32,
-                    ),
-                ),
+                        WASMValue::I32(((captures.len() + 1) * OBJECT_ELEMENT_ALIGN) as i64),
+                    ))],
+                )),
             )));
 
             // Store the function index first in the closure

@@ -16,6 +16,11 @@ pub enum WASMValue {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub enum WASMDirectFuncName {
+    Alloc,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum WASMExpr {
     Const(WASMType, WASMValue),
     SetLocal(CName, Ast<WASMExpr>),
@@ -23,15 +28,14 @@ pub enum WASMExpr {
     BinOp(BinOp, Ast<WASMExpr>, Ast<WASMExpr>, WASMType),
     PromoteInt(Ast<WASMExpr>),
     If(Ast<WASMExpr>, Vec<Ast<WASMExpr>>, Vec<Ast<WASMExpr>>),
-    GrowMemory,
     Load(WASMType, Ast<WASMExpr>),
     Store(WASMType, Ast<WASMExpr>, Ast<WASMExpr>),
-    Call {
-        param_type: WASMType,
+    Call(WASMDirectFuncName, Vec<Ast<WASMExpr>>),
+    CallIndirect {
+        param_types: Vec<WASMType>,
         ret_type: WASMType,
         function_index: Ast<WASMExpr>,
-        arg: Ast<WASMExpr>,
-        captures: Ast<WASMExpr>,
+        args: Vec<Ast<WASMExpr>>,
     },
 }
 
@@ -50,6 +54,14 @@ pub struct WASMFunc {
 impl Display for WASMLocal {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "(local ${} {})", self.0, self.1)
+    }
+}
+
+impl Display for WASMDirectFuncName {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            WASMDirectFuncName::Alloc => write!(f, "$_alloc"),
+        }
     }
 }
 
@@ -149,7 +161,6 @@ impl WASMExpr {
                     get_indent(indent_level + 1),
                     sequence_to_str_indented(alternate, indent_level + 2),
                 ),
-                WASMExpr::GrowMemory => format!("(grow_memory (i32.const 1))"),
                 WASMExpr::Load(ref value_type, ref offset) => format!(
                     "({}.load\n{})",
                     value_type,
@@ -161,18 +172,25 @@ impl WASMExpr {
                     offset.get_str_indented(indent_level + 1),
                     value.get_str_indented(indent_level + 1)
                 ),
-                WASMExpr::Call {
-                    ref param_type,
+                WASMExpr::Call(ref name, ref args) => format!(
+                    "(call {}\n{})",
+                    name,
+                    sequence_to_str_indented(args, indent_level + 1)
+                ),
+                WASMExpr::CallIndirect {
+                    ref param_types,
                     ref ret_type,
                     ref function_index,
-                    ref arg,
-                    ref captures,
+                    ref args,
                 } => format!(
-                    "(call_indirect (param {} i32) (result {})\n{}\n{}\n{})",
-                    param_type,
+                    "(call_indirect (param {} i32) (result {})\n{}\n{})",
+                    param_types
+                        .into_iter()
+                        .map(|param_type| format!("{}", param_type))
+                        .collect::<Vec<String>>()
+                        .join(" "),
                     ret_type,
-                    arg.get_str_indented(indent_level + 1),
-                    captures.get_str_indented(indent_level + 1),
+                    sequence_to_str_indented(args, indent_level + 1),
                     function_index.get_str_indented(indent_level + 1)
                 ),
             }
