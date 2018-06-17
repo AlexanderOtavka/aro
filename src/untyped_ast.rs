@@ -5,6 +5,7 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::iter::Iterator;
 use std::rc::Rc;
+use util::sequence_to_str;
 
 #[derive(Debug, Clone)]
 pub struct Ast<T> {
@@ -144,20 +145,6 @@ impl<T: PartialEq> PartialEq for Ast<T> {
     fn eq(&self, other: &Ast<T>) -> bool {
         self.expr == other.expr
     }
-}
-
-fn sequence_to_str<T: Display>(start: &str, sequence: &Vec<T>, end: &str) -> String {
-    let mut string = String::new();
-
-    if sequence.len() >= 1 {
-        string += &format!("{}", sequence[0]);
-
-        for element in &sequence[1..] {
-            string += &format!(" {}", element);
-        }
-    }
-
-    format!("{}{}{}", start, string, end)
 }
 
 impl<T: Display> Display for Ast<T> {

@@ -1,4 +1,19 @@
 use std::cmp::min;
+use std::fmt::Display;
+
+pub fn sequence_to_str<T: Display>(start: &str, sequence: &Vec<T>, end: &str) -> String {
+    let mut string = String::new();
+
+    if sequence.len() >= 1 {
+        string += &format!("{}", sequence[0]);
+
+        for element in &sequence[1..] {
+            string += &format!(" {}", element);
+        }
+    }
+
+    format!("{}{}{}", start, string, end)
+}
 
 #[derive(Debug)]
 pub enum Error {

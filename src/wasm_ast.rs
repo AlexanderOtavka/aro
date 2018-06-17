@@ -1,6 +1,7 @@
 use c_ast::CName;
 use std::fmt::{self, Display, Formatter};
 use untyped_ast::{Ast, BinOp, NumOp, RelOp};
+use util::sequence_to_str;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum WASMType {
@@ -22,6 +23,7 @@ pub enum WASMExpr {
     GetLocal(CName),
     BinOp(BinOp, Ast<WASMExpr>, Ast<WASMExpr>, WASMType),
     PromoteInt(Ast<WASMExpr>),
+    If(Ast<WASMExpr>, Vec<Ast<WASMExpr>>, Vec<Ast<WASMExpr>>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -82,12 +84,19 @@ impl Display for WASMExpr {
                     BinOp::Num(NumOp::Sub) => "sub",
                     BinOp::Num(NumOp::Mul) => "mul",
                     BinOp::Num(NumOp::Div) => "div",
-                    BinOp::Rel(RelOp::LEq) => "le",
+                    BinOp::Rel(RelOp::LEq) => "le_s",
                 },
                 left,
                 right
             ),
             WASMExpr::PromoteInt(ref int) => write!(f, "(f64.convert_s/i32 {})", int),
+            WASMExpr::If(ref condition, ref consequent, ref alternate) => write!(
+                f,
+                "(if {} (then {}) (else {}))",
+                condition,
+                sequence_to_str("", consequent, ""),
+                sequence_to_str("", alternate, ""),
+            ),
         }
     }
 }

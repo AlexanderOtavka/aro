@@ -50,6 +50,37 @@ fn c_expr_to_wasm(c_expr: &Ast<CExpr>) -> Ast<WASMExpr> {
     })
 }
 
+fn flatten_c_statement(
+    c_statement: &Ast<CStatement>,
+    wasm_locals: &mut Vec<WASMLocal>,
+    wasm_exprs: &mut Vec<Ast<WASMExpr>>,
+) {
+    match &*c_statement.expr {
+        CStatement::VarAssign(ref name, ref expr) => {
+            wasm_exprs.push(
+                c_statement.replace_expr(WASMExpr::SetLocal(name.clone(), c_expr_to_wasm(expr))),
+            );
+        }
+        CStatement::If(ref condition, ref consequent, ref alternate) => {
+            let mut consequent_exprs = Vec::new();
+            let mut alternate_exprs = Vec::new();
+
+            flatten_c_statement(consequent, wasm_locals, &mut consequent_exprs);
+            flatten_c_statement(alternate, wasm_locals, &mut alternate_exprs);
+
+            wasm_exprs.push(c_statement.replace_expr(WASMExpr::If(
+                condition.replace_expr(c_value_to_wasm(&condition.expr)),
+                consequent_exprs,
+                alternate_exprs,
+            )));
+        }
+        CStatement::Block(ref c_declarations, ref c_statements) => {
+            flatten_c_block(c_declarations, c_statements, wasm_locals, wasm_exprs);
+        }
+        _ => panic!(),
+    };
+}
+
 pub fn flatten_c_block(
     c_declarations: &Vec<CDeclaration>,
     c_statements: &Vec<Ast<CStatement>>,
@@ -64,11 +95,6 @@ pub fn flatten_c_block(
     }
 
     for statement in c_statements {
-        wasm_exprs.push(statement.replace_expr(match &*statement.expr {
-            CStatement::VarAssign(ref name, ref expr) => {
-                WASMExpr::SetLocal(name.clone(), c_expr_to_wasm(expr))
-            }
-            _ => panic!(),
-        }))
+        flatten_c_statement(statement, wasm_locals, wasm_exprs);
     }
 }
