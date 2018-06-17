@@ -24,6 +24,16 @@ pub enum WASMExpr {
     BinOp(BinOp, Ast<WASMExpr>, Ast<WASMExpr>, WASMType),
     PromoteInt(Ast<WASMExpr>),
     If(Ast<WASMExpr>, Vec<Ast<WASMExpr>>, Vec<Ast<WASMExpr>>),
+    GrowMemory,
+    Load(WASMType, Ast<WASMExpr>),
+    Store(WASMType, Ast<WASMExpr>, Ast<WASMExpr>),
+    Call {
+        param_type: WASMType,
+        ret_type: WASMType,
+        function_index: Ast<WASMExpr>,
+        arg: Ast<WASMExpr>,
+        captures: Ast<WASMExpr>,
+    },
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -96,6 +106,24 @@ impl Display for WASMExpr {
                 condition,
                 sequence_to_str("", consequent, ""),
                 sequence_to_str("", alternate, ""),
+            ),
+            WASMExpr::GrowMemory => write!(f, "(grow_memory (i32.const 1))"),
+            WASMExpr::Load(ref value_type, ref offset) => {
+                write!(f, "({}.load {})", value_type, offset)
+            }
+            WASMExpr::Store(ref value_type, ref offset, ref value) => {
+                write!(f, "({}.load {} {})", value_type, offset, value)
+            }
+            WASMExpr::Call {
+                ref param_type,
+                ref ret_type,
+                ref function_index,
+                ref arg,
+                ref captures,
+            } => write!(
+                f,
+                "(call_indirect (param {} i32) (result {}) {} {} {})",
+                param_type, ret_type, arg, captures, function_index
             ),
         }
     }

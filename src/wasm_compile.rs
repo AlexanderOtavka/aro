@@ -1,6 +1,15 @@
-use c_ast::{CDeclaration, CExpr, CStatement, CType, CValue, WellCTyped};
-use untyped_ast::Ast;
+use c_ast::{CDeclaration, CExpr, CFuncName, CStatement, CType, CValue, WellCTyped};
+use untyped_ast::{Ast, BinOp, NumOp};
 use wasm_ast::{WASMExpr, WASMLocal, WASMType, WASMValue};
+
+static PAGE_SIZE: i64 = 0x10_000; // WebAssembly page size defined at 64kb
+static OBJECT_ELEMENT_ALIGN: usize = 8; // The size of a union
+
+fn get_func_index(name: &CFuncName) -> u64 {
+    match name {
+        CFuncName::Func(index) | CFuncName::AdaptorFunc(index) => *index,
+    }
+}
 
 pub fn c_type_to_wasm(c_type: &CType) -> WASMType {
     match c_type {
@@ -46,6 +55,25 @@ fn c_expr_to_wasm(c_expr: &Ast<CExpr>) -> Ast<WASMExpr> {
 
             WASMExpr::BinOp(op.clone(), casted_left, casted_right, op_wasm_type)
         }
+        &CExpr::Call(ref closure, ref arg, ref ret_type) => {
+            let closure_wasm = closure.replace_expr(c_value_to_wasm(&closure.expr));
+            WASMExpr::Call {
+                param_type: c_type_to_wasm(&arg.expr.get_ctype()),
+                ret_type: c_type_to_wasm(ret_type),
+                function_index: closure
+                    .replace_expr(WASMExpr::Load(WASMType::I32, closure_wasm.clone())),
+                arg: arg.replace_expr(c_value_to_wasm(&arg.expr)),
+                captures: closure.replace_expr(WASMExpr::BinOp(
+                    BinOp::Num(NumOp::Add),
+                    closure_wasm,
+                    closure.replace_expr(WASMExpr::Const(
+                        WASMType::I32,
+                        WASMValue::I32(OBJECT_ELEMENT_ALIGN as i64),
+                    )),
+                    WASMType::I32,
+                )),
+            }
+        }
         _ => panic!(),
     })
 }
@@ -76,6 +104,52 @@ fn flatten_c_statement(
         }
         CStatement::Block(ref c_declarations, ref c_statements) => {
             flatten_c_block(c_declarations, c_statements, wasm_locals, wasm_exprs);
+        }
+        CStatement::ClosureInit {
+            ref name,
+            ref function,
+            ref captures,
+        } => {
+            // Allocate a new page and store the address in `name` local
+            wasm_exprs.push(c_statement.replace_expr(WASMExpr::SetLocal(
+                name.clone(),
+                c_statement.replace_expr(
+                    WASMExpr::BinOp(
+                        BinOp::Num(NumOp::Mul),
+                        c_statement.replace_expr(WASMExpr::GrowMemory),
+                        c_statement.replace_expr(WASMExpr::Const(
+                            WASMType::I32,
+                            WASMValue::I32(PAGE_SIZE),
+                        )),
+                        WASMType::I32,
+                    ),
+                ),
+            )));
+
+            wasm_exprs.push(c_statement.replace_expr(WASMExpr::Store(
+                WASMType::I32,
+                c_statement.replace_expr(WASMExpr::GetLocal(name.clone())),
+                c_statement.replace_expr(WASMExpr::Const(
+                    WASMType::I32,
+                    WASMValue::I32(get_func_index(function) as i64),
+                )),
+            )));
+
+            for (index, capture) in captures.into_iter().enumerate() {
+                wasm_exprs.push(capture.replace_expr(WASMExpr::Store(
+                    c_type_to_wasm(&capture.expr.get_ctype()),
+                    capture.replace_expr(WASMExpr::BinOp(
+                        BinOp::Num(NumOp::Add),
+                        capture.replace_expr(WASMExpr::GetLocal(name.clone())),
+                        capture.replace_expr(WASMExpr::Const(
+                            WASMType::I32,
+                            WASMValue::I32((index * OBJECT_ELEMENT_ALIGN) as i64),
+                        )),
+                        WASMType::I32,
+                    )),
+                    capture.replace_expr(c_value_to_wasm(&capture.expr)),
+                )));
+            }
         }
         _ => panic!(),
     };
