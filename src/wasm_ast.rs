@@ -1,7 +1,6 @@
 use c_ast::CName;
 use std::fmt::{self, Display, Formatter};
 use untyped_ast::{Ast, BinOp, NumOp, RelOp};
-use util::sequence_to_str;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum WASMType {
@@ -77,54 +76,106 @@ impl Display for WASMType {
     }
 }
 
-impl Display for WASMExpr {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            WASMExpr::Const(ref value_type, ref value) => {
-                write!(f, "({}.const {})", value_type, value)
-            }
-            WASMExpr::GetLocal(ref name) => write!(f, "(get_local ${})", name),
-            WASMExpr::SetLocal(ref name, ref value) => write!(f, "(set_local ${} {})", name, value),
-            WASMExpr::BinOp(ref op, ref left, ref right, ref result_type) => write!(
-                f,
-                "({}.{} {} {})",
-                result_type,
-                match op {
-                    BinOp::Num(NumOp::Add) => "add",
-                    BinOp::Num(NumOp::Sub) => "sub",
-                    BinOp::Num(NumOp::Mul) => "mul",
-                    BinOp::Num(NumOp::Div) => "div",
-                    BinOp::Rel(RelOp::LEq) => "le_s",
-                },
-                left,
-                right
-            ),
-            WASMExpr::PromoteInt(ref int) => write!(f, "(f64.convert_s/i32 {})", int),
-            WASMExpr::If(ref condition, ref consequent, ref alternate) => write!(
-                f,
-                "(if {} (then {}) (else {}))",
-                condition,
-                sequence_to_str("", consequent, ""),
-                sequence_to_str("", alternate, ""),
-            ),
-            WASMExpr::GrowMemory => write!(f, "(grow_memory (i32.const 1))"),
-            WASMExpr::Load(ref value_type, ref offset) => {
-                write!(f, "({}.load {})", value_type, offset)
-            }
-            WASMExpr::Store(ref value_type, ref offset, ref value) => {
-                write!(f, "({}.load {} {})", value_type, offset, value)
-            }
-            WASMExpr::Call {
-                ref param_type,
-                ref ret_type,
-                ref function_index,
-                ref arg,
-                ref captures,
-            } => write!(
-                f,
-                "(call_indirect (param {} i32) (result {}) {} {} {})",
-                param_type, ret_type, arg, captures, function_index
-            ),
+fn get_indent(indent_level: u32) -> String {
+    let mut indent = String::new();
+
+    for _ in 0..indent_level {
+        indent += "  ";
+    }
+
+    indent
+}
+
+fn sequence_to_str_indented(sequence: &Vec<Ast<WASMExpr>>, indent_level: u32) -> String {
+    let mut string = String::new();
+
+    let mut is_first = false;
+    for element in sequence {
+        if is_first {
+            is_first = false;
+        } else {
+            string += "\n";
         }
+
+        string += &element.get_str_indented(indent_level);
+    }
+
+    string
+}
+
+impl Ast<WASMExpr> {
+    pub fn get_str_indented(&self, indent_level: u32) -> String {
+        self.expr.get_str_indented(indent_level)
+    }
+}
+
+impl WASMExpr {
+    pub fn get_str_indented(&self, indent_level: u32) -> String {
+        format!(
+            "{}{}",
+            get_indent(indent_level),
+            match self {
+                WASMExpr::Const(ref value_type, ref value) => {
+                    format!("({}.const {})", value_type, value)
+                }
+                WASMExpr::GetLocal(ref name) => format!("(get_local ${})", name),
+                WASMExpr::SetLocal(ref name, ref value) => format!(
+                    "(set_local ${}\n{})",
+                    name,
+                    value.get_str_indented(indent_level + 1)
+                ),
+                WASMExpr::BinOp(ref op, ref left, ref right, ref result_type) => format!(
+                    "({}.{}\n{}\n{})",
+                    result_type,
+                    match op {
+                        BinOp::Num(NumOp::Add) => "add",
+                        BinOp::Num(NumOp::Sub) => "sub",
+                        BinOp::Num(NumOp::Mul) => "mul",
+                        BinOp::Num(NumOp::Div) => "div",
+                        BinOp::Rel(RelOp::LEq) => "le_s",
+                    },
+                    left.get_str_indented(indent_level + 1),
+                    right.get_str_indented(indent_level + 1)
+                ),
+                WASMExpr::PromoteInt(ref int) => format!(
+                    "(f64.convert_s/i32\n{})",
+                    int.get_str_indented(indent_level + 1)
+                ),
+                WASMExpr::If(ref condition, ref consequent, ref alternate) => format!(
+                    "(if\n{}\n{}(then {})\n{}(else {}))",
+                    condition.get_str_indented(indent_level + 1),
+                    get_indent(indent_level + 1),
+                    sequence_to_str_indented(consequent, indent_level + 2),
+                    get_indent(indent_level + 1),
+                    sequence_to_str_indented(alternate, indent_level + 2),
+                ),
+                WASMExpr::GrowMemory => format!("(grow_memory (i32.const 1))"),
+                WASMExpr::Load(ref value_type, ref offset) => format!(
+                    "({}.load\n{})",
+                    value_type,
+                    offset.get_str_indented(indent_level + 1)
+                ),
+                WASMExpr::Store(ref value_type, ref offset, ref value) => format!(
+                    "({}.load\n{}\n{})",
+                    value_type,
+                    offset.get_str_indented(indent_level + 1),
+                    value.get_str_indented(indent_level + 1)
+                ),
+                WASMExpr::Call {
+                    ref param_type,
+                    ref ret_type,
+                    ref function_index,
+                    ref arg,
+                    ref captures,
+                } => format!(
+                    "(call_indirect (param {} i32) (result {})\n{}\n{}\n{})",
+                    param_type,
+                    ret_type,
+                    arg.get_str_indented(indent_level + 1),
+                    captures.get_str_indented(indent_level + 1),
+                    function_index.get_str_indented(indent_level + 1)
+                ),
+            }
+        )
     }
 }
