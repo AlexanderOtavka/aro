@@ -126,6 +126,7 @@ fn flatten_c_statement(
                 ),
             )));
 
+            // Store the function index first in the closure
             wasm_exprs.push(c_statement.replace_expr(WASMExpr::Store(
                 WASMType::I32,
                 c_statement.replace_expr(WASMExpr::GetLocal(name.clone())),
@@ -135,6 +136,8 @@ fn flatten_c_statement(
                 )),
             )));
 
+            // Fill the rest of the closure with captures aligned at
+            // OBJECT_ELEMENT_ALIGN
             for (index, capture) in captures.into_iter().enumerate() {
                 wasm_exprs.push(capture.replace_expr(WASMExpr::Store(
                     c_type_to_wasm(&capture.expr.get_ctype()),
