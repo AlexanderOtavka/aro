@@ -368,34 +368,32 @@ fn wasm_compile_source(input: &str) -> Result<String, Error> {
          \n      (get_global $_last_alloc)\
          \n      (get_local $size))))\
          \n\
-         \n(table anyfunc (elem\n{}))\
-         \n\
+         \n(table anyfunc (elem{}))\
          \n{}\
-         \n\
-         \n(func (export \"main\") (result {})\n{}\n\n{}\n\n{})",
+         \n(func (export \"main\") (result {}){}\n{}{})",
         env!("CARGO_PKG_NAME"),
         env!("CARGO_PKG_VERSION"),
         wasm_functions
             .iter()
-            .map(|wasm_func| format!("  ${}", wasm_func.name))
+            .map(|wasm_func| format!("\n  ${}", wasm_func.name))
             .collect::<Vec<String>>()
-            .join("\n"),
+            .join(""),
         wasm_functions
             .iter()
-            .map(|wasm_func| format!("{}", wasm_func))
+            .map(|wasm_func| format!("\n{}\n", wasm_func))
             .collect::<Vec<String>>()
-            .join("\n\n"),
+            .join(""),
         wasm_compile::c_type_to_wasm(&c_compile::type_to_ctype(&typechecked_ast.expr_type)),
         wasm_locals
             .into_iter()
-            .map(|local| format!("  {}", local))
+            .map(|local| format!("\n  {}", local))
             .collect::<Vec<String>>()
-            .join("\n"),
+            .join(""),
         wasm_exprs
             .into_iter()
             .map(|expr| expr.get_str_indented(1))
             .collect::<Vec<String>>()
-            .join("\n"),
+            .join(""),
         wasm_compile::c_value_to_wasm(&value).get_str_indented(1)
     ))
 }

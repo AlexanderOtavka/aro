@@ -89,7 +89,7 @@ impl Display for WASMType {
 }
 
 fn get_indent(indent_level: u32) -> String {
-    let mut indent = String::new();
+    let mut indent = String::from("\n");
 
     for _ in 0..indent_level {
         indent += "  ";
@@ -101,14 +101,7 @@ fn get_indent(indent_level: u32) -> String {
 fn sequence_to_str_indented(sequence: &Vec<Ast<WASMExpr>>, indent_level: u32) -> String {
     let mut string = String::new();
 
-    let mut is_first = true;
     for element in sequence {
-        if is_first {
-            is_first = false;
-        } else {
-            string += "\n";
-        }
-
         string += &element.get_str_indented(indent_level);
     }
 
@@ -132,12 +125,12 @@ impl WASMExpr {
                 }
                 WASMExpr::GetLocal(ref name) => format!("(get_local ${})", name),
                 WASMExpr::SetLocal(ref name, ref value) => format!(
-                    "(set_local ${}\n{})",
+                    "(set_local ${}{})",
                     name,
                     value.get_str_indented(indent_level + 1)
                 ),
                 WASMExpr::BinOp(ref op, ref left, ref right, ref result_type) => format!(
-                    "({}.{}\n{}\n{})",
+                    "({}.{}{}{})",
                     result_type,
                     match op {
                         BinOp::Num(NumOp::Add) => "add",
@@ -150,11 +143,11 @@ impl WASMExpr {
                     right.get_str_indented(indent_level + 1)
                 ),
                 WASMExpr::PromoteInt(ref int) => format!(
-                    "(f64.convert_s/i32\n{})",
+                    "(f64.convert_s/i32{})",
                     int.get_str_indented(indent_level + 1)
                 ),
                 WASMExpr::If(ref condition, ref consequent, ref alternate) => format!(
-                    "(if\n{}\n{}(then\n{})\n{}(else\n{}))",
+                    "(if{}{}(then{}){}(else{}))",
                     condition.get_str_indented(indent_level + 1),
                     get_indent(indent_level + 1),
                     sequence_to_str_indented(consequent, indent_level + 2),
@@ -162,18 +155,18 @@ impl WASMExpr {
                     sequence_to_str_indented(alternate, indent_level + 2),
                 ),
                 WASMExpr::Load(ref value_type, ref offset) => format!(
-                    "({}.load\n{})",
+                    "({}.load{})",
                     value_type,
                     offset.get_str_indented(indent_level + 1)
                 ),
                 WASMExpr::Store(ref value_type, ref offset, ref value) => format!(
-                    "({}.store\n{}\n{})",
+                    "({}.store{}{})",
                     value_type,
                     offset.get_str_indented(indent_level + 1),
                     value.get_str_indented(indent_level + 1)
                 ),
                 WASMExpr::Call(ref name, ref args) => format!(
-                    "(call {}\n{})",
+                    "(call {}{})",
                     name,
                     sequence_to_str_indented(args, indent_level + 1)
                 ),
@@ -183,7 +176,7 @@ impl WASMExpr {
                     ref function_index,
                     ref args,
                 } => format!(
-                    "(call_indirect (param {}) (result {})\n{}\n{})",
+                    "(call_indirect (param {}) (result {}){}{})",
                     param_types
                         .into_iter()
                         .map(|param_type| format!("{}", param_type))
@@ -202,7 +195,7 @@ impl Display for WASMFunc {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
-            "(func ${} {} (result {})\n{}\n\n{})",
+            "(func ${} {} (result {}){}\n{})",
             self.name,
             self.params
                 .iter()
@@ -212,14 +205,10 @@ impl Display for WASMFunc {
             self.result,
             self.locals
                 .iter()
-                .map(|local| format!("  {}", local))
+                .map(|local| format!("\n  {}", local))
                 .collect::<Vec<String>>()
-                .join("\n"),
-            self.body
-                .iter()
-                .map(|expr| expr.get_str_indented(1))
-                .collect::<Vec<String>>()
-                .join("\n"),
+                .join(""),
+            sequence_to_str_indented(&self.body, 1)
         )
     }
 }
