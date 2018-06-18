@@ -368,14 +368,15 @@ fn wasm_compile_source(input: &str) -> Result<String, Error> {
          \n      (get_global $_last_alloc)\
          \n      (get_local $size))))\
          \n\
-         \n(table anyfunc (elem{}))\
+         \n(table anyfunc\
+         \n  (elem{}))\
          \n{}\
          \n(func (export \"main\") (result {}){}\n{}{})",
         env!("CARGO_PKG_NAME"),
         env!("CARGO_PKG_VERSION"),
         wasm_functions
             .iter()
-            .map(|wasm_func| format!("\n  ${}", wasm_func.name))
+            .map(|wasm_func| format!("\n    ${}", wasm_func.name))
             .collect::<Vec<String>>()
             .join(""),
         wasm_functions
