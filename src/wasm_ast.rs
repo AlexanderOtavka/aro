@@ -1,4 +1,4 @@
-use c_ast::CName;
+use c_ast::{CFuncName, CName};
 use std::fmt::{self, Display, Formatter};
 use untyped_ast::{Ast, BinOp, NumOp, RelOp};
 
@@ -44,11 +44,11 @@ pub struct WASMLocal(pub CName, pub WASMType);
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct WASMFunc {
-    name: CName,
-    param: Ast<WASMType>,
-    locals: Vec<WASMLocal>,
-    body: Vec<Ast<WASMExpr>>,
-    ret: Ast<WASMExpr>,
+    pub name: CFuncName,
+    pub params: Vec<(CName, WASMType)>,
+    pub result: WASMType,
+    pub locals: Vec<WASMLocal>,
+    pub body: Vec<Ast<WASMExpr>>,
 }
 
 impl Display for WASMLocal {
@@ -101,7 +101,7 @@ fn get_indent(indent_level: u32) -> String {
 fn sequence_to_str_indented(sequence: &Vec<Ast<WASMExpr>>, indent_level: u32) -> String {
     let mut string = String::new();
 
-    let mut is_first = false;
+    let mut is_first = true;
     for element in sequence {
         if is_first {
             is_first = false;
@@ -154,7 +154,7 @@ impl WASMExpr {
                     int.get_str_indented(indent_level + 1)
                 ),
                 WASMExpr::If(ref condition, ref consequent, ref alternate) => format!(
-                    "(if\n{}\n{}(then {})\n{}(else {}))",
+                    "(if\n{}\n{}(then\n{})\n{}(else\n{}))",
                     condition.get_str_indented(indent_level + 1),
                     get_indent(indent_level + 1),
                     sequence_to_str_indented(consequent, indent_level + 2),
@@ -167,7 +167,7 @@ impl WASMExpr {
                     offset.get_str_indented(indent_level + 1)
                 ),
                 WASMExpr::Store(ref value_type, ref offset, ref value) => format!(
-                    "({}.load\n{}\n{})",
+                    "({}.store\n{}\n{})",
                     value_type,
                     offset.get_str_indented(indent_level + 1),
                     value.get_str_indented(indent_level + 1)
@@ -183,7 +183,7 @@ impl WASMExpr {
                     ref function_index,
                     ref args,
                 } => format!(
-                    "(call_indirect (param {} i32) (result {})\n{}\n{})",
+                    "(call_indirect (param {}) (result {})\n{}\n{})",
                     param_types
                         .into_iter()
                         .map(|param_type| format!("{}", param_type))
@@ -194,6 +194,32 @@ impl WASMExpr {
                     function_index.get_str_indented(indent_level + 1)
                 ),
             }
+        )
+    }
+}
+
+impl Display for WASMFunc {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "(func ${} {} (result {})\n{}\n\n{})",
+            self.name,
+            self.params
+                .iter()
+                .map(|(name, param_type)| format!("(param ${} {})", name, param_type))
+                .collect::<Vec<String>>()
+                .join(" "),
+            self.result,
+            self.locals
+                .iter()
+                .map(|local| format!("  {}", local))
+                .collect::<Vec<String>>()
+                .join("\n"),
+            self.body
+                .iter()
+                .map(|expr| expr.get_str_indented(1))
+                .collect::<Vec<String>>()
+                .join("\n"),
         )
     }
 }
