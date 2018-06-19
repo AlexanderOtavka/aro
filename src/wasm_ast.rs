@@ -17,7 +17,7 @@ pub enum WASMValue {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum WASMDirectFuncName {
-    Alloc,
+    HeapAlloc,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -60,7 +60,7 @@ impl Display for WASMLocal {
 impl Display for WASMDirectFuncName {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            WASMDirectFuncName::Alloc => write!(f, "$_alloc"),
+            WASMDirectFuncName::HeapAlloc => write!(f, "$_alloc"),
         }
     }
 }

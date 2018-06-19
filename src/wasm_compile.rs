@@ -136,11 +136,11 @@ fn flatten_c_statement(
             ref function,
             ref captures,
         } => {
-            // Allocate a new buffer and store the address in `name` local
+            // Heap allocate a new buffer and store the address in `name` local
             wasm_exprs.push(c_statement.replace_expr(WASMExpr::SetLocal(
                 name.clone(),
                 c_statement.replace_expr(WASMExpr::Call(
-                    WASMDirectFuncName::Alloc,
+                    WASMDirectFuncName::HeapAlloc,
                     vec![c_statement.replace_expr(WASMExpr::Const(
                         WASMType::I32,
                         WASMValue::I32(((captures.len() + 1) * UNIVERSAL_ALIGN) as i64),
@@ -177,11 +177,11 @@ fn flatten_c_statement(
             }
         }
         &CStatement::RefAlloc(ref name, _) => {
-            // Allocate a new buffer and store the address in `name` local
+            // Heap allocate a new buffer and store the address in `name` local
             wasm_exprs.push(c_statement.replace_expr(WASMExpr::SetLocal(
                 name.clone(),
                 c_statement.replace_expr(WASMExpr::Call(
-                    WASMDirectFuncName::Alloc,
+                    WASMDirectFuncName::HeapAlloc,
                     vec![c_statement.replace_expr(WASMExpr::Const(
                         WASMType::I32,
                         WASMValue::I32(UNIVERSAL_ALIGN as i64),
