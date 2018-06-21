@@ -288,6 +288,38 @@ fn c_expr_to_wasm(c_expr: &Ast<CExpr>, locals: &Locals) -> Ast<WASMExpr> {
                 ],
             })
         }
+        &CExpr::ObjectAccess {
+            ref object,
+            index,
+            ref field_type,
+        } => c_expr.replace_expr(WASMExpr::Load(
+            c_type_to_wasm(field_type),
+            c_expr.replace_expr(WASMExpr::BinOp(
+                BinOp::Num(NumOp::Add),
+                c_value_to_wasm(object, locals),
+                c_expr.replace_expr(WASMExpr::Const(WASMType::I32, WASMValue::I32(index as i64))),
+                WASMType::I32,
+            )),
+        )),
+        CExpr::Cast {
+            ref value,
+            ref to_type,
+        } => {
+            let from_wasm_type = c_type_to_wasm(&value.expr.get_ctype());
+            let to_wasm_type = c_type_to_wasm(to_type);
+            let wasm_value = c_value_to_wasm(value, locals);
+
+            match (from_wasm_type, to_wasm_type) {
+                (WASMType::I32, WASMType::F64) => {
+                    c_expr.replace_expr(WASMExpr::PromoteInt(wasm_value))
+                }
+                (WASMType::F64, WASMType::I32) => {
+                    c_expr.replace_expr(WASMExpr::TruncateFloat(wasm_value))
+                }
+                // TODO: explictly handle all possibilities?
+                _ => wasm_value,
+            }
+        }
         _ => panic!("Unhandled expr: {}", c_expr),
     }
 }
@@ -368,7 +400,7 @@ fn flatten_c_statement(
                         wasm_locals.load(capture.left_loc, capture.right_loc, name),
                         capture.replace_expr(WASMExpr::Const(
                             WASMType::I32,
-                            WASMValue::I32((index * UNIVERSAL_ALIGN) as i64),
+                            WASMValue::I32(((index + 1) * UNIVERSAL_ALIGN) as i64),
                         )),
                         WASMType::I32,
                     )),

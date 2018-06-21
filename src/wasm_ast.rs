@@ -7,7 +7,6 @@ pub enum WASMType {
     I32,
     I64,
     F64,
-    GarbageCollectedPointer,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -37,6 +36,7 @@ pub enum WASMExpr {
     GetGlobal(WASMGlobalName),
     BinOp(BinOp, Ast<WASMExpr>, Ast<WASMExpr>, WASMType),
     PromoteInt(Ast<WASMExpr>),
+    TruncateFloat(Ast<WASMExpr>),
     If(Ast<WASMExpr>, Vec<Ast<WASMExpr>>, Vec<Ast<WASMExpr>>),
     Load(WASMType, Ast<WASMExpr>),
     Store(WASMType, Ast<WASMExpr>, Ast<WASMExpr>),
@@ -94,7 +94,7 @@ impl Display for WASMType {
             f,
             "{}",
             match self {
-                WASMType::I32 | WASMType::GarbageCollectedPointer => "i32",
+                WASMType::I32 => "i32",
                 WASMType::I64 => "i64",
                 WASMType::F64 => "f64",
             }
@@ -165,6 +165,10 @@ impl WASMExpr {
                 WASMExpr::PromoteInt(ref int) => format!(
                     "(f64.convert_s/i32{})",
                     int.get_str_indented(indent_level + 1)
+                ),
+                WASMExpr::TruncateFloat(ref float) => format!(
+                    "(i32.trunc_s/f64{})",
+                    float.get_str_indented(indent_level + 1)
                 ),
                 WASMExpr::If(ref condition, ref consequent, ref alternate) => format!(
                     "(if{}{}(then{}){}(else{}))",
