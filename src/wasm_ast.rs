@@ -7,6 +7,7 @@ pub enum WASMType {
     I32,
     I64,
     F64,
+    GarbageCollectedPointer,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -18,6 +19,13 @@ pub enum WASMValue {
 #[derive(Debug, PartialEq, Clone)]
 pub enum WASMDirectFuncName {
     HeapAlloc,
+    StackAlloc,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum WASMGlobalName {
+    StackPointer,
+    Temp,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -25,6 +33,8 @@ pub enum WASMExpr {
     Const(WASMType, WASMValue),
     SetLocal(CName, Ast<WASMExpr>),
     GetLocal(CName),
+    SetGlobal(WASMGlobalName, Ast<WASMExpr>),
+    GetGlobal(WASMGlobalName),
     BinOp(BinOp, Ast<WASMExpr>, Ast<WASMExpr>, WASMType),
     PromoteInt(Ast<WASMExpr>),
     If(Ast<WASMExpr>, Vec<Ast<WASMExpr>>, Vec<Ast<WASMExpr>>),
@@ -37,30 +47,34 @@ pub enum WASMExpr {
         function_index: Ast<WASMExpr>,
         args: Vec<Ast<WASMExpr>>,
     },
+    Sequence(Vec<Ast<WASMExpr>>),
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub struct WASMLocal(pub CName, pub WASMType);
+pub type StackMap = Vec<WASMType>;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct WASMFunc {
     pub name: CFuncName,
     pub params: Vec<(CName, WASMType)>,
     pub result: WASMType,
-    pub locals: Vec<WASMLocal>,
+    pub stack_map: StackMap,
     pub body: Vec<Ast<WASMExpr>>,
-}
-
-impl Display for WASMLocal {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "(local ${} {})", self.0, self.1)
-    }
 }
 
 impl Display for WASMDirectFuncName {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             WASMDirectFuncName::HeapAlloc => write!(f, "$_alloc"),
+            WASMDirectFuncName::StackAlloc => write!(f, "$_alloc"),
+        }
+    }
+}
+
+impl Display for WASMGlobalName {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            WASMGlobalName::StackPointer => write!(f, "$_stack_pointer"),
+            WASMGlobalName::Temp => write!(f, "$_temp"),
         }
     }
 }
@@ -80,7 +94,7 @@ impl Display for WASMType {
             f,
             "{}",
             match self {
-                WASMType::I32 => "i32",
+                WASMType::I32 | WASMType::GarbageCollectedPointer => "i32",
                 WASMType::I64 => "i64",
                 WASMType::F64 => "f64",
             }
@@ -126,6 +140,12 @@ impl WASMExpr {
                 WASMExpr::GetLocal(ref name) => format!("(get_local ${})", name),
                 WASMExpr::SetLocal(ref name, ref value) => format!(
                     "(set_local ${}{})",
+                    name,
+                    value.get_str_indented(indent_level + 1)
+                ),
+                WASMExpr::GetGlobal(ref name) => format!("(get_global {})", name),
+                WASMExpr::SetGlobal(ref name, ref value) => format!(
+                    "(set_global {}{})",
                     name,
                     value.get_str_indented(indent_level + 1)
                 ),
@@ -186,6 +206,10 @@ impl WASMExpr {
                     sequence_to_str_indented(args, indent_level + 1),
                     function_index.get_str_indented(indent_level + 1)
                 ),
+                WASMExpr::Sequence(ref exprs) => format!(
+                    "(;sequence;){}",
+                    sequence_to_str_indented(exprs, indent_level + 1)
+                ),
             }
         )
     }
@@ -195,7 +219,7 @@ impl Display for WASMFunc {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
-            "(func ${} {} (result {}){}\n{})",
+            "(func ${} {} (result {}){})",
             self.name,
             self.params
                 .iter()
@@ -203,11 +227,6 @@ impl Display for WASMFunc {
                 .collect::<Vec<String>>()
                 .join(" "),
             self.result,
-            self.locals
-                .iter()
-                .map(|local| format!("\n  {}", local))
-                .collect::<Vec<String>>()
-                .join(""),
             sequence_to_str_indented(&self.body, 1)
         )
     }

@@ -339,7 +339,7 @@ fn wasm_compile_source(input: &str) -> Result<String, Error> {
         &record_layouts,
     );
 
-    let mut wasm_locals = Vec::new();
+    let mut wasm_locals = wasm_compile::Locals::new();
     let mut wasm_exprs = Vec::new();
     wasm_compile::flatten_c_block(
         &c_declarations,
@@ -348,9 +348,13 @@ fn wasm_compile_source(input: &str) -> Result<String, Error> {
         &mut wasm_exprs,
     );
 
+    // The stack allocation has to come first, but we don't know how much we
+    // need until we have flattened the block
+    wasm_exprs.insert(0, wasm_locals.init_stack_frame(0, 0, None));
+
     let mut wasm_functions = c_functions
         .into_iter()
-        .map(|c_func| wasm_compile::c_func_to_wasm(&c_func.expr))
+        .map(|c_func| wasm_compile::c_func_to_wasm(&c_func))
         .collect::<Vec<wasm_ast::WASMFunc>>();
 
     wasm_functions.sort_unstable_by_key(|wasm_func| wasm_compile::get_func_index(&wasm_func.name));
@@ -360,18 +364,21 @@ fn wasm_compile_source(input: &str) -> Result<String, Error> {
          \n\
          \n(memory 1)\
          \n\
-         \n(global $_last_alloc (mut i32) (i32.const 0))\
+         \n(global $_free_buffer (mut i32) (i32.const 8))\
          \n(func $_alloc (param $size i32) (result i32)\
-         \n  (get_global $_last_alloc) ;; Return value\
-         \n  (set_global $_last_alloc\
+         \n  (get_global $_free_buffer) ;; Return value\
+         \n  (set_global $_free_buffer\
          \n    (i32.add\
-         \n      (get_global $_last_alloc)\
+         \n      (get_global $_free_buffer)\
          \n      (get_local $size))))\
+         \n\
+         \n(global $_stack_pointer (mut i32) (i32.const 0))\
+         \n(global $_temp (mut i32) (i32.const 0))\
          \n\
          \n(table anyfunc\
          \n  (elem{}))\
          \n{}\
-         \n(func (export \"main\") (result {}){}\n{}{})",
+         \n(func (export \"main\") (result {}){}{})",
         env!("CARGO_PKG_NAME"),
         env!("CARGO_PKG_VERSION"),
         wasm_functions
@@ -385,17 +392,12 @@ fn wasm_compile_source(input: &str) -> Result<String, Error> {
             .collect::<Vec<String>>()
             .join(""),
         wasm_compile::c_type_to_wasm(&c_compile::type_to_ctype(&typechecked_ast.expr_type)),
-        wasm_locals
-            .into_iter()
-            .map(|local| format!("\n  {}", local))
-            .collect::<Vec<String>>()
-            .join(""),
         wasm_exprs
             .into_iter()
             .map(|expr| expr.get_str_indented(1))
             .collect::<Vec<String>>()
             .join(""),
-        wasm_compile::c_value_to_wasm(&value).get_str_indented(1)
+        wasm_compile::c_value_to_wasm(&value, &wasm_locals).get_str_indented(1)
     ))
 }
 

@@ -47,7 +47,7 @@ pub enum CExpr {
     },
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum CName {
     Expr(String, u64),
     Ident(String),
