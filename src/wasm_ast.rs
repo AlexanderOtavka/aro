@@ -30,7 +30,6 @@ pub enum WASMGlobalName {
 #[derive(Debug, PartialEq, Clone)]
 pub enum WASMExpr {
     Const(WASMType, WASMValue),
-    SetLocal(CName, Ast<WASMExpr>),
     GetLocal(CName),
     SetGlobal(WASMGlobalName, Ast<WASMExpr>),
     GetGlobal(WASMGlobalName),
@@ -138,11 +137,6 @@ impl WASMExpr {
                     format!("({}.const {})", value_type, value)
                 }
                 WASMExpr::GetLocal(ref name) => format!("(get_local ${})", name),
-                WASMExpr::SetLocal(ref name, ref value) => format!(
-                    "(set_local ${}{})",
-                    name,
-                    value.get_str_indented(indent_level + 1)
-                ),
                 WASMExpr::GetGlobal(ref name) => format!("(get_global {})", name),
                 WASMExpr::SetGlobal(ref name, ref value) => format!(
                     "(set_global {}{})",
