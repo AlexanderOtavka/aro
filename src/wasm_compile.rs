@@ -301,11 +301,11 @@ fn c_expr_to_wasm(c_expr: &Ast<CExpr>, locals: &Locals) -> Ast<WASMExpr> {
                 BinOp::Num(NumOp::Add),
                 c_value_to_wasm(object, locals),
                 c_expr.replace_expr(WASMExpr::Const(
-                WASMType::I32,
+                    WASMType::I32,
                     WASMValue::I32((index * UNIVERSAL_ALIGN) as i64),
-            )),
+                )),
                 WASMType::I32,
-        )),
+            )),
         )),
         CExpr::Cast {
             ref value,
@@ -407,6 +407,38 @@ fn flatten_c_statement(
                         capture.replace_expr(WASMExpr::Const(
                             WASMType::I32,
                             WASMValue::I32(((index + 1) * UNIVERSAL_ALIGN) as i64),
+                        )),
+                        WASMType::I32,
+                    )),
+                    c_value_to_wasm(capture, wasm_locals),
+                )));
+            }
+        }
+        CStatement::ObjectInit { ref name, ref data } => {
+            // Heap allocate a new buffer and store the address in `name` local
+            wasm_exprs.push(wasm_locals.store(
+                c_statement.left_loc,
+                c_statement.right_loc,
+                name,
+                c_statement.replace_expr(WASMExpr::Call(
+                    WASMDirectFuncName::HeapAlloc,
+                    vec![c_statement.replace_expr(WASMExpr::Const(
+                        WASMType::I32,
+                        WASMValue::I32((data.len() * UNIVERSAL_ALIGN) as i64),
+                    ))],
+                )),
+            ));
+
+            // Fill the buffer with data aligned at UNIVERSAL_ALIGN
+            for (index, capture) in data.into_iter().enumerate() {
+                wasm_exprs.push(capture.replace_expr(WASMExpr::Store(
+                    c_type_to_wasm(&capture.expr.get_ctype()),
+                    capture.replace_expr(WASMExpr::BinOp(
+                        BinOp::Num(NumOp::Add),
+                        wasm_locals.load(capture.left_loc, capture.right_loc, name),
+                        capture.replace_expr(WASMExpr::Const(
+                            WASMType::I32,
+                            WASMValue::I32((index * UNIVERSAL_ALIGN) as i64),
                         )),
                         WASMType::I32,
                     )),
