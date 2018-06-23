@@ -300,9 +300,12 @@ fn c_expr_to_wasm(c_expr: &Ast<CExpr>, locals: &Locals) -> Ast<WASMExpr> {
             c_expr.replace_expr(WASMExpr::BinOp(
                 BinOp::Num(NumOp::Add),
                 c_value_to_wasm(object, locals),
-                c_expr.replace_expr(WASMExpr::Const(WASMType::I32, WASMValue::I32(index as i64))),
+                c_expr.replace_expr(WASMExpr::Const(
                 WASMType::I32,
+                    WASMValue::I32((index * UNIVERSAL_ALIGN) as i64),
             )),
+                WASMType::I32,
+        )),
         )),
         CExpr::Cast {
             ref value,
