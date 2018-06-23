@@ -221,6 +221,10 @@ pub fn c_value_to_wasm(c_value: &Ast<CValue>, locals: &Locals) -> Ast<WASMExpr> 
         &CValue::Float(value) => {
             c_value.replace_expr(WASMExpr::Const(WASMType::F64, WASMValue::F64(value)))
         }
+        &CValue::Bool(value) => c_value.replace_expr(WASMExpr::Const(
+            WASMType::I32,
+            WASMValue::I32(if value { 1 } else { 0 } as i64),
+        )),
         &CValue::Ident(ref name, _) => locals.load(c_value.left_loc, c_value.right_loc, name),
         &CValue::Null => {
             c_value.replace_expr(WASMExpr::Const(WASMType::I32, WASMValue::I32(NULL as i64)))
@@ -232,7 +236,6 @@ pub fn c_value_to_wasm(c_value: &Ast<CValue>, locals: &Locals) -> Ast<WASMExpr> 
                 locals.load(c_value.left_loc, c_value.right_loc, name),
             )),
         )),
-        _ => panic!("Unhandled value: {}", c_value),
     }
 }
 
