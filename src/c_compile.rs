@@ -53,6 +53,8 @@ fn maybe_cast_representation(
     expr_index: &mut u64,
     functions: &mut Vec<Ast<CFunc>>,
     function_index: &mut u64,
+    real_types: &Vec<EvaluatedType>,
+    record_layouts: &HashMap<usize, HashMap<String, usize>>,
 ) -> (Ast<CValue>, bool) {
     match (from_type, to_type) {
         (&EvaluatedType::Int, &EvaluatedType::Num) => {
@@ -147,8 +149,86 @@ fn maybe_cast_representation(
                     expr_index,
                     functions,
                     function_index,
+                    real_types,
+                    record_layouts,
                 );
                 casted_elements.push(c_element);
+                if was_casted {
+                    something_was_casted = true;
+                }
+            }
+
+            if something_was_casted {
+                declarations.append(&mut temp_declarations);
+                statements.append(&mut temp_statements);
+
+                let copy_name = get_expr_name("casted_tuple", expr_index);
+                declarations.push(CDeclaration(CType::Object, copy_name.clone()));
+                statements.push(from.replace_expr(CStatement::ObjectInit {
+                    name: copy_name.clone(),
+                    data: casted_elements,
+                }));
+                (
+                    from.replace_expr(CValue::Ident(copy_name, CType::Object)),
+                    true,
+                )
+            } else {
+                (from.clone(), false)
+            }
+        }
+        (&EvaluatedType::Record(ref from_elements), &EvaluatedType::Record(ref to_elements)) => {
+            let mut casted_elements = Vec::new();
+            let mut something_was_casted = false;
+            let mut temp_declarations = Vec::new();
+            let mut temp_statements = Vec::new();
+
+            let type_index = real_types
+                .into_iter()
+                .position(|real_type| real_type == from_type)
+                .unwrap();
+            let layout = record_layouts.get(&type_index).unwrap();
+
+            for (field, from_field_type) in from_elements {
+                let expr_name = get_expr_name("object_access", expr_index);
+                let expr_ctype = type_to_ctype(&from_field_type.expr);
+                temp_declarations.push(CDeclaration(expr_ctype.clone(), expr_name.clone()));
+                temp_statements.push(from.replace_expr(CStatement::VarAssign(
+                    expr_name.clone(),
+                    from.replace_expr(CExpr::ObjectAccess {
+                        object: from.clone(),
+                        index: *layout.get(field).unwrap(),
+                        field_type: expr_ctype.clone(),
+                    }),
+                )));
+                let ident = from.replace_expr(CValue::Ident(expr_name, expr_ctype));
+
+                let to_field_type = if let Some(field_type) = to_elements.get(field) {
+                    field_type
+                } else {
+                    from_field_type
+                };
+
+                let (c_element, was_casted) = maybe_cast_representation(
+                    ident,
+                    &from_field_type.expr,
+                    &to_field_type.expr,
+                    &mut temp_declarations,
+                    &mut temp_statements,
+                    expr_index,
+                    functions,
+                    function_index,
+                    real_types,
+                    record_layouts,
+                );
+
+                let field_position = *layout.get(field).unwrap();
+                if field_position >= casted_elements.len() {
+                    casted_elements.resize(field_position + 1, from.replace_expr(CValue::Null));
+                }
+
+                casted_elements.remove(field_position);
+                casted_elements.insert(field_position, c_element);
+
                 if was_casted {
                     something_was_casted = true;
                 }
@@ -190,6 +270,8 @@ fn maybe_cast_representation(
                 &mut adaptor_func_expr_index,
                 functions,
                 function_index,
+                real_types,
+                record_layouts,
             );
 
             let inner_func_name = get_expr_name("inner_closure", &mut adaptor_func_expr_index);
@@ -226,6 +308,8 @@ fn maybe_cast_representation(
                 &mut adaptor_func_expr_index,
                 functions,
                 function_index,
+                real_types,
+                record_layouts,
             );
 
             if arg_was_casted || ret_was_casted {
@@ -276,6 +360,8 @@ fn maybe_cast_representation(
             expr_index,
             functions,
             function_index,
+            real_types,
+            record_layouts,
         ),
         _ => (from, false),
     }
@@ -385,6 +471,8 @@ fn bind_declarations(
     expr_index: &mut u64,
     functions: &mut Vec<Ast<CFunc>>,
     function_index: &mut u64,
+    real_types: &Vec<EvaluatedType>,
+    record_layouts: &HashMap<usize, HashMap<String, usize>>,
 ) {
     match &*pattern.expr {
         &TypedPattern::Ident(ref name) => {
@@ -397,6 +485,8 @@ fn bind_declarations(
                 expr_index,
                 functions,
                 function_index,
+                real_types,
+                record_layouts,
             );
 
             let value_name = get_ident_name(name);
@@ -449,6 +539,8 @@ fn bind_declarations(
                 expr_index,
                 functions,
                 function_index,
+                real_types,
+                record_layouts,
             );
         },
     }
@@ -557,6 +649,8 @@ pub fn lift_expr(
                     &mut func_expr_index,
                     functions,
                     function_index,
+                    real_types,
+                    record_layouts,
                 );
 
                 for (index, (name, var_type)) in captures_map.iter().enumerate() {
@@ -597,6 +691,8 @@ pub fn lift_expr(
                     &mut func_expr_index,
                     functions,
                     function_index,
+                    real_types,
+                    record_layouts,
                 );
 
                 let closure_name = get_expr_name("closure", expr_index);
@@ -691,6 +787,8 @@ pub fn lift_expr(
                         expr_index,
                         functions,
                         function_index,
+                        real_types,
+                        record_layouts,
                     );
 
                     let cons_name = get_expr_name("cons", expr_index);
@@ -785,6 +883,8 @@ pub fn lift_expr(
                     expr_index,
                     functions,
                     function_index,
+                    real_types,
+                    record_layouts,
                 );
 
                 casted_ast
@@ -815,6 +915,8 @@ pub fn lift_expr(
                     expr_index,
                     functions,
                     function_index,
+                    real_types,
+                    record_layouts,
                 );
                 casted
             } else {
@@ -957,6 +1059,8 @@ pub fn lift_expr(
                 expr_index,
                 functions,
                 function_index,
+                real_types,
+                record_layouts,
             );
 
             let body_c_ast = lift_expr(
@@ -1001,6 +1105,8 @@ pub fn lift_expr(
                 expr_index,
                 functions,
                 function_index,
+                real_types,
+                record_layouts,
             );
 
             casted
