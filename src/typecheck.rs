@@ -1150,8 +1150,8 @@ mod typecheck_ast {
 
     #[test]
     fn checks_a_bool_literal() {
-        assert_typecheck_eq("#true ()", "Bool");
-        assert_typecheck_eq("#false ()", "Bool");
+        assert_typecheck_eq("#true", "Bool");
+        assert_typecheck_eq("#false", "Bool");
     }
 
     #[test]
@@ -1188,15 +1188,15 @@ mod typecheck_ast {
         assert_typecheck_eq("-1.0 - -2", "Num");
         assert_typecheck_eq("1.0 * 2.0", "Num");
         assert_typecheck_eq("-1.0 / -2", "Num");
-        assert_typecheck_err("1.0 + #true()");
-        assert_typecheck_err("#true() + #true()");
+        assert_typecheck_err("1.0 + #true");
+        assert_typecheck_err("#true + #true");
     }
 
     #[test]
     fn checks_nested_arithmatic() {
         assert_typecheck_eq("1 + (2 * 3)", "Int");
-        assert_typecheck_err("1 + (#false() * 3)");
-        assert_typecheck_err("#true() + (#false() * #true())");
+        assert_typecheck_err("1 + (#false * 3)");
+        assert_typecheck_err("#true + (#false * #true)");
     }
 
     #[test]
@@ -1205,26 +1205,26 @@ mod typecheck_ast {
         assert_typecheck_eq("3.1 <= 2", "Bool");
         assert_typecheck_eq("3.1 <= 2.3", "Bool");
         assert_typecheck_eq("3 <= 2.3", "Bool");
-        assert_typecheck_err("#false() <= #true()");
-        assert_typecheck_err("#false() <= 3");
+        assert_typecheck_err("#false <= #true");
+        assert_typecheck_err("#false <= 3");
     }
 
     #[test]
     fn checks_an_if() {
         assert_typecheck_eq("if 1 <= 1 then 1 else 2", "Int");
-        assert_typecheck_eq("if #false() then 1.1 else 2.0", "Num");
-        assert_typecheck_eq("if #false() then 1.1 else 2", "Num");
-        assert_typecheck_eq("if #false() then 1 else 2.0", "Num");
-        assert_typecheck_eq("if #false() then 2.1 else []", "Any");
+        assert_typecheck_eq("if #false then 1.1 else 2.0", "Num");
+        assert_typecheck_eq("if #false then 1.1 else 2", "Num");
+        assert_typecheck_eq("if #false then 1 else 2.0", "Num");
+        assert_typecheck_eq("if #false then 2.1 else []", "Any");
         assert_typecheck_err("if 1 then 2 else 3");
     }
 
     #[test]
     fn checks_sequenced_operations() {
         assert_typecheck_eq("5; 3", "Int");
-        assert_typecheck_eq("#true(); 3", "Int");
-        assert_typecheck_eq("(); #true()", "Bool");
-        assert_typecheck_err("1 + #true(); 5");
+        assert_typecheck_eq("#true; 3", "Int");
+        assert_typecheck_eq("(); #true", "Bool");
+        assert_typecheck_err("1 + #true; 5");
     }
 
     #[test]
@@ -1238,14 +1238,12 @@ mod typecheck_ast {
             "Num",
         );
         assert_typecheck_eq(
-            "(func: (Bool => Bool) =Bool=> func <| #true()) <| (x: Bool =Bool=> x)",
+            "(func: (Bool => Bool) =Bool=> func <| #true) <| (x: Bool =Bool=> x)",
             "Bool",
         );
         assert_typecheck_err("(func: (Int => Bool) =Int=> func <| 5) <| (x: Int =Int=> x)");
         assert_typecheck_err("(func: (Int => Bool) =Bool=> func <| 5) <| (x: Int =Int=> x)");
-        assert_typecheck_err(
-            "(func: (Bool => Bool) =Int=> func <| #true()) <| (x: Bool =Bool=> x)",
-        );
+        assert_typecheck_err("(func: (Bool => Bool) =Int=> func <| #true) <| (x: Bool =Bool=> x)");
     }
 
     #[test]
@@ -1305,7 +1303,7 @@ mod typecheck_ast {
         );
         assert_typecheck_eq(
             "
-            let x: {a: Int} <- {a <- 5  b <- #false()}
+            let x: {a: Int} <- {a <- 5  b <- #false}
             x
             ",
             "{a: Int}",
@@ -1373,7 +1371,7 @@ mod typecheck_ast {
     fn unions_list_element_types() {
         assert_typecheck_eq("[1 1.2]", "[Num]");
         assert_typecheck_eq("[1.2 1]", "[Num]");
-        assert_typecheck_eq("[#true() 1]", "[Any]");
+        assert_typecheck_eq("[#true 1]", "[Any]");
     }
 
     #[test]

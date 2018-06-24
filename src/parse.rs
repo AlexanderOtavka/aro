@@ -112,17 +112,17 @@ mod source_to_ast {
 
     #[test]
     fn makes_a_bool_tree() {
-        assert_parse_eq(source_to_ast("#true ()"), "#true ()");
-        assert_parse_eq(source_to_ast("#false()"), "#false ()");
-        assert_parse_eq(source_to_ast("#true ( )"), "#true ()");
+        assert_parse_eq(source_to_ast("#true"), "#true");
+        assert_parse_eq(source_to_ast("#false"), "#false");
+        assert_parse_eq(source_to_ast("#true"), "#true");
     }
 
     #[test]
     fn makes_a_tuple_tree() {
         assert_parse_eq(source_to_ast("()"), "()");
         assert_parse_eq(source_to_ast("(1)"), "1");
-        assert_parse_eq(source_to_ast("(1  #false())"), "(1 #false ())");
-        assert_parse_eq(source_to_ast("(1  #false()  3.1)"), "(1 #false () 3.1)");
+        assert_parse_eq(source_to_ast("(1  #false)"), "(1 #false)");
+        assert_parse_eq(source_to_ast("(1  #false  3.1)"), "(1 #false 3.1)");
     }
 
     #[test]
@@ -163,8 +163,8 @@ mod source_to_ast {
     #[test]
     fn makes_an_if_tree() {
         assert_parse_eq(
-            source_to_ast("if #true () then 2 else 5"),
-            "(if #true () then 2 else 5)",
+            source_to_ast("if #true then 2 else 5"),
+            "(if #true then 2 else 5)",
         );
     }
 

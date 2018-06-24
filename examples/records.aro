@@ -4,10 +4,10 @@ let Motion <- {
     with_sass: Bool
 }
 
-let sass_holder: {value: Bool} <- {value <- #true()}
+let sass_holder: {value: Bool} <- {value <- #true}
 
 let motion: Motion <- {
-    is_forward <- #false()
+    is_forward <- #false
     speed <- 25
     with_sass <- sass_holder.value
 }

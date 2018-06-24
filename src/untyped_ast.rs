@@ -225,8 +225,8 @@ impl Display for Value {
                         format!("{}", value)
                     }
                 }
-                &Value::Bool(true) => String::from("#true ()"),
-                &Value::Bool(false) => String::from("#false ()"),
+                &Value::Bool(true) => String::from("#true"),
+                &Value::Bool(false) => String::from("#false"),
                 &Value::Func(ref p, ref te, ref e) => format!("(fn {} ={}=> {})", p, te, e),
                 &Value::GenericFunc(ref n, ref t, ref te, ref e) => {
                     format!("({}: {} ={}=> {})", n, t, te, e)

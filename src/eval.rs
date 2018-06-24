@@ -716,7 +716,7 @@ mod evaluate_ast {
 
     #[test]
     fn spits_back_out_a_bool() {
-        assert_eval_eq("#true ()", "#true ()");
+        assert_eval_eq("#true", "#true");
     }
 
     #[test]
@@ -811,9 +811,9 @@ mod evaluate_ast {
 
     #[test]
     fn compares_with_leq() {
-        assert_eval_eq("3 <= 2", "#false ()");
-        assert_eval_eq("2 <= 2", "#true ()");
-        assert_eval_eq("1 <= 2", "#true ()");
+        assert_eval_eq("3 <= 2", "#false");
+        assert_eval_eq("2 <= 2", "#true");
+        assert_eval_eq("1 <= 2", "#true");
     }
 
     #[test]
@@ -823,7 +823,7 @@ mod evaluate_ast {
 
     #[test]
     fn returns_the_alternate_of_an_if() {
-        assert_eval_eq("if (#false ()) then 1 else 2", "2");
+        assert_eval_eq("if (#false) then 1 else 2", "2");
     }
 
     #[test]
@@ -886,7 +886,7 @@ mod evaluate_ast {
         );
         assert_eval_eq(
             "
-            (2  5.3  #true ()) |> (fn (a: Int  b: Num  bool: Bool) =Num=> a + b)
+            (2  5.3  #true) |> (fn (a: Int  b: Num  bool: Bool) =Num=> a + b)
             ",
             "7.3",
         );
@@ -1016,25 +1016,25 @@ mod evaluate_ast {
             r#"
             [1 2 3] |> @hook("std.list.is_empty"  ([Int] => Bool))
             "#,
-            "#false ()",
+            "#false",
         );
         assert_eval_eq(
             r#"
             [] |> @hook("std.list.is_empty"  ([Int] => Bool))
             "#,
-            "#true ()",
+            "#true",
         );
         assert_eval_eq(
             r#"
-            [#true() #false()] |> @hook("std.list.is_empty"  ([Bool] => Bool))
+            [#true #false] |> @hook("std.list.is_empty"  ([Bool] => Bool))
             "#,
-            "#false ()",
+            "#false",
         );
         assert_eval_eq(
             r#"
             [] |> @hook("std.list.is_empty"  ([Num] => Bool))
             "#,
-            "#true ()",
+            "#true",
         );
     }
 
@@ -1053,9 +1053,9 @@ mod evaluate_ast {
         );
         assert_eval_eq(
             r#"
-            [#true() #false()] |> @hook("std.list.head"  ([Bool] => Bool))
+            [#true #false] |> @hook("std.list.head"  ([Bool] => Bool))
             "#,
-            "#true ()",
+            "#true",
         );
     }
 
@@ -1074,9 +1074,9 @@ mod evaluate_ast {
         );
         assert_eval_eq(
             r#"
-            [#true() #false()] |> @hook("std.list.tail"  ([Bool] => Bool))
+            [#true #false] |> @hook("std.list.tail"  ([Bool] => Bool))
             "#,
-            "[#false ()]",
+            "[#false]",
         );
     }
 }

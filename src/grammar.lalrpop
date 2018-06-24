@@ -168,6 +168,6 @@ Int: i32 = {
 };
 
 Bool: bool = {
-    r"#true" "(" ")" => true,
-    r"#false" "(" ")" => false,
+    r"#true" => true,
+    r"#false" => false,
 };

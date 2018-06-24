@@ -395,10 +395,9 @@ impl Display for CStatement {
                     format!("while ({}) {}", condition, body)
                 }
                 &CStatement::PrintValue(ref value) => match value.expr.get_ctype() {
-                    CType::Bool => format!(
-                        "if ({}) printf(\"#true()\"); else printf(\"#false()\");",
-                        value
-                    ),
+                    CType::Bool => {
+                        format!("if ({}) printf(\"#true\"); else printf(\"#false\");", value)
+                    }
                     CType::Int => format!("printf(\"%d\", {});", value),
                     CType::Float => format!("printf(\"%lf\", {});", value),
                     CType::Any => format!("printf(\"<Any %p>\", {}.Void_Ptr);", value),
