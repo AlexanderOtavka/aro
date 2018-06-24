@@ -88,7 +88,7 @@ Value = {
     <l:@L> <e:Value> "." <f:Ident> <r:@R> =>
         Ast::<Expression>::new(l, r, Expression::RecordAccess(e, f)),
 
-    <l:@L> "@hook" "(" <n:r#""([a-z](_?[a-z])*\.)+[a-z](_?[a-z])*!?""#> <t:Type> ")" <r:@R> =>
+    <l:@L> "@hook" "(" <n:r#""([a-z](_?[a-z])*\.)+[a-z](_?[a-z])*""#> <t:Type> ")" <r:@R> =>
         Ast::<Expression>::new_hook(l, r, n, t),
 
     "(" <Expr> ")",
@@ -156,7 +156,7 @@ Num: f64 = {
 };
 
 Ident: String = {
-    r"[a-z]+((_[0-9]+)|(_[a-z]+))*!?" => String::from(<>),
+    r"[a-z]+((_[0-9]+)|(_[a-z]+))*" => String::from(<>),
 };
 
 TypeIdent: String = {
