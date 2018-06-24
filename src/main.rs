@@ -364,12 +364,13 @@ fn wasm_compile_source(input: &str) -> Result<String, Error> {
          \n\
          \n(memory 1)\
          \n\
-         \n(global $_free_buffer (mut i32) (i32.const 8))\
+         \n;; Reserve first 4 bytes for stack free pointer\
+         \n;; Reserve next 4 bytes for heap free pointer\
          \n(func $_alloc (param $size i32) (result i32)\
-         \n  (get_global $_free_buffer) ;; Return value\
-         \n  (set_global $_free_buffer\
+         \n  (i32.load (i32.const 4)) ;; Return value\
+         \n  (i32.store (i32.const 4)\
          \n    (i32.add\
-         \n      (get_global $_free_buffer)\
+         \n      (i32.load (i32.const 4))\
          \n      (get_local $size))))\
          \n\
          \n(global $_stack_pointer (mut i32) (i32.const 0))\
