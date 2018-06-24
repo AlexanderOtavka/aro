@@ -157,26 +157,6 @@ impl WellCTyped for CExpr {
     }
 }
 
-fn get_hook_c_name(names: &Vec<String>) -> String {
-    let mut string = String::from("_aro_hook__");
-
-    for name in &names[..names.len() - 1] {
-        string += name;
-        string += "__";
-    }
-
-    // Replace trailing ! with __
-    let last_name = &names[names.len() - 1];
-    if &last_name[last_name.len() - 1..] == "!" {
-        string += &last_name[..last_name.len() - 1];
-        string += "__";
-    } else {
-        string += last_name;
-    }
-
-    string
-}
-
 impl Display for CValue {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
@@ -308,16 +288,9 @@ impl Display for CName {
             f,
             "{}",
             match self {
-                &CName::Hook(ref names) => get_hook_c_name(names),
+                &CName::Hook(ref names) => format!("_aro_hook__{}", names.join("__")),
                 &CName::Expr(ref name, index) => format!("_aro_expr_{}_{}", name, index),
-                &CName::Ident(ref name) => {
-                    // Replace trailing ! with __
-                    if &name[name.len() - 1..] == "!" {
-                        format!("aro_{}__", &name[..name.len() - 1])
-                    } else {
-                        format!("aro_{}", name)
-                    }
-                }
+                &CName::Ident(ref name) => format!("aro_{}", name),
                 &CName::FuncArg => String::from("_aro_arg"),
                 &CName::FuncCaptures => String::from("_aro_captures"),
             }
