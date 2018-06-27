@@ -489,12 +489,17 @@ fn substitute_expr(ast: &Ast<Expression>, name: &str, value: &Ast<Type>) -> Ast<
             substitute_expr(reference, name, value),
             substitute_expr(value_ast, name, value),
         )),
+        &Expression::HookCall(ref path, ref return_type, ref vec) => {
+            ast.replace_expr(Expression::HookCall(
+                path.clone(),
+                return_type.clone(),
+                vec.into_iter()
+                    .map(|element| substitute_expr(element, name, value))
+                    .collect(),
+            ))
+        }
         &Expression::Value(ref ast_value) => ast.replace_expr(Expression::Value(match ast_value {
-            &Value::Bool(_)
-            | &Value::Int(_)
-            | &Value::Num(_)
-            | &Value::Hook(_, _)
-            | &Value::Ref(_) => ast_value.clone(),
+            &Value::Bool(_) | &Value::Int(_) | &Value::Num(_) | &Value::Ref(_) => ast_value.clone(),
             &Value::Func(ref param_pattern, ref body_type, ref body) => Value::Func(
                 substitute_pattern(param_pattern, name, value),
                 substitute_raw_type(body_type, name, value),
@@ -662,10 +667,6 @@ pub fn typecheck_ast(
 
     match &*ast.expr {
         &Expression::Value(ref value) => match value {
-            &Value::Hook(ref name, ref hook_type) => Ok(ast.to_typed(
-                TypedExpression::Value(TypedValue::Hook(name.clone())),
-                evaluate_type(hook_type, env)?,
-            )),
             &Value::Int(value) => Ok(ast.to_typed(
                 TypedExpression::Value(TypedValue::Int(value)),
                 EvaluatedType::Int,
@@ -896,6 +897,22 @@ pub fn typecheck_ast(
                     right_loc: generic_func.right_loc,
                 })
             }
+        }
+        &Expression::HookCall(ref name, ref return_type, ref arguments) => {
+            let evaluated_return_type = evaluate_type(return_type, env)?;
+
+            let mut typecheced_arguments = Vec::new();
+
+            for item in arguments {
+                typecheced_arguments.push(typecheck_ast(item, env, real_types)?);
+            }
+
+            add_real_type(evaluated_return_type.clone(), real_types);
+
+            Ok(ast.to_typed(
+                TypedExpression::HookCall(name.clone(), typecheced_arguments),
+                evaluated_return_type,
+            ))
         }
         &Expression::Ident(ref name) => if let Some(ident_type) = env.get(name) {
             Ok(ast.to_typed(TypedExpression::Ident(name.clone()), ident_type.clone()))

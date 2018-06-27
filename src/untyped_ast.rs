@@ -23,6 +23,7 @@ pub enum Expression {
     Let(Ast<Pattern>, Ast<Expression>, Ast<Expression>),
     Call(Ast<Expression>, Ast<Expression>),
     GenericCall(Ast<Expression>, Ast<Type>),
+    HookCall(Vec<String>, Ast<Type>, Vec<Ast<Expression>>),
     TypeLet(String, Ast<Type>, Ast<Expression>),
     Sequence(Ast<Expression>, Ast<Expression>),
     RecordAccess(Ast<Expression>, String),
@@ -59,7 +60,6 @@ pub enum Value {
     GenericFunc(String, Ast<Type>, Ast<Type>, Ast<Expression>),
     Tuple(Vec<Ast<Expression>>),
     List(Vec<Ast<Expression>>),
-    Hook(Vec<String>, Ast<Type>),
     Ref(Rc<RefCell<Value>>),
     Record(HashMap<String, Ast<Expression>>),
 }
@@ -101,11 +101,12 @@ impl<T> Ast<T> {
 }
 
 impl Ast<Expression> {
-    pub fn new_hook(
+    pub fn new_hook_call(
         left_loc: usize,
         right_loc: usize,
         name: &str,
-        hook_type: Ast<Type>,
+        return_type: Ast<Type>,
+        arguments: Vec<Ast<Expression>>,
     ) -> Ast<Expression> {
         let path = name[1..name.len() - 1] // Wipe away the surrounding quotes
             .split(".")
@@ -115,7 +116,7 @@ impl Ast<Expression> {
         Ast::<Expression>::new(
             left_loc,
             right_loc,
-            Expression::Value(Value::Hook(path, hook_type)),
+            Expression::HookCall(path, return_type, arguments),
         )
     }
 
@@ -195,6 +196,17 @@ impl Display for Expression {
             &Expression::Value(ref value) => value.fmt(f),
             &Expression::BinOp(ref op, ref a, ref b) => write!(f, "({} {} {})", a, op, b,),
             &Expression::GenericCall(ref e, ref t) => write!(f, "({} <| type {})", e, t),
+            &Expression::HookCall(ref name, ref hook_type, ref arguments) => write!(
+                f,
+                "@call_hook(\"{}\" {}{})",
+                name.join("."),
+                hook_type,
+                arguments
+                    .into_iter()
+                    .map(|argument| format!(" {}", argument))
+                    .collect::<Vec<String>>()
+                    .join("")
+            ),
             &Expression::Call(ref e, ref a) => write!(f, "({} <| {})", e, a),
             &Expression::If(ref c, ref t, ref e) => write!(f, "(if {} then {} else {})", c, t, e),
             &Expression::Ident(ref n) => write!(f, "({})", n),
@@ -233,9 +245,6 @@ impl Display for Value {
                 }
                 &Value::Tuple(ref vec) => sequence_to_str("(", vec, ")"),
                 &Value::List(ref vec) => sequence_to_str("[", vec, "]"),
-                &Value::Hook(ref name, ref hook_type) => {
-                    format!("@hook (\"{}\" {})", name.join("."), hook_type)
-                }
                 &Value::Ref(ref rc) => format!("(&!{})", rc.borrow()),
                 &Value::Record(ref map) => sequence_to_str(
                     "{",

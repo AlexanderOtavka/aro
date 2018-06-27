@@ -88,8 +88,8 @@ Value = {
     <l:@L> <e:Value> "." <f:Ident> <r:@R> =>
         Ast::<Expression>::new(l, r, Expression::RecordAccess(e, f)),
 
-    <l:@L> "@hook" "(" <n:r#""([a-z](_?[a-z])*\.)+[a-z](_?[a-z])*""#> <t:Type> ")" <r:@R> =>
-        Ast::<Expression>::new_hook(l, r, n, t),
+    <l:@L> "@call_hook" "(" <n:r#""([a-z](_?[a-z])*\.)+[a-z](_?[a-z])*""#> "type" <t:Type> <a: Expr* > ")" <r:@R> =>
+        Ast::<Expression>::new_hook_call(l, r, n, t, a),
 
     "(" <Expr> ")",
 };

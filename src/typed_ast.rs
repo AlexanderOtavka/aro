@@ -18,6 +18,7 @@ pub enum TypedExpression {
     Value(TypedValue),
     BinOp(BinOp, TypedAst<TypedExpression>, TypedAst<TypedExpression>),
     Call(TypedAst<TypedExpression>, TypedAst<TypedExpression>),
+    HookCall(Vec<String>, Vec<TypedAst<TypedExpression>>),
     If(
         TypedAst<TypedExpression>,
         TypedAst<TypedExpression>,
@@ -49,7 +50,6 @@ pub enum TypedValue {
     ),
     Tuple(Vec<TypedAst<TypedExpression>>),
     List(Vec<TypedAst<TypedExpression>>),
-    Hook(Vec<String>),
     Record(HashMap<String, TypedAst<TypedExpression>>),
 }
 

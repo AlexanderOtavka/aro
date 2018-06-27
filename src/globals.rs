@@ -19,7 +19,7 @@ pub fn get_globals(
         r#"
             a: Num =(Num => Int)=>
             b: Num =Int=>
-                (a b) |> @hook("std.math.floordiv"  (Num Num) => Int)
+                @call_hook("std.math.floordiv"  type Int  a  b)
         "#,
     );
     sources.insert(
@@ -28,25 +28,30 @@ pub fn get_globals(
             T: Any =([T] => T => [T])=>
             list: [T] =(T => [T])=>
             element: T =[T]=>
-                (element list) |> @hook("std.list.push"  ((T [T]) => [T]))
+                @call_hook("std.list.push"  type [T]  element  list)
         "#,
     );
     sources.insert(
         "is_empty",
         r#"
-            @hook("std.list.is_empty"  ([Any] => Bool))
+            list: [Any] =Bool=>
+                @call_hook("std.list.is_empty"  type Bool  list)
         "#,
     );
     sources.insert(
         "head",
         r#"
-            @hook("std.list.head"  (T: Any => [T] => T))
+            T: Any =([T] => T)=>
+            list: [T] =T=>
+                @call_hook("std.list.head"  type T  list)
         "#,
     );
     sources.insert(
         "tail",
         r#"
-            @hook("std.list.tail"  (T: Any => [T] => [T]))
+            T: Any =([T] => [T])=>
+            list: [T] =[T]=>
+                @call_hook("std.list.tail"  type [T]  list)
         "#,
     );
     sources.insert(
@@ -145,18 +150,10 @@ pub fn get_globals_c_files(
          \n}} *_Aro_Closure;\
          \n\
          \n// Useful macros\
-         \n#define ARO_DEFINE_CLOSURE_HOOK(NAME, RETURN_TYPE, ARGUMENT) \\\
-         \n  _Aro_Closure _aro_hook__##NAME;                            \\\
-         \n  static RETURN_TYPE fn__##NAME(ARGUMENT, _Aro_Object _captures)\
-         \n\
-         \n#define ARO_BIND_CLOSURE_HOOK(NAME)             \\\
-         \n  _aro_hook__##NAME = malloc(sizeof(struct _Aro_Closure)); \\\
-         \n  _aro_hook__##NAME->func = fn__##NAME;\
+         \n#define ARO_HOOK(NAME) _aro_hook__##NAME\
          \n\
          \n// Lifecycle hooks for linked libraries\
          \nvoid _aro_std_init(void);\
-         \nvoid _aro_std_ext_init(void);\
-         \nvoid _aro_ext_init(void);\
          \n\
          \n// Global names\
          \n{}\
@@ -183,15 +180,9 @@ pub fn get_globals_c_files(
          \n\
          \n{}\
          \n\
-         \nvoid _aro_ext_init(void) {{}}\
-         \n\
          \nvoid _aro_std_init(void) {{\
-         \n  _aro_std_ext_init();\
-         \n\
          \n  {}\
          \n  {}\
-         \n\
-         \n  _aro_ext_init();\
          \n}}\
          \n",
         env!("CARGO_PKG_NAME"),

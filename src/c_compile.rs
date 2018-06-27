@@ -1,4 +1,7 @@
-use c_ast::{CDeclaration, CExpr, CFunc, CFuncName, CName, CStatement, CType, CValue};
+use c_ast::{
+    CDeclaration, CExpr, CFunc, CFuncName, CHookDeclaration, CHookName, CName, CStatement, CType,
+    CValue,
+};
 use std::collections::{HashMap, HashSet};
 use typed_ast::{EvaluatedType, TypedAst, TypedExpression, TypedPattern, TypedValue};
 use untyped_ast::Ast;
@@ -289,7 +292,7 @@ fn maybe_cast_representation(
                 }),
             )));
 
-            let ret = from_out.replace_expr(CExpr::Call(
+            let ret = from_out.replace_expr(CExpr::ClosureCall(
                 from.replace_expr(CValue::Ident(inner_func_name, inner_func_ctype)),
                 arg,
                 type_to_ctype(&from_out.expr),
@@ -413,20 +416,17 @@ fn find_captures(
             find_captures(value, &locals, captures);
             find_captures(body, &locals, captures);
         }
+        &TypedExpression::HookCall(_, ref vec) => for element in vec {
+            find_captures(element, locals, captures);
+        },
         &TypedExpression::Value(ref value) => match value {
-            &TypedValue::Bool(_)
-            | &TypedValue::Hook(_)
-            | &TypedValue::Int(_)
-            | &TypedValue::Num(_) => {}
+            &TypedValue::Bool(_) | &TypedValue::Int(_) | &TypedValue::Num(_) => {}
             &TypedValue::Func(ref pattern, _, ref body) => {
                 let mut locals = locals.clone();
                 find_names_in_pattern(pattern, &mut locals);
                 find_captures(body, &locals, captures);
             }
-            &TypedValue::List(ref vec) => for element in vec {
-                find_captures(element, locals, captures);
-            },
-            &TypedValue::Tuple(ref vec) => for element in vec {
+            &TypedValue::List(ref vec) | &TypedValue::Tuple(ref vec) => for element in vec {
                 find_captures(element, locals, captures);
             },
             &TypedValue::Record(ref map) => for (_, element) in map {
@@ -616,7 +616,7 @@ pub fn lift_expr(
     expr_index: &mut u64,
     functions: &mut Vec<Ast<CFunc>>,
     function_index: &mut u64,
-    externs: &mut Vec<CDeclaration>,
+    externs: &mut Vec<CHookDeclaration>,
     real_types: &Vec<EvaluatedType>,
     record_layouts: &HashMap<usize, HashMap<String, usize>>,
 ) -> Ast<CValue> {
@@ -748,12 +748,6 @@ pub fn lift_expr(
                 }));
 
                 ast.replace_untyped(CValue::Ident(expr_name, CType::Object))
-            }
-            &TypedValue::Hook(ref names) => {
-                let ctype = type_to_ctype(&ast.expr_type);
-                let name = CName::Hook(names.clone());
-                externs.push(CDeclaration(ctype.clone(), name.clone()));
-                ast.replace_untyped(CValue::Ident(name, ctype))
             }
             &TypedValue::List(ref elements) => {
                 let mut head = CValue::Null;
@@ -897,7 +891,7 @@ pub fn lift_expr(
             declarations.push(CDeclaration(result_type.clone(), result_name.clone()));
             statements.push(ast.replace_untyped(CStatement::VarAssign(
                 result_name.clone(),
-                ast.replace_untyped(CExpr::Call(
+                ast.replace_untyped(CExpr::ClosureCall(
                     left_c_ast.clone(),
                     right_c_ast,
                     type_to_ctype(&ast.expr_type),
@@ -922,6 +916,45 @@ pub fn lift_expr(
             } else {
                 panic!("Calling non-function `{}`", left.expr_type)
             }
+        }
+        &TypedExpression::HookCall(ref path, ref args) => {
+            let return_ctype = type_to_ctype(&ast.expr_type);
+            let hook_name = CHookName(path.clone());
+            externs.push(CHookDeclaration(
+                return_ctype.clone(),
+                hook_name.clone(),
+                args.iter()
+                    .map(|arg| type_to_ctype(&arg.expr_type))
+                    .collect(),
+            ));
+
+            let expr_name = get_expr_name("hook_call", expr_index);
+            declarations.push(CDeclaration(return_ctype.clone(), expr_name.clone()));
+
+            let hook_call = ast.replace_untyped(CExpr::HookCall(
+                hook_name,
+                args.into_iter()
+                    .map(|arg| {
+                        lift_expr(
+                            arg,
+                            declarations,
+                            statements,
+                            expr_index,
+                            functions,
+                            function_index,
+                            externs,
+                            real_types,
+                            record_layouts,
+                        )
+                    })
+                    .collect(),
+                return_ctype.clone(),
+            ));
+
+            statements
+                .push(ast.replace_untyped(CStatement::VarAssign(expr_name.clone(), hook_call)));
+
+            ast.replace_untyped(CValue::Ident(expr_name, return_ctype))
         }
         &TypedExpression::BinOp(ref op, ref left, ref right) => {
             let left_c_ast = lift_expr(
@@ -1402,7 +1435,7 @@ pub fn print_value(
             ));
 
             let has_next_cond_expr =
-                value_ast.replace_expr(CExpr::Not(value_ast.replace_expr(CExpr::Call(
+                value_ast.replace_expr(CExpr::Not(value_ast.replace_expr(CExpr::ClosureCall(
                     value_ast.replace_expr(CValue::DerefBound(
                         get_ident_name("is_empty"),
                         CType::Closure {

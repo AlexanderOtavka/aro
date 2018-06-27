@@ -29,7 +29,8 @@ pub enum CValue {
 pub enum CExpr {
     Value(CValue),
     BinOp(BinOp, Ast<CValue>, Ast<CValue>, CType),
-    Call(Ast<CValue>, Ast<CValue>, CType),
+    ClosureCall(Ast<CValue>, Ast<CValue>, CType),
+    HookCall(CHookName, Vec<Ast<CValue>>, CType),
     Not(Ast<CExpr>),
     AnyRefGet(Ast<CValue>, CType),
     ObjectAccess {
@@ -51,7 +52,6 @@ pub enum CExpr {
 pub enum CName {
     Expr(String, u64),
     Ident(String),
-    Hook(Vec<String>),
     FuncArg,
     FuncCaptures,
 }
@@ -61,6 +61,12 @@ pub enum CFuncName {
     Func(u64),
     AdaptorFunc(u64),
 }
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct CHookName(pub Vec<String>);
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct CHookDeclaration(pub CType, pub CHookName, pub Vec<CType>);
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct CDeclaration(pub CType, pub CName);
@@ -151,7 +157,8 @@ impl WellCTyped for CExpr {
                 ..
             }
             | &CExpr::BinOp(_, _, _, ref expr_type)
-            | &CExpr::Call(_, _, ref expr_type)
+            | &CExpr::ClosureCall(_, _, ref expr_type)
+            | &CExpr::HookCall(_, _, ref expr_type)
             | &CExpr::AnyRefGet(_, ref expr_type) => expr_type.clone(),
         }
     }
@@ -244,7 +251,7 @@ impl Display for CExpr {
                     op,
                     right
                 ),
-                &CExpr::Call(ref closure, ref arg, ref ret_type) => format!(
+                &CExpr::ClosureCall(ref closure, ref arg, ref ret_type) => format!(
                     "(*({}){}->func)({}, {}->captures)",
                     ctype_to_string(
                         &ret_type,
@@ -257,6 +264,14 @@ impl Display for CExpr {
                     closure,
                     arg,
                     closure
+                ),
+                &CExpr::HookCall(ref name, ref args, _) => format!(
+                    "{}({})",
+                    name,
+                    args.into_iter()
+                        .map(|arg| format!("{}", arg))
+                        .collect::<Vec<String>>()
+                        .join(",")
                 ),
                 &CExpr::Cast {
                     ref value,
@@ -288,7 +303,6 @@ impl Display for CName {
             f,
             "{}",
             match self {
-                &CName::Hook(ref names) => format!("_aro_hook__{}", names.join("__")),
                 &CName::Expr(ref name, index) => format!("_aro_expr_{}_{}", name, index),
                 &CName::Ident(ref name) => format!("aro_{}", name),
                 &CName::FuncArg => String::from("_aro_arg"),
@@ -304,6 +318,12 @@ impl Display for CFuncName {
             &CFuncName::Func(index) => write!(f, "_aro_func_{}", index),
             &CFuncName::AdaptorFunc(index) => write!(f, "_aro_func_adaptor_{}", index),
         }
+    }
+}
+
+impl Display for CHookName {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "_aro_hook__{}", self.0.join("__"))
     }
 }
 
@@ -380,6 +400,28 @@ impl Display for CStatement {
                 },
                 &CStatement::PrintText(ref text) => format!("printf(\"{}\");", text),
             }
+        )
+    }
+}
+
+impl Display for CHookDeclaration {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{};",
+            ctype_to_string(
+                &self.0,
+                &format!(
+                    "{}({})",
+                    self.1,
+                    self.2
+                        .iter()
+                        .enumerate()
+                        .map(|(i, arg_type)| format!("{} arg{}", arg_type, i))
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                ),
+            )
         )
     }
 }

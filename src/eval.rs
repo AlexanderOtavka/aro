@@ -167,6 +167,15 @@ fn substitute(
                 substitute(func, pattern, value),
                 substitute(arg, pattern, value),
             )),
+            &Expression::HookCall(ref path, ref return_type, ref vec) => {
+                ast.replace_expr(Expression::HookCall(
+                    path.clone(),
+                    return_type.clone(),
+                    vec.into_iter()
+                        .map(|element| substitute(element, pattern, value))
+                        .collect(),
+                ))
+            }
             &Expression::BinOp(ref op, ref left, ref right) => ast.replace_expr(Expression::BinOp(
                 op.clone(),
                 substitute(left, pattern, value),
@@ -233,7 +242,6 @@ fn substitute(
                 )))
             }
             &Expression::Value(Value::Bool(_))
-            | &Expression::Value(Value::Hook(_, _))
             | &Expression::Value(Value::Int(_))
             | &Expression::Value(Value::Num(_))
             | &Expression::Value(Value::Ref(_)) => ast.clone(),
@@ -258,33 +266,29 @@ fn handle_hook_call(
     path: &Vec<String>,
     left_loc: usize,
     right_loc: usize,
-    param_ast: &Ast<Expression>,
-    param_value: &Value,
+    arguments: &Vec<Ast<Value>>,
 ) -> Option<Result<Ast<Expression>, Error>> {
     Some(match path.join(".").as_str() {
         "std.list.push" => {
-            if let &Value::Tuple(ref right_vec) = param_value {
-                let el = &right_vec[0];
-                let list = &right_vec[1];
+            let el = &arguments[0];
+            let list = &arguments[1];
 
-                if let &Expression::Value(Value::List(ref vec)) = &*list.expr {
-                    let mut list = vec.clone();
-                    list.insert(0, el.clone());
+            if let &Value::List(ref vec) = &*list.expr {
+                let mut list = vec.clone();
+                list.insert(0, el.replace_expr(Expression::Value(*el.expr.clone())));
 
-                    Ok(Ast::<Expression>::new(
-                        left_loc,
-                        right_loc,
-                        Expression::Value(Value::List(list)),
-                    ))
-                } else {
-                    panic!("Second tuple arg should be list.")
-                }
+                Ok(Ast::<Expression>::new(
+                    left_loc,
+                    right_loc,
+                    Expression::Value(Value::List(list)),
+                ))
             } else {
-                panic!("list.push arg should be tuple.")
+                panic!("Second tuple arg should be list.")
             }
         }
         "std.list.is_empty" => {
-            if let &Value::List(ref vec) = param_value {
+            let list = &arguments[0];
+            if let &Value::List(ref vec) = &*list.expr {
                 Ok(Ast::<Expression>::new(
                     left_loc,
                     right_loc,
@@ -295,15 +299,16 @@ fn handle_hook_call(
             }
         }
         "std.list.head" => {
-            if let &Value::List(ref vec) = param_value {
+            let list = &arguments[0];
+            if let &Value::List(ref vec) = &*list.expr {
                 if vec.is_empty() {
                     Err(Error::LRLocated {
                         message: String::from(
                             "As usual, you can't get head.\n\
                              Especially not from an empty list.",
                         ),
-                        left_loc: param_ast.left_loc,
-                        right_loc: param_ast.right_loc,
+                        left_loc: list.left_loc,
+                        right_loc: list.right_loc,
                     })
                 } else {
                     Ok(vec[0].clone())
@@ -313,12 +318,13 @@ fn handle_hook_call(
             }
         }
         "std.list.tail" => {
-            if let &Value::List(ref vec) = param_value {
+            let list = &arguments[0];
+            if let &Value::List(ref vec) = &*list.expr {
                 if vec.is_empty() {
                     Err(Error::LRLocated {
                         message: String::from("There's no tail on that list."),
-                        left_loc: param_ast.left_loc,
-                        right_loc: param_ast.right_loc,
+                        left_loc: list.left_loc,
+                        right_loc: list.right_loc,
                     })
                 } else {
                     Ok(Ast::<Expression>::new(
@@ -332,47 +338,41 @@ fn handle_hook_call(
             }
         }
         "std.math.floordiv" => {
-            if let &Value::Tuple(ref vec) = param_value {
-                if let (&Expression::Value(ref left), &Expression::Value(ref right)) =
-                    (&*vec[0].expr, &*vec[1].expr)
-                {
-                    let div_by_zero_error = Err(Error::LRLocated {
-                        message: String::from("Can't divide by your future (which is zero)."),
-                        left_loc: vec[1].left_loc,
-                        right_loc: vec[1].right_loc,
-                    });
-                    match (left, right) {
-                        (&Value::Int(_), &Value::Int(0)) | (&Value::Num(_), &Value::Int(0)) => {
-                            div_by_zero_error
-                        }
-                        (&Value::Int(_), &Value::Num(val)) | (&Value::Num(_), &Value::Num(val))
-                            if val as i32 == 0 =>
-                        {
-                            div_by_zero_error
-                        }
-                        _ => Ok(param_ast.replace_expr(Expression::Value(Value::Int(match (
-                            left, right,
-                        ) {
-                            (&Value::Int(left_value), &Value::Int(right_value)) => {
-                                left_value / right_value
-                            }
-                            (&Value::Int(left_value), &Value::Num(right_value)) => {
-                                left_value / right_value as i32
-                            }
-                            (&Value::Num(left_value), &Value::Int(right_value)) => {
-                                left_value as i32 / right_value
-                            }
-                            (&Value::Num(left_value), &Value::Num(right_value)) => {
-                                left_value as i32 / right_value as i32
-                            }
-                            _ => panic!("int.floordiv can only be called on numbers"),
-                        })))),
-                    }
-                } else {
-                    panic!("int.floordiv must be called with values")
+            let left = &arguments[0];
+            let right = &arguments[1];
+            let div_by_zero_error = Err(Error::LRLocated {
+                message: String::from("Can't divide by your future (which is zero)."),
+                left_loc: right.left_loc,
+                right_loc: right.right_loc,
+            });
+            match (&*left.expr, &*right.expr) {
+                (&Value::Int(_), &Value::Int(0)) | (&Value::Num(_), &Value::Int(0)) => {
+                    div_by_zero_error
                 }
-            } else {
-                panic!("int.floordiv arg should be a tuple")
+                (&Value::Int(_), &Value::Num(val)) | (&Value::Num(_), &Value::Num(val))
+                    if val as i32 == 0 =>
+                {
+                    div_by_zero_error
+                }
+                _ => Ok(Ast::<Expression>::new(
+                    left_loc,
+                    right_loc,
+                    Expression::Value(Value::Int(match (&*left.expr, &*right.expr) {
+                        (&Value::Int(left_value), &Value::Int(right_value)) => {
+                            left_value / right_value
+                        }
+                        (&Value::Int(left_value), &Value::Num(right_value)) => {
+                            left_value / right_value as i32
+                        }
+                        (&Value::Num(left_value), &Value::Int(right_value)) => {
+                            left_value as i32 / right_value
+                        }
+                        (&Value::Num(left_value), &Value::Num(right_value)) => {
+                            left_value as i32 / right_value as i32
+                        }
+                        _ => panic!("int.floordiv can only be called on numbers"),
+                    })),
+                )),
             }
         }
         _ => {
@@ -428,7 +428,6 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
             Ok(ast.replace_expr(Expression::Value(Value::Record(stepped_record))))
         }
         &Expression::Value(Value::Bool(_))
-        | &Expression::Value(Value::Hook(_, _))
         | &Expression::Value(Value::Int(_))
         | &Expression::Value(Value::Num(_))
         | &Expression::Value(Value::Ref(_))
@@ -458,24 +457,59 @@ fn step_ast(ast: &Ast<Expression>) -> Result<Ast<Expression>, Error> {
         } else {
             ast.replace_expr(Expression::Sequence(step_ast(side_effect)?, result.clone()))
         }),
+        &Expression::HookCall(ref path, ref return_type, ref arguments) => {
+            let mut stepped_arguments = Vec::new();
+
+            let mut something_was_stepped = false;
+            for value in arguments {
+                if value.is_term() {
+                    stepped_arguments.push(value.clone());
+                } else {
+                    stepped_arguments.push(step_ast(value)?);
+                    something_was_stepped = true;
+                }
+            }
+
+            if something_was_stepped {
+                Ok(ast.replace_expr(Expression::HookCall(
+                    path.clone(),
+                    return_type.clone(),
+                    stepped_arguments,
+                )))
+            } else {
+                match handle_hook_call(
+                    path,
+                    left_loc,
+                    right_loc,
+                    &stepped_arguments
+                        .into_iter()
+                        .map(|arg_ast| {
+                            if let Expression::Value(ref arg_value) = *arg_ast.expr {
+                                arg_ast.replace_expr(arg_value.clone())
+                            } else {
+                                panic!("Wat? We just check to be sure they were all terminals.")
+                            }
+                        })
+                        .collect(),
+                ) {
+                    Some(result) => result,
+                    None => Err(Error::LRLocated {
+                        message: format!(
+                            "`{}` ain't gonna hook up with your ugly ass.\n\
+                             'Cuz it's not a hook.",
+                            path.join(".")
+                        ),
+                        left_loc: ast.left_loc,
+                        right_loc: ast.right_loc,
+                    }),
+                }
+            }
+        }
         &Expression::Call(ref func_ast, ref arg_ast) => match (&*func_ast.expr, &*arg_ast.expr) {
             (&Expression::Value(ref func), &Expression::Value(ref arg))
                 if func_ast.is_term() && arg_ast.is_term() =>
             {
-                if let &Value::Hook(ref path, _) = func {
-                    match handle_hook_call(path, left_loc, right_loc, arg_ast, arg) {
-                        Some(result) => result,
-                        None => Err(Error::LRLocated {
-                            message: format!(
-                                "`{}` ain't gonna hook up with your ugly ass.\n\
-                                 'Cuz it's not a hook.",
-                                path.join(".")
-                            ),
-                            left_loc: func_ast.left_loc,
-                            right_loc: func_ast.right_loc,
-                        }),
-                    }
-                } else if let &Value::Func(ref pattern, _, ref body) = func {
+                if let &Value::Func(ref pattern, _, ref body) = func {
                     Ok(substitute(
                         body,
                         pattern,
@@ -765,30 +799,21 @@ mod evaluate_ast {
 
     #[test]
     fn can_floor_divide_with_a_hook() {
+        assert_eval_eq(r#"@call_hook("std.math.floordiv"  type Int  7  4)"#, "1");
+        assert_eval_eq(r#"@call_hook("std.math.floordiv"  type Int  7.0  4)"#, "1");
+        assert_eval_eq(r#"@call_hook("std.math.floordiv"  type Int  7  4.0)"#, "1");
         assert_eval_eq(
-            r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (7 4)"#,
+            r#"@call_hook("std.math.floordiv"  type Int  7.0  4.0)"#,
             "1",
         );
-        assert_eval_eq(
-            r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (7.0 4)"#,
-            "1",
-        );
-        assert_eval_eq(
-            r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (7 4.0)"#,
-            "1",
-        );
-        assert_eval_eq(
-            r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (7.0 4.0)"#,
-            "1",
-        );
-        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (7 0)"#);
-        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (7 0.0)"#);
-        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (7.0 0)"#);
-        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (7.0 0.0)"#);
-        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (0 0)"#);
-        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (0 0.0)"#);
-        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (0.0 0)"#);
-        assert_eval_err(r#"@hook ("std.math.floordiv"  (Num Num) => Int) <| (0.0 0.0)"#);
+        assert_eval_err(r#"@call_hook("std.math.floordiv"  type Int  7  0)"#);
+        assert_eval_err(r#"@call_hook("std.math.floordiv"  type Int  7  0.0)"#);
+        assert_eval_err(r#"@call_hook("std.math.floordiv"  type Int  7.0  0)"#);
+        assert_eval_err(r#"@call_hook("std.math.floordiv"  type Int  7.0  0.0)"#);
+        assert_eval_err(r#"@call_hook("std.math.floordiv"  type Int  0  0)"#);
+        assert_eval_err(r#"@call_hook("std.math.floordiv"  type Int  0  0.0)"#);
+        assert_eval_err(r#"@call_hook("std.math.floordiv"  type Int  0.0  0)"#);
+        assert_eval_err(r#"@call_hook("std.math.floordiv"  type Int  0.0  0.0)"#);
     }
 
     #[test]
@@ -992,19 +1017,19 @@ mod evaluate_ast {
     fn list_push_hook() {
         assert_eval_eq(
             r#"
-            (1 [2 3]) |> @hook("std.list.push"  ((Int  [Int]) => [Int]))
+            @call_hook("std.list.push"  type [Int]  1  [2 3])
             "#,
             "[1 2 3]",
         );
         assert_eval_eq(
             r#"
-            (1 []) |> @hook("std.list.push"  ((Int  [Int]) => [Int]))
+            @call_hook("std.list.push"  type [Int]  1  [])
             "#,
             "[1]",
         );
         assert_eval_eq(
             r#"
-            (1.6 [2.1 3.7]) |> @hook("std.list.push"  ((Num  [Num]) => [Num]))
+            @call_hook("std.list.push"  type [Num]  1.6  [2.1 3.7])
             "#,
             "[1.6 2.1 3.7]",
         );
@@ -1014,27 +1039,21 @@ mod evaluate_ast {
     fn list_is_empty_hook() {
         assert_eval_eq(
             r#"
-            [1 2 3] |> @hook("std.list.is_empty"  ([Int] => Bool))
+            @call_hook("std.list.is_empty"  type Bool  [1 2 3])
             "#,
             "#false",
         );
         assert_eval_eq(
             r#"
-            [] |> @hook("std.list.is_empty"  ([Int] => Bool))
+            @call_hook("std.list.is_empty"  type Bool  [])
             "#,
             "#true",
         );
         assert_eval_eq(
             r#"
-            [#true #false] |> @hook("std.list.is_empty"  ([Bool] => Bool))
+            @call_hook("std.list.is_empty"  type Bool  [#true #false])
             "#,
             "#false",
-        );
-        assert_eval_eq(
-            r#"
-            [] |> @hook("std.list.is_empty"  ([Num] => Bool))
-            "#,
-            "#true",
         );
     }
 
@@ -1042,18 +1061,18 @@ mod evaluate_ast {
     fn list_head_hook() {
         assert_eval_eq(
             r#"
-            [1 2 3] |> @hook("std.list.head"  ([Int] => Int))
+            @call_hook("std.list.head"  type Int  [1 2 3])
             "#,
             "1",
         );
         assert_eval_err(
             r#"
-            [] |> @hook("std.list.head"  ([Int] => Int))
+            @call_hook("std.list.head"  type Int  [])
             "#,
         );
         assert_eval_eq(
             r#"
-            [#true #false] |> @hook("std.list.head"  ([Bool] => Bool))
+            @call_hook("std.list.head"  type Bool  [#true #false])
             "#,
             "#true",
         );
@@ -1063,18 +1082,18 @@ mod evaluate_ast {
     fn list_tail_hook() {
         assert_eval_eq(
             r#"
-            [1 2 3] |> @hook("std.list.tail"  ([Int] => Int))
+            @call_hook("std.list.tail"  type Int  [1 2 3])
             "#,
             "[2 3]",
         );
         assert_eval_err(
             r#"
-            [] |> @hook("std.list.tail"  ([Int] => Int))
+            @call_hook("std.list.tail"  type Int  [])
             "#,
         );
         assert_eval_eq(
             r#"
-            [#true #false] |> @hook("std.list.tail"  ([Bool] => Bool))
+            @call_hook("std.list.tail"  type Bool  [#true #false])
             "#,
             "[#false]",
         );

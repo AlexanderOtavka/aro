@@ -269,7 +269,7 @@ fn c_expr_to_wasm(c_expr: &Ast<CExpr>, locals: &Locals) -> Ast<WASMExpr> {
                 op_wasm_type,
             ))
         }
-        &CExpr::Call(ref closure, ref arg, ref ret_type) => {
+        &CExpr::ClosureCall(ref closure, ref arg, ref ret_type) => {
             let closure_wasm = c_value_to_wasm(closure, locals);
 
             c_expr.replace_expr(WASMExpr::CallIndirect {

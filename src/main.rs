@@ -251,7 +251,7 @@ fn c_compile_source(input: &str) -> Result<String, Error> {
         env!("CARGO_PKG_VERSION"),
         externs
             .iter()
-            .map(|extern_declaration| format!("extern {}", extern_declaration))
+            .map(|extern_declaration| format!("{}", extern_declaration))
             .collect::<Vec<String>>()
             .join("\n"),
         functions
