@@ -376,12 +376,24 @@ fn wasm_compile_source(input: &str) -> Result<String, Error> {
          \n(global $_stack_pointer (mut i32) (i32.const 0))\
          \n(global $_temp (mut i32) (i32.const 0))\
          \n\
+         \n{}\
+         \n\
          \n(table anyfunc\
          \n  (elem{}))\
          \n{}\
          \n(func (export \"main\") (result {}){}{})",
         env!("CARGO_PKG_NAME"),
         env!("CARGO_PKG_VERSION"),
+        c_externs
+            .into_iter()
+            .map(|hook_declaration| {
+                format!(
+                    "{}",
+                    wasm_compile::c_hook_declaration_to_wasm(&hook_declaration)
+                )
+            })
+            .collect::<Vec<String>>()
+            .join("\n"),
         wasm_functions
             .iter()
             .map(|wasm_func| format!("\n    ${}", wasm_func.name))

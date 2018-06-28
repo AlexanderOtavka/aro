@@ -1,9 +1,13 @@
-use c_ast::{CDeclaration, CExpr, CFunc, CFuncName, CName, CStatement, CType, CValue, WellCTyped};
+use c_ast::{
+    CDeclaration, CExpr, CFunc, CFuncName, CHookDeclaration, CHookName, CName, CStatement, CType,
+    CValue, WellCTyped,
+};
 use std::collections::HashMap;
 use std::u32;
 use untyped_ast::{Ast, BinOp, NumOp};
 use wasm_ast::{
-    StackMap, WASMDirectFuncName, WASMExpr, WASMFunc, WASMGlobalName, WASMType, WASMValue,
+    StackMap, WASMDirectFuncName, WASMExpr, WASMFunc, WASMGlobalName, WASMHookImport, WASMHookName,
+    WASMType, WASMValue,
 };
 
 const UNIVERSAL_ALIGN: usize = 8; // The size of a union
@@ -291,6 +295,12 @@ fn c_expr_to_wasm(c_expr: &Ast<CExpr>, locals: &Locals) -> Ast<WASMExpr> {
                 ],
             })
         }
+        &CExpr::HookCall(CHookName(ref path), ref args, _) => c_expr.replace_expr(WASMExpr::Call(
+            WASMDirectFuncName::Hook(WASMHookName(path.clone())),
+            args.into_iter()
+                .map(|value| c_value_to_wasm(value, locals))
+                .collect(),
+        )),
         &CExpr::ObjectAccess {
             ref object,
             index,
@@ -529,5 +539,15 @@ pub fn c_func_to_wasm(c_func: &Ast<CFunc>) -> WASMFunc {
         result: c_type_to_wasm(&c_func.expr.ret.expr.get_ctype()),
         stack_map: locals.to_stack_map(),
         body,
+    }
+}
+
+pub fn c_hook_declaration_to_wasm(c_hook_declaration: &CHookDeclaration) -> WASMHookImport {
+    let &CHookDeclaration(ref ret_type, CHookName(ref path), ref args) = c_hook_declaration;
+
+    WASMHookImport {
+        name: WASMHookName(path.clone()),
+        params: args.into_iter().map(c_type_to_wasm).collect(),
+        result: c_type_to_wasm(ret_type),
     }
 }

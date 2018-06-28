@@ -16,9 +16,13 @@ pub enum WASMValue {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct WASMHookName(pub Vec<String>);
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum WASMDirectFuncName {
     HeapAlloc,
     StackAlloc,
+    Hook(WASMHookName),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -52,6 +56,13 @@ pub enum WASMExpr {
 pub type StackMap = Vec<WASMType>;
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct WASMHookImport {
+    pub name: WASMHookName,
+    pub params: Vec<WASMType>,
+    pub result: WASMType,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub struct WASMFunc {
     pub name: CFuncName,
     pub params: Vec<(CName, WASMType)>,
@@ -60,9 +71,16 @@ pub struct WASMFunc {
     pub body: Vec<Ast<WASMExpr>>,
 }
 
+impl Display for WASMHookName {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "${}", self.0.join("."))
+    }
+}
+
 impl Display for WASMDirectFuncName {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
+            WASMDirectFuncName::Hook(ref name) => name.fmt(f),
             WASMDirectFuncName::HeapAlloc => write!(f, "$_alloc"),
             WASMDirectFuncName::StackAlloc => write!(f, "$_alloc"),
         }
@@ -75,6 +93,27 @@ impl Display for WASMGlobalName {
             WASMGlobalName::StackPointer => write!(f, "$_stack_pointer"),
             WASMGlobalName::Temp => write!(f, "$_temp"),
         }
+    }
+}
+
+impl Display for WASMHookImport {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let WASMHookName(ref path) = self.name;
+        write!(
+            f,
+            "(import{} (func {}{} (result {})))",
+            path.into_iter()
+                .map(|name| format!(" \"{}\"", name))
+                .collect::<Vec<String>>()
+                .join(""),
+            self.name,
+            self.params
+                .iter()
+                .map(|param| format!(" (param {})", param))
+                .collect::<Vec<String>>()
+                .join(""),
+            self.result
+        )
     }
 }
 
