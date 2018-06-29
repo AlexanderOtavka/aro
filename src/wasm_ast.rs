@@ -3,111 +3,111 @@ use std::fmt::{self, Display, Formatter};
 use untyped_ast::{Ast, BinOp, NumOp, RelOp};
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum WASMType {
+pub enum WAsmType {
     I32,
     I64,
     F64,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum WASMValue {
+pub enum WAsmValue {
     I32(i64), // Extra space for unsigned integers
     F64(f64),
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct WASMHookName(pub Vec<String>);
+pub struct WAsmHookName(pub Vec<String>);
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum WASMDirectFuncName {
+pub enum WAsmDirectFuncName {
     HeapAlloc,
     StackAlloc,
-    Hook(WASMHookName),
+    Hook(WAsmHookName),
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum WASMGlobalName {
+pub enum WAsmGlobalName {
     StackPointer,
     Temp,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum WASMExpr {
-    Const(WASMType, WASMValue),
+pub enum WAsmExpr {
+    Const(WAsmType, WAsmValue),
     GetLocal(CName),
-    SetGlobal(WASMGlobalName, Ast<WASMExpr>),
-    GetGlobal(WASMGlobalName),
-    BinOp(BinOp, Ast<WASMExpr>, Ast<WASMExpr>, WASMType),
-    PromoteInt(Ast<WASMExpr>),
-    TruncateFloat(Ast<WASMExpr>),
-    If(Ast<WASMExpr>, Vec<Ast<WASMExpr>>, Vec<Ast<WASMExpr>>),
-    Load(WASMType, Ast<WASMExpr>),
-    Store(WASMType, Ast<WASMExpr>, Ast<WASMExpr>),
-    Call(WASMDirectFuncName, Vec<Ast<WASMExpr>>),
+    SetGlobal(WAsmGlobalName, Ast<WAsmExpr>),
+    GetGlobal(WAsmGlobalName),
+    BinOp(BinOp, Ast<WAsmExpr>, Ast<WAsmExpr>, WAsmType),
+    PromoteInt(Ast<WAsmExpr>),
+    TruncateFloat(Ast<WAsmExpr>),
+    If(Ast<WAsmExpr>, Vec<Ast<WAsmExpr>>, Vec<Ast<WAsmExpr>>),
+    Load(WAsmType, Ast<WAsmExpr>),
+    Store(WAsmType, Ast<WAsmExpr>, Ast<WAsmExpr>),
+    Call(WAsmDirectFuncName, Vec<Ast<WAsmExpr>>),
     CallIndirect {
-        param_types: Vec<WASMType>,
-        ret_type: WASMType,
-        function_index: Ast<WASMExpr>,
-        args: Vec<Ast<WASMExpr>>,
+        param_types: Vec<WAsmType>,
+        ret_type: WAsmType,
+        function_index: Ast<WAsmExpr>,
+        args: Vec<Ast<WAsmExpr>>,
     },
-    Sequence(Vec<Ast<WASMExpr>>),
+    Sequence(Vec<Ast<WAsmExpr>>),
 }
 
-pub type StackMap = Vec<WASMType>;
+pub type StackMap = Vec<WAsmType>;
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct WASMHookImport {
-    pub name: WASMHookName,
-    pub params: Vec<WASMType>,
-    pub result: WASMType,
+pub struct WAsmHookImport {
+    pub name: WAsmHookName,
+    pub params: Vec<WAsmType>,
+    pub result: WAsmType,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct WASMFunc {
+pub struct WAsmFunc {
     pub name: CFuncName,
-    pub params: Vec<(CName, WASMType)>,
-    pub result: WASMType,
+    pub params: Vec<(CName, WAsmType)>,
+    pub result: WAsmType,
     pub stack_map: StackMap,
-    pub body: Vec<Ast<WASMExpr>>,
+    pub body: Vec<Ast<WAsmExpr>>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct WASMModule {
-    pub hook_imports: Vec<WASMHookImport>,
+pub struct WAsmModule {
+    pub hook_imports: Vec<WAsmHookImport>,
     pub table_offset: u32,
-    pub table: Vec<WASMFunc>,
-    pub main_body: Vec<Ast<WASMExpr>>,
-    pub main_return: Option<(Ast<WASMExpr>, WASMType)>,
+    pub table: Vec<WAsmFunc>,
+    pub main_body: Vec<Ast<WAsmExpr>>,
+    pub main_return: Option<(Ast<WAsmExpr>, WAsmType)>,
 }
 
-impl Display for WASMHookName {
+impl Display for WAsmHookName {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "${}", self.0.join("."))
     }
 }
 
-impl Display for WASMDirectFuncName {
+impl Display for WAsmDirectFuncName {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            WASMDirectFuncName::Hook(ref name) => name.fmt(f),
-            WASMDirectFuncName::HeapAlloc => write!(f, "$_alloc"),
-            WASMDirectFuncName::StackAlloc => write!(f, "$_alloc"),
+            WAsmDirectFuncName::Hook(ref name) => name.fmt(f),
+            WAsmDirectFuncName::HeapAlloc => write!(f, "$_alloc"),
+            WAsmDirectFuncName::StackAlloc => write!(f, "$_alloc"),
         }
     }
 }
 
-impl Display for WASMGlobalName {
+impl Display for WAsmGlobalName {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            WASMGlobalName::StackPointer => write!(f, "$_stack_pointer"),
-            WASMGlobalName::Temp => write!(f, "$_temp"),
+            WAsmGlobalName::StackPointer => write!(f, "$_stack_pointer"),
+            WAsmGlobalName::Temp => write!(f, "$_temp"),
         }
     }
 }
 
-impl Display for WASMHookImport {
+impl Display for WAsmHookImport {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        let WASMHookName(ref path) = self.name;
+        let WAsmHookName(ref path) = self.name;
         write!(
             f,
             "(import{} (func {}{} (result {})))",
@@ -126,24 +126,24 @@ impl Display for WASMHookImport {
     }
 }
 
-impl Display for WASMValue {
+impl Display for WAsmValue {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            WASMValue::I32(value) => write!(f, "{}", value),
-            WASMValue::F64(value) => write!(f, "{}", value),
+            WAsmValue::I32(value) => write!(f, "{}", value),
+            WAsmValue::F64(value) => write!(f, "{}", value),
         }
     }
 }
 
-impl Display for WASMType {
+impl Display for WAsmType {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
             "{}",
             match self {
-                WASMType::I32 => "i32",
-                WASMType::I64 => "i64",
-                WASMType::F64 => "f64",
+                WAsmType::I32 => "i32",
+                WAsmType::I64 => "i64",
+                WAsmType::F64 => "f64",
             }
         )
     }
@@ -159,7 +159,7 @@ fn get_indent(indent_level: u32) -> String {
     indent
 }
 
-fn sequence_to_str_indented(sequence: &Vec<Ast<WASMExpr>>, indent_level: u32) -> String {
+fn sequence_to_str_indented(sequence: &Vec<Ast<WAsmExpr>>, indent_level: u32) -> String {
     let mut string = String::new();
 
     for element in sequence {
@@ -169,29 +169,29 @@ fn sequence_to_str_indented(sequence: &Vec<Ast<WASMExpr>>, indent_level: u32) ->
     string
 }
 
-impl Ast<WASMExpr> {
+impl Ast<WAsmExpr> {
     pub fn get_str_indented(&self, indent_level: u32) -> String {
         self.expr.get_str_indented(indent_level)
     }
 }
 
-impl WASMExpr {
+impl WAsmExpr {
     pub fn get_str_indented(&self, indent_level: u32) -> String {
         format!(
             "{}{}",
             get_indent(indent_level),
             match self {
-                WASMExpr::Const(ref value_type, ref value) => {
+                WAsmExpr::Const(ref value_type, ref value) => {
                     format!("({}.const {})", value_type, value)
                 }
-                WASMExpr::GetLocal(ref name) => format!("(get_local ${})", name),
-                WASMExpr::GetGlobal(ref name) => format!("(get_global {})", name),
-                WASMExpr::SetGlobal(ref name, ref value) => format!(
+                WAsmExpr::GetLocal(ref name) => format!("(get_local ${})", name),
+                WAsmExpr::GetGlobal(ref name) => format!("(get_global {})", name),
+                WAsmExpr::SetGlobal(ref name, ref value) => format!(
                     "(set_global {}{})",
                     name,
                     value.get_str_indented(indent_level + 1)
                 ),
-                WASMExpr::BinOp(ref op, ref left, ref right, ref result_type) => format!(
+                WAsmExpr::BinOp(ref op, ref left, ref right, ref result_type) => format!(
                     "({}.{}{}{})",
                     result_type,
                     match op {
@@ -204,15 +204,15 @@ impl WASMExpr {
                     left.get_str_indented(indent_level + 1),
                     right.get_str_indented(indent_level + 1)
                 ),
-                WASMExpr::PromoteInt(ref int) => format!(
+                WAsmExpr::PromoteInt(ref int) => format!(
                     "(f64.convert_s/i32{})",
                     int.get_str_indented(indent_level + 1)
                 ),
-                WASMExpr::TruncateFloat(ref float) => format!(
+                WAsmExpr::TruncateFloat(ref float) => format!(
                     "(i32.trunc_s/f64{})",
                     float.get_str_indented(indent_level + 1)
                 ),
-                WASMExpr::If(ref condition, ref consequent, ref alternate) => format!(
+                WAsmExpr::If(ref condition, ref consequent, ref alternate) => format!(
                     "(if{}{}(then{}){}(else{}))",
                     condition.get_str_indented(indent_level + 1),
                     get_indent(indent_level + 1),
@@ -220,23 +220,23 @@ impl WASMExpr {
                     get_indent(indent_level + 1),
                     sequence_to_str_indented(alternate, indent_level + 2),
                 ),
-                WASMExpr::Load(ref value_type, ref offset) => format!(
+                WAsmExpr::Load(ref value_type, ref offset) => format!(
                     "({}.load{})",
                     value_type,
                     offset.get_str_indented(indent_level + 1)
                 ),
-                WASMExpr::Store(ref value_type, ref offset, ref value) => format!(
+                WAsmExpr::Store(ref value_type, ref offset, ref value) => format!(
                     "({}.store{}{})",
                     value_type,
                     offset.get_str_indented(indent_level + 1),
                     value.get_str_indented(indent_level + 1)
                 ),
-                WASMExpr::Call(ref name, ref args) => format!(
+                WAsmExpr::Call(ref name, ref args) => format!(
                     "(call {}{})",
                     name,
                     sequence_to_str_indented(args, indent_level + 1)
                 ),
-                WASMExpr::CallIndirect {
+                WAsmExpr::CallIndirect {
                     ref param_types,
                     ref ret_type,
                     ref function_index,
@@ -252,7 +252,7 @@ impl WASMExpr {
                     sequence_to_str_indented(args, indent_level + 1),
                     function_index.get_str_indented(indent_level + 1)
                 ),
-                WASMExpr::Sequence(ref exprs) => format!(
+                WAsmExpr::Sequence(ref exprs) => format!(
                     "(;sequence;){}",
                     sequence_to_str_indented(exprs, indent_level + 1)
                 ),
@@ -261,7 +261,7 @@ impl WASMExpr {
     }
 }
 
-impl Display for WASMFunc {
+impl Display for WAsmFunc {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
@@ -278,7 +278,7 @@ impl Display for WASMFunc {
     }
 }
 
-impl Display for WASMModule {
+impl Display for WAsmModule {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,

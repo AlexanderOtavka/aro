@@ -6,8 +6,8 @@ use std::collections::HashMap;
 use std::u32;
 use untyped_ast::{Ast, BinOp, NumOp};
 use wasm_ast::{
-    StackMap, WASMDirectFuncName, WASMExpr, WASMFunc, WASMGlobalName, WASMHookImport, WASMHookName,
-    WASMModule, WASMType, WASMValue,
+    StackMap, WAsmDirectFuncName, WAsmExpr, WAsmFunc, WAsmGlobalName, WAsmHookImport, WAsmHookName,
+    WAsmModule, WAsmType, WAsmValue,
 };
 
 const UNIVERSAL_ALIGN: usize = 8; // The size of a union
@@ -17,7 +17,7 @@ const FUNCTION_INDEX_OFFSET: usize = 1 * UNIVERSAL_ALIGN;
 const NULL: u32 = u32::MAX;
 
 pub struct Locals {
-    map: HashMap<CName, (i64, WASMType)>,
+    map: HashMap<CName, (i64, WAsmType)>,
     current_offset: i64,
 }
 
@@ -34,21 +34,21 @@ impl Locals {
         left_loc: usize,
         right_loc: usize,
         function_index: Option<i64>,
-    ) -> Ast<WASMExpr> {
+    ) -> Ast<WAsmExpr> {
         Ast::new(
             left_loc,
             right_loc,
-            WASMExpr::Sequence(vec![
+            WAsmExpr::Sequence(vec![
                 // Save the current call stack pointer
                 Ast::new(
                     left_loc,
                     right_loc,
-                    WASMExpr::SetGlobal(
-                        WASMGlobalName::Temp,
+                    WAsmExpr::SetGlobal(
+                        WAsmGlobalName::Temp,
                         Ast::new(
                             left_loc,
                             right_loc,
-                            WASMExpr::GetGlobal(WASMGlobalName::StackPointer),
+                            WAsmExpr::GetGlobal(WAsmGlobalName::StackPointer),
                         ),
                     ),
                 ),
@@ -56,19 +56,19 @@ impl Locals {
                 Ast::new(
                     left_loc,
                     right_loc,
-                    WASMExpr::SetGlobal(
-                        WASMGlobalName::StackPointer,
+                    WAsmExpr::SetGlobal(
+                        WAsmGlobalName::StackPointer,
                         Ast::new(
                             left_loc,
                             right_loc,
-                            WASMExpr::Call(
-                                WASMDirectFuncName::StackAlloc,
+                            WAsmExpr::Call(
+                                WAsmDirectFuncName::StackAlloc,
                                 vec![Ast::new(
                                     left_loc,
                                     right_loc,
-                                    WASMExpr::Const(
-                                        WASMType::I32,
-                                        WASMValue::I32(self.get_frame_size() as i64),
+                                    WAsmExpr::Const(
+                                        WAsmType::I32,
+                                        WAsmValue::I32(self.get_frame_size() as i64),
                                     ),
                                 )],
                             ),
@@ -79,13 +79,13 @@ impl Locals {
                 Ast::new(
                     left_loc,
                     right_loc,
-                    WASMExpr::Store(
-                        WASMType::I32,
+                    WAsmExpr::Store(
+                        WAsmType::I32,
                         Locals::get_offset(left_loc, right_loc, FRAME_POINTER_OFFSET as i64),
                         Ast::new(
                             left_loc,
                             right_loc,
-                            WASMExpr::GetGlobal(WASMGlobalName::Temp),
+                            WAsmExpr::GetGlobal(WAsmGlobalName::Temp),
                         ),
                     ),
                 ),
@@ -93,15 +93,15 @@ impl Locals {
                 Ast::new(
                     left_loc,
                     right_loc,
-                    WASMExpr::Store(
-                        WASMType::I32,
+                    WAsmExpr::Store(
+                        WAsmType::I32,
                         Locals::get_offset(left_loc, right_loc, FUNCTION_INDEX_OFFSET as i64),
                         Ast::new(
                             left_loc,
                             right_loc,
-                            WASMExpr::Const(
-                                WASMType::I32,
-                                WASMValue::I32(function_index.unwrap_or(NULL as i64)),
+                            WAsmExpr::Const(
+                                WAsmType::I32,
+                                WAsmValue::I32(function_index.unwrap_or(NULL as i64)),
                             ),
                         ),
                     ),
@@ -122,43 +122,43 @@ impl Locals {
         let mut values = self.map
             .into_iter()
             .map(|(_, value)| value)
-            .collect::<Vec<(i64, WASMType)>>();
+            .collect::<Vec<(i64, WAsmType)>>();
 
         values.sort_unstable_by_key(|(index, _)| *index);
 
         values.into_iter().map(|(_, wasm_type)| wasm_type).collect()
     }
 
-    fn push(&mut self, name: CName, local_type: WASMType) {
+    fn push(&mut self, name: CName, local_type: WAsmType) {
         self.map.insert(name, (self.current_offset, local_type));
         self.current_offset += UNIVERSAL_ALIGN as i64;
     }
 
-    fn get_offset(left_loc: usize, right_loc: usize, offset: i64) -> Ast<WASMExpr> {
+    fn get_offset(left_loc: usize, right_loc: usize, offset: i64) -> Ast<WAsmExpr> {
         Ast::new(
             left_loc,
             right_loc,
-            WASMExpr::BinOp(
+            WAsmExpr::BinOp(
                 BinOp::Num(NumOp::Add),
                 Ast::new(
                     left_loc,
                     right_loc,
-                    WASMExpr::Const(WASMType::I32, WASMValue::I32(offset)),
+                    WAsmExpr::Const(WAsmType::I32, WAsmValue::I32(offset)),
                 ),
                 Ast::new(
                     left_loc,
                     right_loc,
-                    WASMExpr::GetGlobal(WASMGlobalName::StackPointer),
+                    WAsmExpr::GetGlobal(WAsmGlobalName::StackPointer),
                 ),
-                WASMType::I32,
+                WAsmType::I32,
             ),
         )
     }
 
-    fn load(&self, left_loc: usize, right_loc: usize, name: &CName) -> Ast<WASMExpr> {
+    fn load(&self, left_loc: usize, right_loc: usize, name: &CName) -> Ast<WAsmExpr> {
         match name {
             &CName::FuncArg | &CName::FuncCaptures => {
-                Ast::new(left_loc, right_loc, WASMExpr::GetLocal(name.clone()))
+                Ast::new(left_loc, right_loc, WAsmExpr::GetLocal(name.clone()))
             }
             _ => {
                 let (offset, local_type) = self.map
@@ -168,7 +168,7 @@ impl Locals {
                 Ast::new(
                     left_loc,
                     right_loc,
-                    WASMExpr::Load(
+                    WAsmExpr::Load(
                         local_type.clone(),
                         Locals::get_offset(left_loc, right_loc, *offset),
                     ),
@@ -182,8 +182,8 @@ impl Locals {
         left_loc: usize,
         right_loc: usize,
         name: &CName,
-        value: Ast<WASMExpr>,
-    ) -> Ast<WASMExpr> {
+        value: Ast<WAsmExpr>,
+    ) -> Ast<WAsmExpr> {
         let (offset, local_type) = self.map.get(name).expect(&format!(
             "Couldn't find local in stack map with name {}",
             name
@@ -192,7 +192,7 @@ impl Locals {
         Ast::new(
             left_loc,
             right_loc,
-            WASMExpr::Store(
+            WAsmExpr::Store(
                 local_type.clone(),
                 Locals::get_offset(left_loc, right_loc, *offset),
                 value,
@@ -207,43 +207,43 @@ pub fn get_func_index(name: &CFuncName) -> u64 {
     }
 }
 
-pub fn c_type_to_wasm(c_type: &CType) -> WASMType {
+pub fn c_type_to_wasm(c_type: &CType) -> WAsmType {
     match c_type {
         &CType::Int | &CType::Bool | &CType::Closure { .. } | &CType::Object | &CType::Ref(_) => {
-            WASMType::I32
+            WAsmType::I32
         }
-        &CType::Any => WASMType::I64,
-        &CType::Float => WASMType::F64,
+        &CType::Any => WAsmType::I64,
+        &CType::Float => WAsmType::F64,
     }
 }
 
-pub fn c_value_to_wasm(c_value: &Ast<CValue>, locals: &Locals) -> Ast<WASMExpr> {
+pub fn c_value_to_wasm(c_value: &Ast<CValue>, locals: &Locals) -> Ast<WAsmExpr> {
     match &*c_value.expr {
         &CValue::Int(value) => {
-            c_value.replace_expr(WASMExpr::Const(WASMType::I32, WASMValue::I32(value as i64)))
+            c_value.replace_expr(WAsmExpr::Const(WAsmType::I32, WAsmValue::I32(value as i64)))
         }
         &CValue::Float(value) => {
-            c_value.replace_expr(WASMExpr::Const(WASMType::F64, WASMValue::F64(value)))
+            c_value.replace_expr(WAsmExpr::Const(WAsmType::F64, WAsmValue::F64(value)))
         }
-        &CValue::Bool(value) => c_value.replace_expr(WASMExpr::Const(
-            WASMType::I32,
-            WASMValue::I32(if value { 1 } else { 0 } as i64),
+        &CValue::Bool(value) => c_value.replace_expr(WAsmExpr::Const(
+            WAsmType::I32,
+            WAsmValue::I32(if value { 1 } else { 0 } as i64),
         )),
         &CValue::Ident(ref name, _) => locals.load(c_value.left_loc, c_value.right_loc, name),
         &CValue::Null => {
-            c_value.replace_expr(WASMExpr::Const(WASMType::I32, WASMValue::I32(NULL as i64)))
+            c_value.replace_expr(WAsmExpr::Const(WAsmType::I32, WAsmValue::I32(NULL as i64)))
         }
-        &CValue::DerefBound(ref name, ref value_type) => c_value.replace_expr(WASMExpr::Load(
+        &CValue::DerefBound(ref name, ref value_type) => c_value.replace_expr(WAsmExpr::Load(
             c_type_to_wasm(value_type),
-            c_value.replace_expr(WASMExpr::Load(
-                WASMType::I32,
+            c_value.replace_expr(WAsmExpr::Load(
+                WAsmType::I32,
                 locals.load(c_value.left_loc, c_value.right_loc, name),
             )),
         )),
     }
 }
 
-fn c_expr_to_wasm(c_expr: &Ast<CExpr>, locals: &Locals) -> Ast<WASMExpr> {
+fn c_expr_to_wasm(c_expr: &Ast<CExpr>, locals: &Locals) -> Ast<WAsmExpr> {
     match &*c_expr.expr {
         &CExpr::Value(ref value) => c_value_to_wasm(&c_expr.replace_expr(value.clone()), locals),
         &CExpr::BinOp(ref op, ref left, ref right, ref op_type) => {
@@ -254,19 +254,19 @@ fn c_expr_to_wasm(c_expr: &Ast<CExpr>, locals: &Locals) -> Ast<WASMExpr> {
             let left_wasm = c_value_to_wasm(left, locals);
             let right_wasm = c_value_to_wasm(right, locals);
 
-            let casted_left = if op_wasm_type == WASMType::F64 && left_wasm_type == WASMType::I32 {
-                left.replace_expr(WASMExpr::PromoteInt(left_wasm))
+            let casted_left = if op_wasm_type == WAsmType::F64 && left_wasm_type == WAsmType::I32 {
+                left.replace_expr(WAsmExpr::PromoteInt(left_wasm))
             } else {
                 left_wasm
             };
-            let casted_right = if op_wasm_type == WASMType::F64 && right_wasm_type == WASMType::I32
+            let casted_right = if op_wasm_type == WAsmType::F64 && right_wasm_type == WAsmType::I32
             {
-                right.replace_expr(WASMExpr::PromoteInt(right_wasm))
+                right.replace_expr(WAsmExpr::PromoteInt(right_wasm))
             } else {
                 right_wasm
             };
 
-            c_expr.replace_expr(WASMExpr::BinOp(
+            c_expr.replace_expr(WAsmExpr::BinOp(
                 op.clone(),
                 casted_left,
                 casted_right,
@@ -276,27 +276,27 @@ fn c_expr_to_wasm(c_expr: &Ast<CExpr>, locals: &Locals) -> Ast<WASMExpr> {
         &CExpr::ClosureCall(ref closure, ref arg, ref ret_type) => {
             let closure_wasm = c_value_to_wasm(closure, locals);
 
-            c_expr.replace_expr(WASMExpr::CallIndirect {
-                param_types: vec![c_type_to_wasm(&arg.expr.get_ctype()), WASMType::I32],
+            c_expr.replace_expr(WAsmExpr::CallIndirect {
+                param_types: vec![c_type_to_wasm(&arg.expr.get_ctype()), WAsmType::I32],
                 ret_type: c_type_to_wasm(ret_type),
                 function_index: closure
-                    .replace_expr(WASMExpr::Load(WASMType::I32, closure_wasm.clone())),
+                    .replace_expr(WAsmExpr::Load(WAsmType::I32, closure_wasm.clone())),
                 args: vec![
                     c_value_to_wasm(arg, locals),
-                    closure.replace_expr(WASMExpr::BinOp(
+                    closure.replace_expr(WAsmExpr::BinOp(
                         BinOp::Num(NumOp::Add),
                         closure_wasm,
-                        closure.replace_expr(WASMExpr::Const(
-                            WASMType::I32,
-                            WASMValue::I32(UNIVERSAL_ALIGN as i64),
+                        closure.replace_expr(WAsmExpr::Const(
+                            WAsmType::I32,
+                            WAsmValue::I32(UNIVERSAL_ALIGN as i64),
                         )),
-                        WASMType::I32,
+                        WAsmType::I32,
                     )),
                 ],
             })
         }
-        &CExpr::HookCall(CHookName(ref path), ref args, _) => c_expr.replace_expr(WASMExpr::Call(
-            WASMDirectFuncName::Hook(WASMHookName(path.clone())),
+        &CExpr::HookCall(CHookName(ref path), ref args, _) => c_expr.replace_expr(WAsmExpr::Call(
+            WAsmDirectFuncName::Hook(WAsmHookName(path.clone())),
             args.into_iter()
                 .map(|value| c_value_to_wasm(value, locals))
                 .collect(),
@@ -305,16 +305,16 @@ fn c_expr_to_wasm(c_expr: &Ast<CExpr>, locals: &Locals) -> Ast<WASMExpr> {
             ref object,
             index,
             ref field_type,
-        } => c_expr.replace_expr(WASMExpr::Load(
+        } => c_expr.replace_expr(WAsmExpr::Load(
             c_type_to_wasm(field_type),
-            c_expr.replace_expr(WASMExpr::BinOp(
+            c_expr.replace_expr(WAsmExpr::BinOp(
                 BinOp::Num(NumOp::Add),
                 c_value_to_wasm(object, locals),
-                c_expr.replace_expr(WASMExpr::Const(
-                    WASMType::I32,
-                    WASMValue::I32((index * UNIVERSAL_ALIGN) as i64),
+                c_expr.replace_expr(WAsmExpr::Const(
+                    WAsmType::I32,
+                    WAsmValue::I32((index * UNIVERSAL_ALIGN) as i64),
                 )),
-                WASMType::I32,
+                WAsmType::I32,
             )),
         )),
         CExpr::Cast {
@@ -326,11 +326,11 @@ fn c_expr_to_wasm(c_expr: &Ast<CExpr>, locals: &Locals) -> Ast<WASMExpr> {
             let wasm_value = c_value_to_wasm(value, locals);
 
             match (from_wasm_type, to_wasm_type) {
-                (WASMType::I32, WASMType::F64) => {
-                    c_expr.replace_expr(WASMExpr::PromoteInt(wasm_value))
+                (WAsmType::I32, WAsmType::F64) => {
+                    c_expr.replace_expr(WAsmExpr::PromoteInt(wasm_value))
                 }
-                (WASMType::F64, WASMType::I32) => {
-                    c_expr.replace_expr(WASMExpr::TruncateFloat(wasm_value))
+                (WAsmType::F64, WAsmType::I32) => {
+                    c_expr.replace_expr(WAsmExpr::TruncateFloat(wasm_value))
                 }
                 // TODO: explictly handle all possibilities?
                 _ => wasm_value,
@@ -343,7 +343,7 @@ fn c_expr_to_wasm(c_expr: &Ast<CExpr>, locals: &Locals) -> Ast<WASMExpr> {
 fn flatten_c_statement(
     c_statement: &Ast<CStatement>,
     wasm_locals: &mut Locals,
-    wasm_exprs: &mut Vec<Ast<WASMExpr>>,
+    wasm_exprs: &mut Vec<Ast<WAsmExpr>>,
 ) {
     match &*c_statement.expr {
         CStatement::VarAssign(ref name, ref expr) => {
@@ -355,7 +355,7 @@ fn flatten_c_statement(
             ));
         }
         CStatement::RefAssign(ref name, ref value) => {
-            wasm_exprs.push(c_statement.replace_expr(WASMExpr::Store(
+            wasm_exprs.push(c_statement.replace_expr(WAsmExpr::Store(
                 c_type_to_wasm(&value.expr.get_ctype()),
                 wasm_locals.load(c_statement.left_loc, c_statement.right_loc, name),
                 c_expr_to_wasm(value, wasm_locals),
@@ -368,7 +368,7 @@ fn flatten_c_statement(
             flatten_c_statement(consequent, wasm_locals, &mut consequent_exprs);
             flatten_c_statement(alternate, wasm_locals, &mut alternate_exprs);
 
-            wasm_exprs.push(c_statement.replace_expr(WASMExpr::If(
+            wasm_exprs.push(c_statement.replace_expr(WAsmExpr::If(
                 c_value_to_wasm(condition, wasm_locals),
                 consequent_exprs,
                 alternate_exprs,
@@ -387,38 +387,38 @@ fn flatten_c_statement(
                 c_statement.left_loc,
                 c_statement.right_loc,
                 name,
-                c_statement.replace_expr(WASMExpr::Call(
-                    WASMDirectFuncName::HeapAlloc,
-                    vec![c_statement.replace_expr(WASMExpr::Const(
-                        WASMType::I32,
-                        WASMValue::I32(((captures.len() + 1) * UNIVERSAL_ALIGN) as i64),
+                c_statement.replace_expr(WAsmExpr::Call(
+                    WAsmDirectFuncName::HeapAlloc,
+                    vec![c_statement.replace_expr(WAsmExpr::Const(
+                        WAsmType::I32,
+                        WAsmValue::I32(((captures.len() + 1) * UNIVERSAL_ALIGN) as i64),
                     ))],
                 )),
             ));
 
             // Store the function index first in the closure
-            wasm_exprs.push(c_statement.replace_expr(WASMExpr::Store(
-                WASMType::I32,
+            wasm_exprs.push(c_statement.replace_expr(WAsmExpr::Store(
+                WAsmType::I32,
                 wasm_locals.load(c_statement.left_loc, c_statement.right_loc, name),
-                c_statement.replace_expr(WASMExpr::Const(
-                    WASMType::I32,
-                    WASMValue::I32(get_func_index(function) as i64),
+                c_statement.replace_expr(WAsmExpr::Const(
+                    WAsmType::I32,
+                    WAsmValue::I32(get_func_index(function) as i64),
                 )),
             )));
 
             // Fill the rest of the closure with captures aligned at
             // UNIVERSAL_ALIGN
             for (index, capture) in captures.into_iter().enumerate() {
-                wasm_exprs.push(capture.replace_expr(WASMExpr::Store(
+                wasm_exprs.push(capture.replace_expr(WAsmExpr::Store(
                     c_type_to_wasm(&capture.expr.get_ctype()),
-                    capture.replace_expr(WASMExpr::BinOp(
+                    capture.replace_expr(WAsmExpr::BinOp(
                         BinOp::Num(NumOp::Add),
                         wasm_locals.load(capture.left_loc, capture.right_loc, name),
-                        capture.replace_expr(WASMExpr::Const(
-                            WASMType::I32,
-                            WASMValue::I32(((index + 1) * UNIVERSAL_ALIGN) as i64),
+                        capture.replace_expr(WAsmExpr::Const(
+                            WAsmType::I32,
+                            WAsmValue::I32(((index + 1) * UNIVERSAL_ALIGN) as i64),
                         )),
-                        WASMType::I32,
+                        WAsmType::I32,
                     )),
                     c_value_to_wasm(capture, wasm_locals),
                 )));
@@ -430,27 +430,27 @@ fn flatten_c_statement(
                 c_statement.left_loc,
                 c_statement.right_loc,
                 name,
-                c_statement.replace_expr(WASMExpr::Call(
-                    WASMDirectFuncName::HeapAlloc,
-                    vec![c_statement.replace_expr(WASMExpr::Const(
-                        WASMType::I32,
-                        WASMValue::I32((data.len() * UNIVERSAL_ALIGN) as i64),
+                c_statement.replace_expr(WAsmExpr::Call(
+                    WAsmDirectFuncName::HeapAlloc,
+                    vec![c_statement.replace_expr(WAsmExpr::Const(
+                        WAsmType::I32,
+                        WAsmValue::I32((data.len() * UNIVERSAL_ALIGN) as i64),
                     ))],
                 )),
             ));
 
             // Fill the buffer with data aligned at UNIVERSAL_ALIGN
             for (index, capture) in data.into_iter().enumerate() {
-                wasm_exprs.push(capture.replace_expr(WASMExpr::Store(
+                wasm_exprs.push(capture.replace_expr(WAsmExpr::Store(
                     c_type_to_wasm(&capture.expr.get_ctype()),
-                    capture.replace_expr(WASMExpr::BinOp(
+                    capture.replace_expr(WAsmExpr::BinOp(
                         BinOp::Num(NumOp::Add),
                         wasm_locals.load(capture.left_loc, capture.right_loc, name),
-                        capture.replace_expr(WASMExpr::Const(
-                            WASMType::I32,
-                            WASMValue::I32((index * UNIVERSAL_ALIGN) as i64),
+                        capture.replace_expr(WAsmExpr::Const(
+                            WAsmType::I32,
+                            WAsmValue::I32((index * UNIVERSAL_ALIGN) as i64),
                         )),
-                        WASMType::I32,
+                        WAsmType::I32,
                     )),
                     c_value_to_wasm(capture, wasm_locals),
                 )));
@@ -462,11 +462,11 @@ fn flatten_c_statement(
                 c_statement.left_loc,
                 c_statement.right_loc,
                 name,
-                c_statement.replace_expr(WASMExpr::Call(
-                    WASMDirectFuncName::HeapAlloc,
-                    vec![c_statement.replace_expr(WASMExpr::Const(
-                        WASMType::I32,
-                        WASMValue::I32(UNIVERSAL_ALIGN as i64),
+                c_statement.replace_expr(WAsmExpr::Call(
+                    WAsmDirectFuncName::HeapAlloc,
+                    vec![c_statement.replace_expr(WAsmExpr::Const(
+                        WAsmType::I32,
+                        WAsmValue::I32(UNIVERSAL_ALIGN as i64),
                     ))],
                 )),
             ));
@@ -479,7 +479,7 @@ pub fn flatten_c_block(
     c_declarations: &Vec<CDeclaration>,
     c_statements: &Vec<Ast<CStatement>>,
     wasm_locals: &mut Locals,
-    wasm_exprs: &mut Vec<Ast<WASMExpr>>,
+    wasm_exprs: &mut Vec<Ast<WAsmExpr>>,
 ) {
     for declaration in c_declarations {
         wasm_locals.push(declaration.1.clone(), c_type_to_wasm(&declaration.0))
@@ -490,7 +490,7 @@ pub fn flatten_c_block(
     }
 }
 
-pub fn c_func_to_wasm(c_func: &Ast<CFunc>) -> WASMFunc {
+pub fn c_func_to_wasm(c_func: &Ast<CFunc>) -> WAsmFunc {
     let mut locals = Locals::new();
     let mut body = Vec::new();
 
@@ -516,10 +516,10 @@ pub fn c_func_to_wasm(c_func: &Ast<CFunc>) -> WASMFunc {
     );
 
     // Return. Must be done at end of function after stack accesses
-    body.push(c_func.replace_expr(WASMExpr::SetGlobal(
-        WASMGlobalName::StackPointer,
-        c_func.replace_expr(WASMExpr::Load(
-            WASMType::I32,
+    body.push(c_func.replace_expr(WAsmExpr::SetGlobal(
+        WAsmGlobalName::StackPointer,
+        c_func.replace_expr(WAsmExpr::Load(
+            WAsmType::I32,
             Locals::get_offset(
                 c_func.left_loc,
                 c_func.right_loc,
@@ -530,11 +530,11 @@ pub fn c_func_to_wasm(c_func: &Ast<CFunc>) -> WASMFunc {
 
     // TODO: free the old stack frame
 
-    WASMFunc {
+    WAsmFunc {
         name: c_func.expr.name.clone(),
         params: vec![
             (CName::FuncArg, c_type_to_wasm(&c_func.expr.param.expr)),
-            (CName::FuncCaptures, WASMType::I32),
+            (CName::FuncCaptures, WAsmType::I32),
         ],
         result: c_type_to_wasm(&c_func.expr.ret.expr.get_ctype()),
         stack_map: locals.to_stack_map(),
@@ -542,17 +542,17 @@ pub fn c_func_to_wasm(c_func: &Ast<CFunc>) -> WASMFunc {
     }
 }
 
-pub fn c_hook_declaration_to_wasm(c_hook_declaration: &CHookDeclaration) -> WASMHookImport {
+pub fn c_hook_declaration_to_wasm(c_hook_declaration: &CHookDeclaration) -> WAsmHookImport {
     let &CHookDeclaration(ref ret_type, CHookName(ref path), ref args) = c_hook_declaration;
 
-    WASMHookImport {
-        name: WASMHookName(path.clone()),
+    WAsmHookImport {
+        name: WAsmHookName(path.clone()),
         params: args.into_iter().map(c_type_to_wasm).collect(),
         result: c_type_to_wasm(ret_type),
     }
 }
 
-impl WASMModule {
+impl WAsmModule {
     pub fn from_c(
         c_externs: &Vec<CHookDeclaration>,
         table_offset: u32,
@@ -560,7 +560,7 @@ impl WASMModule {
         c_declarations: &Vec<CDeclaration>,
         c_statements: &Vec<Ast<CStatement>>,
         c_value: Option<&Ast<CValue>>,
-    ) -> WASMModule {
+    ) -> WAsmModule {
         let mut main_locals = Locals::new();
         let mut main_body = Vec::new();
         flatten_c_block(
@@ -577,11 +577,11 @@ impl WASMModule {
         let mut table = c_functions
             .into_iter()
             .map(|c_func| c_func_to_wasm(&c_func))
-            .collect::<Vec<WASMFunc>>();
+            .collect::<Vec<WAsmFunc>>();
 
         table.sort_unstable_by_key(|wasm_func| get_func_index(&wasm_func.name));
 
-        WASMModule {
+        WAsmModule {
             hook_imports: c_externs
                 .into_iter()
                 .map(|hook_declaration| c_hook_declaration_to_wasm(hook_declaration))

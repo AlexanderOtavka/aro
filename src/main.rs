@@ -341,7 +341,7 @@ fn wasm_compile_source(input: &str) -> Result<String, Error> {
 
     Ok(format!(
         "{}",
-        wasm_ast::WASMModule::from_c(
+        wasm_ast::WAsmModule::from_c(
             &c_externs,
             0,
             &c_functions,
