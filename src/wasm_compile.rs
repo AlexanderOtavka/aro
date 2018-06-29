@@ -7,7 +7,7 @@ use std::u32;
 use untyped_ast::{Ast, BinOp, NumOp};
 use wasm_ast::{
     StackMap, WASMDirectFuncName, WASMExpr, WASMFunc, WASMGlobalName, WASMHookImport, WASMHookName,
-    WASMType, WASMValue,
+    WASMModule, WASMType, WASMValue,
 };
 
 const UNIVERSAL_ALIGN: usize = 8; // The size of a union
@@ -549,5 +549,52 @@ pub fn c_hook_declaration_to_wasm(c_hook_declaration: &CHookDeclaration) -> WASM
         name: WASMHookName(path.clone()),
         params: args.into_iter().map(c_type_to_wasm).collect(),
         result: c_type_to_wasm(ret_type),
+    }
+}
+
+impl WASMModule {
+    pub fn from_c(
+        c_externs: &Vec<CHookDeclaration>,
+        table_offset: u32,
+        c_functions: &Vec<Ast<CFunc>>,
+        c_declarations: &Vec<CDeclaration>,
+        c_statements: &Vec<Ast<CStatement>>,
+        c_value: Option<&Ast<CValue>>,
+    ) -> WASMModule {
+        let mut main_locals = Locals::new();
+        let mut main_body = Vec::new();
+        flatten_c_block(
+            &c_declarations,
+            &c_statements,
+            &mut main_locals,
+            &mut main_body,
+        );
+
+        // The stack allocation has to come first, but we don't know how much we
+        // need until we have flattened the block
+        main_body.insert(0, main_locals.init_stack_frame(0, 0, None));
+
+        let mut table = c_functions
+            .into_iter()
+            .map(|c_func| c_func_to_wasm(&c_func))
+            .collect::<Vec<WASMFunc>>();
+
+        table.sort_unstable_by_key(|wasm_func| get_func_index(&wasm_func.name));
+
+        WASMModule {
+            hook_imports: c_externs
+                .into_iter()
+                .map(|hook_declaration| c_hook_declaration_to_wasm(hook_declaration))
+                .collect(),
+            table_offset,
+            table,
+            main_body,
+            main_return: c_value.map(|value| {
+                (
+                    c_value_to_wasm(value, &main_locals),
+                    c_type_to_wasm(&value.expr.get_ctype()),
+                )
+            }),
+        }
     }
 }
