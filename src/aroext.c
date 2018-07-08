@@ -8,7 +8,7 @@
 
 #include <limits.h>
 
-int _aro_hook__std__math__floordiv(double left, double right) {
+int _aro_hook__std__math_floordiv(double left, double right) {
   double quotient = left / right;
   if (quotient > INT_MAX || quotient < INT_MIN) {
     fprintf(stderr,
@@ -19,7 +19,7 @@ int _aro_hook__std__math__floordiv(double left, double right) {
   return (int)quotient;
 }
 
-_Aro_Object _aro_hook__std__list__push(_Aro_Any element, _Aro_Object list) {
+_Aro_Object _aro_hook__std__list_push(_Aro_Any element, _Aro_Object list) {
   _Aro_Object new_node = malloc(sizeof(_Aro_Any) * 2);
   new_node[0] = element;
   new_node[1].Object = list;
@@ -27,9 +27,9 @@ _Aro_Object _aro_hook__std__list__push(_Aro_Any element, _Aro_Object list) {
   return new_node;
 }
 
-bool _aro_hook__std__list__is_empty(_Aro_Object list) { return list == NULL; }
+bool _aro_hook__std__list_is_empty(_Aro_Object list) { return list == NULL; }
 
-_Aro_Any _aro_hook__std__list__head(_Aro_Object list) {
+_Aro_Any _aro_hook__std__list_head(_Aro_Object list) {
   if (list == NULL) {
     fprintf(stderr,
             "As usual, you can't get head.\n"
@@ -40,7 +40,7 @@ _Aro_Any _aro_hook__std__list__head(_Aro_Object list) {
   return list[0];
 }
 
-_Aro_Object _aro_hook__std__list__tail(_Aro_Object list) {
+_Aro_Object _aro_hook__std__list_tail(_Aro_Object list) {
   if (list == NULL) {
     fprintf(stderr,
             "You spent your whole life chasing your own tail.\n"

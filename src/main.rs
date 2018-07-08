@@ -22,6 +22,7 @@ mod wasm_ast;
 mod wasm_compile;
 
 use globals::{get_globals, get_globals_c_files};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
@@ -321,16 +322,36 @@ fn wasm_compile_source(input: &str) -> Result<String, Error> {
 
     let record_layouts = c_compile::layout_records(real_types.clone());
 
-    let mut c_declarations = Vec::new();
-    let mut c_statements = Vec::new();
+    let mut c_globals_init_declarations = Vec::new();
+    let mut c_globals_init_statements = Vec::new();
+    let mut c_main_declarations = Vec::new();
+    let mut c_main_statements = Vec::new();
     let mut c_expr_index = 0;
     let mut c_functions = Vec::new();
     let mut c_function_index = 0;
     let mut c_externs = Vec::new();
+
+    let mut c_globals = HashMap::new();
+    for (name, (_, typechecked)) in globals {
+        let value = c_compile::lift_expr(
+            &typechecked,
+            &mut c_globals_init_declarations,
+            &mut c_globals_init_statements,
+            &mut c_expr_index,
+            &mut c_functions,
+            &mut c_function_index,
+            &mut c_externs,
+            &real_types,
+            &record_layouts,
+        );
+
+        c_globals.insert(name, value);
+    }
+
     let value = c_compile::lift_expr(
         &typechecked_ast,
-        &mut c_declarations,
-        &mut c_statements,
+        &mut c_main_declarations,
+        &mut c_main_statements,
         &mut c_expr_index,
         &mut c_functions,
         &mut c_function_index,
@@ -345,9 +366,12 @@ fn wasm_compile_source(input: &str) -> Result<String, Error> {
             &c_externs,
             0,
             &c_functions,
-            &c_declarations,
-            &c_statements,
+            &c_globals_init_declarations,
+            &c_globals_init_statements,
+            &c_main_declarations,
+            &c_main_statements,
             Some(&value),
+            &c_globals
         )
     ))
 }

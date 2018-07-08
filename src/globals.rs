@@ -19,7 +19,7 @@ pub fn get_globals(
         r#"
             a: Num =(Num => Int)=>
             b: Num =Int=>
-                @call_hook("std.math.floordiv"  type Int  a  b)
+                @call_hook("std.math_floordiv"  type Int  a  b)
         "#,
     );
     sources.insert(
@@ -28,14 +28,14 @@ pub fn get_globals(
             T: Any =([T] => T => [T])=>
             list: [T] =(T => [T])=>
             element: T =[T]=>
-                @call_hook("std.list.push"  type [T]  element  list)
+                @call_hook("std.list_push"  type [T]  element  list)
         "#,
     );
     sources.insert(
         "is_empty",
         r#"
             list: [Any] =Bool=>
-                @call_hook("std.list.is_empty"  type Bool  list)
+                @call_hook("std.list_is_empty"  type Bool  list)
         "#,
     );
     sources.insert(
@@ -43,7 +43,7 @@ pub fn get_globals(
         r#"
             T: Any =([T] => T)=>
             list: [T] =T=>
-                @call_hook("std.list.head"  type T  list)
+                @call_hook("std.list_head"  type T  list)
         "#,
     );
     sources.insert(
@@ -51,7 +51,7 @@ pub fn get_globals(
         r#"
             T: Any =([T] => [T])=>
             list: [T] =[T]=>
-                @call_hook("std.list.tail"  type [T]  list)
+                @call_hook("std.list_tail"  type [T]  list)
         "#,
     );
     sources.insert(
