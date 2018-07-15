@@ -269,7 +269,7 @@ fn handle_hook_call(
     arguments: &Vec<Ast<Value>>,
 ) -> Option<Result<Ast<Expression>, Error>> {
     Some(match path.join(".").as_str() {
-        "std.list.push" => {
+        "std.list_push" => {
             let el = &arguments[0];
             let list = &arguments[1];
 
@@ -286,7 +286,7 @@ fn handle_hook_call(
                 panic!("Second tuple arg should be list.")
             }
         }
-        "std.list.is_empty" => {
+        "std.list_is_empty" => {
             let list = &arguments[0];
             if let &Value::List(ref vec) = &*list.expr {
                 Ok(Ast::<Expression>::new(
@@ -298,7 +298,7 @@ fn handle_hook_call(
                 panic!("list.is_empty arg should be list.")
             }
         }
-        "std.list.head" => {
+        "std.list_head" => {
             let list = &arguments[0];
             if let &Value::List(ref vec) = &*list.expr {
                 if vec.is_empty() {
@@ -317,7 +317,7 @@ fn handle_hook_call(
                 panic!("list.head arg should be list.")
             }
         }
-        "std.list.tail" => {
+        "std.list_tail" => {
             let list = &arguments[0];
             if let &Value::List(ref vec) = &*list.expr {
                 if vec.is_empty() {
