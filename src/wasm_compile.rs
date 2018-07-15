@@ -288,13 +288,16 @@ impl Globals {
     }
 
     fn load(&self, left_loc: usize, right_loc: usize, name: &str) -> Option<Ast<WAsmExpr>> {
-        let (offset, global_type) = self.map.get(name)?;
+        let (offset, _) = self.map.get(name)?;
 
         Some(Ast::new(
             left_loc,
             right_loc,
             WAsmExpr::Load(
-                global_type.clone(),
+                // Since globals are all double indirected, we are really
+                // loading a pointer. The DerefBound will take care of loading
+                // it in the correct type.
+                WAsmType::I32,
                 Globals::get_offset(left_loc, right_loc, *offset),
             ),
         ))
