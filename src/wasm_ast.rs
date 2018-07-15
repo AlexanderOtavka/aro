@@ -290,18 +290,9 @@ impl Display for WAsmModule {
              \n\
              \n(import \"host\" \"memory\" (memory 3))\
              \n(import \"host\" \"print\" (func $host.print (param i32)))\
+             \n(import \"host\" \"heap_alloc\" (func $_alloc (param i32) (result i32)))\
              \n\
-             \n;; Reserve first 4 bytes for stack free pointer\
-             \n;; Reserve next 4 bytes for heap free pointer\
-             \n(data (i32.const 4) \"\\00\\00\\02\\00\") ;; Memory Page Index 2\
-             \n(func $_alloc (param $size i32) (result i32)\
-             \n  (i32.load (i32.const 4)) ;; Return value\
-             \n  (i32.store (i32.const 4)\
-             \n    (i32.add\
-             \n      (i32.load (i32.const 4))\
-             \n      (get_local $size))))\
-             \n\
-             \n(global $_stack_pointer (mut i32) (i32.const 0x10_000)) ;; Memory Page Index 1\
+             \n(global $_stack_pointer (mut i32) (i32.const 0))\
              \n(global $_register_i32_1 (mut i32) (i32.const 0))\
              \n(global $_register_i32_2 (mut i32) (i32.const 0))\
              \n\
