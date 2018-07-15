@@ -33,14 +33,37 @@ const roundUp = (n, multiple) => {
   }
 }
 
+/**
+ * @param {number} n
+ */
+const toUnsigned = n => (n < 0 ? n + U32_MAX + 1 : n)
+
+/**
+ * @param {ArrayBuffer} buffer
+ * @param {number} destinationPointer
+ * @param {number} sourcePointer
+ * @param {number} length
+ */
+const memCopy = (buffer, destinationPointer, sourcePointer, length) => {
+  const destDataView = new DataView(buffer, destinationPointer, length)
+  const sourceDataView = new DataView(buffer, sourcePointer, length)
+  for (let i = 0; i < length; i++) {
+    destDataView.setUint8(i, sourceDataView.getUint8(i))
+  }
+}
+
 const host = {
   memory: new WebAssembly.Memory({ initial: 3 }),
+  print: console.log,
+
+  /**
+   * @param {number} size
+   */
   heap_alloc: size => {
     const bufferPointer = heapFreePointer
     heapFreePointer += roundUp(size, UNIVERSAL_ALIGN)
     return bufferPointer
-  },
-  print: console.log
+  }
 }
 
 const std = {
@@ -56,16 +79,25 @@ const std = {
     return quotient
   },
   list_head: list => {
+    list = toUnsigned(list)
     if (list === NULL) {
       throw new Error(
         "As usual, you can't get head.\nEspecially not from an empty list."
       )
     } else {
-      const listDataView = new DataView(host.memory, list, LIST_SIZE)
-      return listDataView.getBigUint64(0, IS_LITTLE_ENDIAN)
+      // Create a container for the i64
+      const resultHolderSize = UNIVERSAL_ALIGN
+      const resultHolderPointer = host.heap_alloc(resultHolderSize) // TODO: stack alloc
+      memCopy(host.memory.buffer, resultHolderPointer, list, resultHolderSize)
+      console.log(
+        "head:",
+        new Uint32Array(host.memory.buffer, resultHolderPointer, 2)
+      )
+      return resultHolderPointer
     }
   },
   list_tail: list => {
+    list = toUnsigned(list)
     if (list === NULL) {
       throw new Error(
         "You spent your whole life chasing your own tail.\n" +
@@ -73,23 +105,30 @@ const std = {
           "The list is empty, dumbass."
       )
     } else {
-      const listDataView = new DataView(host.memory, list, LIST_SIZE)
-      return listDataView.getUint32(UNIVERSAL_ALIGN, IS_LITTLE_ENDIAN)
+      const listDataView = new DataView(host.memory.buffer, list, LIST_SIZE)
+      const result = listDataView.getUint32(UNIVERSAL_ALIGN, IS_LITTLE_ENDIAN)
+      console.log("tail:", result)
+      return result
     }
   },
   list_is_empty: list => {
+    list = toUnsigned(list)
+    console.log("is_empty:", list === NULL)
     return list === NULL
   },
-  list_push: (list, new_element) => {
+  list_push: (list, newElement) => {
+    list = toUnsigned(list)
     const newNodeSize = UNIVERSAL_ALIGN * 2
     const newNodePointer = host.heap_alloc(newNodeSize)
     const newNodeDataView = new DataView(
-      host.memory,
+      host.memory.buffer,
       newNodePointer,
       newNodeSize
     )
-    newNodeDataView.setBigUint64(0, new_element)
+    memCopy(host.memory.buffer, newNodePointer, newElement, UNIVERSAL_ALIGN)
     newNodeDataView.setUint32(UNIVERSAL_ALIGN, list, IS_LITTLE_ENDIAN)
+
+    console.log("push:", new Uint32Array(host.memory.buffer, newNodePointer, 4))
 
     return newNodePointer
   }
@@ -98,7 +137,12 @@ const std = {
 WebAssembly.compile(fs.readFileSync(process.argv[2]))
   .then(wAsmModule => new WebAssembly.Instance(wAsmModule, { std, host }))
   .then(instance => {
-    console.log(instance.exports.main())
+    // console.log(instance.exports.main())
+    const listAddr = instance.exports.main()
+    console.log(
+      "list node 0:",
+      new Uint32Array(host.memory.buffer, listAddr, 4)
+    )
   })
   .catch(err => {
     console.log("globals:", new Uint32Array(host.memory.buffer, 8, 32))

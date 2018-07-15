@@ -437,12 +437,46 @@ fn c_expr_to_wasm(c_expr: &Ast<CExpr>, locals: &Locals, globals: &Globals) -> As
                 ],
             })
         }
-        &CExpr::HookCall(CHookName(ref path), ref args, _) => c_expr.replace_expr(WAsmExpr::Call(
-            WAsmDirectFuncName::Hook(WAsmHookName(path.clone())),
-            args.into_iter()
-                .map(|value| c_value_to_wasm(value, locals, globals))
-                .collect(),
-        )),
+        &CExpr::HookCall(CHookName(ref path), ref args, ref ret_type) => {
+            // TODO: clean up this temporarily allocated memory manually
+            let ast = |expr| c_expr.replace_expr(expr);
+            let call_result = ast(WAsmExpr::Call(
+                WAsmDirectFuncName::Hook(WAsmHookName(path.clone())),
+                args.into_iter()
+                    .map(|value| {
+                        let wasm_value = c_value_to_wasm(value, locals, globals);
+                        if c_type_to_wasm(&value.expr.get_ctype()) == WAsmType::I64 {
+                            ast(WAsmExpr::Sequence(vec![
+                                ast(WAsmExpr::SetGlobal(
+                                    WAsmGlobalName::RegisterI32_1,
+                                    ast(WAsmExpr::Call(
+                                        WAsmDirectFuncName::StackAlloc,
+                                        vec![ast(WAsmExpr::Const(
+                                            WAsmType::I32,
+                                            WAsmValue::I32(8), // Size of an i64
+                                        ))],
+                                    )),
+                                )),
+                                ast(WAsmExpr::Store(
+                                    c_type_to_wasm(&value.expr.get_ctype()),
+                                    ast(WAsmExpr::GetGlobal(WAsmGlobalName::RegisterI32_1)),
+                                    wasm_value,
+                                )),
+                                ast(WAsmExpr::GetGlobal(WAsmGlobalName::RegisterI32_1)),
+                            ]))
+                        } else {
+                            wasm_value
+                        }
+                    })
+                    .collect(),
+            ));
+
+            if c_type_to_wasm(ret_type) == WAsmType::I64 {
+                c_expr.replace_expr(WAsmExpr::Load(WAsmType::I64, call_result))
+            } else {
+                call_result
+            }
+        }
         &CExpr::ObjectAccess {
             ref object,
             index,
@@ -459,6 +493,17 @@ fn c_expr_to_wasm(c_expr: &Ast<CExpr>, locals: &Locals, globals: &Globals) -> As
                 WAsmType::I32,
             )),
         )),
+        CExpr::AnyAccess {
+            ref value,
+            ref value_type,
+        } => {
+            let wasm_value = c_value_to_wasm(value, locals, globals);
+            match c_type_to_wasm(value_type) {
+                WAsmType::I32 => c_expr.replace_expr(WAsmExpr::WrapInt(wasm_value)),
+                WAsmType::F64 => c_expr.replace_expr(WAsmExpr::ReinterpretIntToFloat(wasm_value)),
+                WAsmType::I64 => wasm_value,
+            }
+        }
         CExpr::Cast {
             ref value,
             ref to_type,
@@ -496,6 +541,22 @@ fn flatten_c_statement(
                 c_statement.right_loc,
                 name,
                 c_expr_to_wasm(expr, wasm_locals, wasm_globals),
+            ));
+        }
+        CStatement::AnyAssign(ref name, ref value) => {
+            let wasm_value = c_value_to_wasm(value, wasm_locals, wasm_globals);
+            wasm_exprs.push(store_name(
+                wasm_locals,
+                c_statement.left_loc,
+                c_statement.right_loc,
+                name,
+                match c_type_to_wasm(&value.expr.get_ctype()) {
+                    WAsmType::I32 => c_statement.replace_expr(WAsmExpr::ExtendInt(wasm_value)),
+                    WAsmType::F64 => {
+                        c_statement.replace_expr(WAsmExpr::ReinterpretFloatToInt(wasm_value))
+                    }
+                    WAsmType::I64 => wasm_value,
+                },
             ));
         }
         CStatement::RefAssign(ref name, ref value) => {
@@ -723,11 +784,22 @@ fn c_func_to_wasm(c_func: &Ast<CFunc>, wasm_globals: &Globals) -> WAsmFunc {
 
 fn c_hook_declaration_to_wasm(c_hook_declaration: &CHookDeclaration) -> WAsmHookImport {
     let &CHookDeclaration(ref ret_type, CHookName(ref path), ref args) = c_hook_declaration;
+    let strip_i64 = |wasm_type| {
+        if wasm_type == WAsmType::I64 {
+            // Pass pointer to stack memory instead
+            WAsmType::I32
+        } else {
+            wasm_type
+        }
+    };
 
     WAsmHookImport {
         name: WAsmHookName(path.clone()),
-        params: args.into_iter().map(c_type_to_wasm).collect(),
-        result: c_type_to_wasm(ret_type),
+        params: args.into_iter()
+            .map(c_type_to_wasm)
+            .map(strip_i64)
+            .collect(),
+        result: strip_i64(c_type_to_wasm(ret_type)),
     }
 }
 

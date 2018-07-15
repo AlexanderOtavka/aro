@@ -270,8 +270,8 @@ fn handle_hook_call(
 ) -> Option<Result<Ast<Expression>, Error>> {
     Some(match path.join(".").as_str() {
         "std.list_push" => {
-            let el = &arguments[0];
-            let list = &arguments[1];
+            let list = &arguments[0];
+            let el = &arguments[1];
 
             if let &Value::List(ref vec) = &*list.expr {
                 let mut list = vec.clone();

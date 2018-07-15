@@ -41,6 +41,10 @@ pub enum WAsmExpr {
     BinOp(BinOp, Ast<WAsmExpr>, Ast<WAsmExpr>, WAsmType),
     PromoteInt(Ast<WAsmExpr>),
     TruncateFloat(Ast<WAsmExpr>),
+    ReinterpretFloatToInt(Ast<WAsmExpr>),
+    ReinterpretIntToFloat(Ast<WAsmExpr>),
+    ExtendInt(Ast<WAsmExpr>),
+    WrapInt(Ast<WAsmExpr>),
     If(Ast<WAsmExpr>, Vec<Ast<WAsmExpr>>, Vec<Ast<WAsmExpr>>),
     Load(WAsmType, Ast<WAsmExpr>),
     Store(WAsmType, Ast<WAsmExpr>, Ast<WAsmExpr>),
@@ -215,6 +219,21 @@ impl WAsmExpr {
                     "(i32.trunc_s/f64{})",
                     float.get_str_indented(indent_level + 1)
                 ),
+                WAsmExpr::ReinterpretFloatToInt(ref float) => format!(
+                    "(i64.reinterpret/f64{})",
+                    float.get_str_indented(indent_level + 1)
+                ),
+                WAsmExpr::ReinterpretIntToFloat(ref int) => format!(
+                    "(f64.reinterpret/i64{})",
+                    int.get_str_indented(indent_level + 1)
+                ),
+                WAsmExpr::ExtendInt(ref int) => format!(
+                    "(i64.extend_u/i32{})",
+                    int.get_str_indented(indent_level + 1)
+                ),
+                WAsmExpr::WrapInt(ref int) => {
+                    format!("(i32.wrap/i64{})", int.get_str_indented(indent_level + 1))
+                }
                 WAsmExpr::If(ref condition, ref consequent, ref alternate) => format!(
                     "(if{}{}(then{}){}(else{}))",
                     condition.get_str_indented(indent_level + 1),

@@ -28,7 +28,7 @@ pub fn get_globals(
             T: Any =([T] => T => [T])=>
             list: [T] =(T => [T])=>
             element: T =[T]=>
-                @call_hook("std.list_push"  type [T]  element  list)
+                @call_hook("std.list_push"  type [T]  list  element)
         "#,
     );
     sources.insert(

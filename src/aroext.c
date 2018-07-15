@@ -19,7 +19,7 @@ int _aro_hook__std__math_floordiv(double left, double right) {
   return (int)quotient;
 }
 
-_Aro_Object _aro_hook__std__list_push(_Aro_Any element, _Aro_Object list) {
+_Aro_Object _aro_hook__std__list_push(_Aro_Object list, _Aro_Any element) {
   _Aro_Object new_node = malloc(sizeof(_Aro_Any) * 2);
   new_node[0] = element;
   new_node[1].Object = list;
