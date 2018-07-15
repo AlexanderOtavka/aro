@@ -337,7 +337,7 @@ fn handle_hook_call(
                 panic!("list.tail arg should be list.")
             }
         }
-        "std.math.floordiv" => {
+        "std.math_floordiv" => {
             let left = &arguments[0];
             let right = &arguments[1];
             let div_by_zero_error = Err(Error::LRLocated {
